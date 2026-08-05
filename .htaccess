@@ -1,0 +1,10 @@
+RewriteEngine On
+
+# 1. External redirect: Force browser from /page.php to /page
+RewriteCond %{THE_REQUEST} ^[A-Z]{3,9}\ /([^\ ]+)\.php([^\ ]*)\ HTTP/ [NC]
+RewriteRule ^([^.]+)\.php$ $1 [R=301,L]
+
+# 2. Internal rewrite: Route /page internally to /page.php
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteCond %{REQUEST_FILENAME}\.php -f
+RewriteRule ^([^\.]+)$ %{REQUEST_URI}.php [NC,L]

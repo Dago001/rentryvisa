@@ -1,0 +1,43 @@
+@font-face {
+    font-family: 'Imperator';
+    font-style: normal;
+    font-weight: 400;
+    src: local('Imperator'), url('https://fonts.cdnfonts.com/s/215/Imperator.woff') format('woff');
+}
+@font-face {
+    font-family: 'Imperator';
+    font-style: normal;
+    font-weight: 700;
+    src: local('Imperator'), url('https://fonts.cdnfonts.com/s/215/Imperator_Bold.woff') format('woff');
+}
+@font-face {
+    font-family: 'ImperatorBronzeSmallCaps';
+    font-style: normal;
+    font-weight: 400;
+    src: local('ImperatorBronzeSmallCaps'), url('https://fonts.cdnfonts.com/s/215/ImperatorBronzeSmallCaps.woff') format('woff');
+}
+@font-face {
+    font-family: 'ImperatorBronze';
+    font-style: normal;
+    font-weight: 400;
+    src: local('ImperatorBronze'), url('assets/ImperatorBronze.woff') format('woff');
+}
+@font-face {
+    font-family: 'ImperatorPlaque';
+    font-style: normal;
+    font-weight: 400;
+    src: local('ImperatorPlaque'), url('https://fonts.cdnfonts.com/s/215/ImperatorPlaque.woff') format('woff');
+}
+@font-face {
+    font-family: 'ImperatorSmallCaps';
+    font-style: normal;
+    font-weight: 400;
+    src: local('ImperatorSmallCaps'), url('assets/ImperatorSmallCaps.woff') format('woff');
+}
+@font-face {
+    font-family: 'ImperatorSmallCaps';
+    font-style: normal;
+    font-weight: 700;
+    src: local('ImperatorSmallCaps'), url('assets/ImperatorSmallCaps_Bold.woff') format('woff');
+}
+
