@@ -299,3 +299,6 @@ document.querySelectorAll('a[href*="logout"]').forEach(link => {
     });
 });
 </script>
+
+<!-- Offline Mode & Sync Integration -->
+<script src="offline-sync.js"></script>
