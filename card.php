@@ -204,7 +204,7 @@ if (isset($_GET['id'])) {
         
         @media print {
             @page {
-                size: 260mm 184mm; /* Set exact page size to 16K landscape (260x184mm) */
+                size: 184mm 260mm; /* Force 16K portrait size (184x260mm) */
                 margin: 0 !important;
                 padding: 0 !important;
             }
@@ -212,8 +212,8 @@ if (isset($_GET['id'])) {
             html, body {
                 margin: 0 !important;
                 padding: 0 !important;
-                width: 260mm !important;
-                height: 184mm !important;
+                width: 184mm !important;
+                height: 260mm !important;
                 background-color: transparent !important;
                 overflow: hidden !important;
                 -webkit-print-color-adjust: exact !important;
@@ -221,21 +221,24 @@ if (isset($_GET['id'])) {
             }
             
             body {
-                display: block !important; /* Avoid centering shifts in print */
+                display: block !important;
                 background: none !important;
+                position: relative !important;
             }
             
             .print-area {
-                width: 260mm !important;  /* Exact print dimensions */
-                height: 184mm !important; /* Exact print dimensions */
+                width: 260mm !important;  /* Landscape dimensions */
+                height: 184mm !important; /* Landscape dimensions */
                 margin: 0 !important;
                 padding: 0 !important;
                 background-color: transparent !important;
                 box-shadow: none !important;
                 position: absolute !important;
-                top: 0 !important;
-                left: 0 !important;
-                transform: none !important;
+                /* Center and rotate the landscape card on the portrait sheet */
+                top: 50% !important;
+                left: 50% !important;
+                transform: translate(-50%, -50%) rotate(90deg) !important;
+                transform-origin: center center !important;
                 page-break-inside: avoid !important;
                 page-break-after: avoid !important;
                 page-break-before: avoid !important;
