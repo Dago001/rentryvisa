@@ -33,10 +33,10 @@ if (isset($_GET['id'])) {
         $surname = strtoupper(htmlspecialchars($foundk['surname']));
         $firstname = strtoupper(htmlspecialchars($foundk['given_name']));
         $fees = strtoupper(htmlspecialchars($foundk['fees']));
-        $validuntil = htmlspecialchars($foundk['within']);
+        $validuntil = formatNISDate($foundk['within']);
         $journey = strtoupper(htmlspecialchars($foundk['journey']));
         $place_of_issue = strtoupper(htmlspecialchars($foundk['place_of_issue']));
-        $date_of_issue = htmlspecialchars($foundk['date_of_issue']);
+        $date_of_issue = formatNISDate($foundk['date_of_issue']);
         $authority = strtoupper(htmlspecialchars($foundk['authority']));
         
 

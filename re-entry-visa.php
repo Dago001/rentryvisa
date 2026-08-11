@@ -844,7 +844,7 @@ $numb = $retrieve ? mysqli_num_rows($retrieve) : 0;
             $given_name = htmlspecialchars($ret['given_name']);
             $passport_number = htmlspecialchars($ret['passport_number']);
             $journey = isset($ret['journey']) ? htmlspecialchars($ret['journey']) : 'N/A';
-            $within = isset($ret['within']) ? htmlspecialchars($ret['within']) : 'N/A';
+            $within = isset($ret['within']) ? formatNISDate($ret['within']) : 'N/A';
             ?>
             <tr>
                 <td><?php echo $visa_number; ?></td>

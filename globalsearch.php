@@ -612,7 +612,7 @@ if (!empty($searchTerm)) {
                                                 <td>
                                                     <?php 
                                                     $wVal = $row['within'] ?? ($row['validity_date'] ?? ($row['expiry_date'] ?? '')); 
-                                                    echo !empty($wVal) ? date('d/m/Y', strtotime($wVal)) : 'N/A';
+                                                    echo !empty($wVal) ? formatNISDate($wVal) : 'N/A';
                                                     ?>
                                                 </td>
                                                 <td>

@@ -65,17 +65,17 @@ if(isset($_GET['id'])) {
         $given_name = $foundk['given_name'] ?? '';
         $nationality = $foundk['nationality'] ?? 'N/A';
         $place_of_issue = $foundk['place_of_issue'] ?? 'N/A';
-        $date_of_issue = $foundk['date_of_issue'] ?? 'N/A';
+        $date_of_issue = formatNISDate($foundk['date_of_issue'] ?? '');
         $embassy = $foundk['embassy'] ?? 'N/A';
         $authority = $foundk['authority'] ?? 'N/A';
         
         // Check for within/validity period
         if (isset($foundk['within'])) {
-            $within = $foundk['within'];
+            $within = formatNISDate($foundk['within']);
         } elseif (isset($foundk['validity_date'])) {
-            $within = $foundk['validity_date'];
+            $within = formatNISDate($foundk['validity_date']);
         } elseif (isset($foundk['expiry_date'])) {
-            $within = $foundk['expiry_date'];
+            $within = formatNISDate($foundk['expiry_date']);
         } else {
             $within = 'N/A';
         }

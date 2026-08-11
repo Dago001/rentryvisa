@@ -36,4 +36,20 @@ header("X-Content-Type-Options: nosniff");
 header("X-XSS-Protection: 1; mode=block");
 header("Referrer-Policy: strict-origin-when-cross-origin");
 header("Content-Security-Policy: default-src 'self' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; img-src 'self' data:; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com https://cdnjs.cloudflare.com; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com;");
+
+// Global Date Formatting Helper (e.g. "21ST JUNE 2027")
+function formatNISDate($dateStr) {
+    if (empty($dateStr) || $dateStr === '0000-00-00') {
+        return 'N/A';
+    }
+    $timestamp = strtotime($dateStr);
+    if (!$timestamp) {
+        return strtoupper($dateStr);
+    }
+    $day = date('j', $timestamp);
+    $suffix = strtoupper(date('S', $timestamp));
+    $month = strtoupper(date('F', $timestamp));
+    $year = date('Y', $timestamp);
+    return $day . $suffix . ' ' . $month . ' ' . $year;
+}
 ?>
