@@ -70,6 +70,13 @@ if ($check_passport && mysqli_num_rows($check_passport) > 0) {
     exit();
 }
 
+// Check duplicate authority
+$check_auth = mysqli_query($conn, "SELECT id FROM visa_applications WHERE authority = '$authority'");
+if ($check_auth && mysqli_num_rows($check_auth) > 0) {
+    echo json_encode(['status' => 'error', 'message' => "Authority Number '$authority' already exists in system."]);
+    exit();
+}
+
 // Check duplicate visa number. If it exists, append suffix to avoid conflicts
 $check_visa = mysqli_query($conn, "SELECT id FROM visa_applications WHERE visa_number = '$visa_number'");
 if ($check_visa && mysqli_num_rows($check_visa) > 0) {

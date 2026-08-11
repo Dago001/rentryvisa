@@ -874,6 +874,7 @@ $current_page = basename($_SERVER['PHP_SELF']);
                                 <label for="authority">Authority</label>
                                 <input type="text" id="authority" name="authority" required
                                        value="ABJ/HQ/DIP/" placeholder="ABJ/HQ/DIP/...">
+                                <div id="authority-status" style="margin-top: 5px; font-size: 0.82rem;"></div>
                             </div>
 
                             <div class="form-group">
@@ -1008,8 +1009,55 @@ $current_page = basename($_SERVER['PHP_SELF']);
             toggleSubmitButton();
         });
 
+        // Authority number duplication real-time checker
+        const authorityInputGlobal = document.getElementById('authority');
+        const authorityStatus = document.getElementById('authority-status');
+        let authorityValid = true;
+
+        authorityInputGlobal.addEventListener('blur', function() {
+            const auth = this.value.trim();
+            
+            // Check if it is empty or just the prefix
+            if (!auth || auth === 'ABJ/HQ/DIP/' || auth.length <= 11) {
+                authorityStatus.innerHTML = '';
+                return;
+            }
+
+            authorityStatus.innerHTML = '<span style="color: #666;"><i class="fa fa-spinner fa-spin"></i> Checking...</span>';
+            
+            fetch(`check_authority?authority=${encodeURIComponent(auth)}`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.exists) {
+                        authorityStatus.innerHTML = `<span style="color: #d9534f;"><i class="fa fa-exclamation-circle"></i> Authority number ${data.authority} already exists in the system!</span>`;
+                        authorityInputGlobal.style.borderColor = '#d9534f';
+                        authorityInputGlobal.style.backgroundColor = '#fdf2f2';
+                        authorityValid = false;
+                    } else {
+                        authorityStatus.innerHTML = '<span style="color: #2b7a43;"><i class="fa fa-check-circle"></i> Authority number is valid</span>';
+                        authorityInputGlobal.style.borderColor = '#2b7a43';
+                        authorityInputGlobal.style.backgroundColor = '#f2fdf5';
+                        authorityValid = true;
+                    }
+                    toggleSubmitButton();
+                })
+                .catch(error => {
+                    console.error('Error checking authority:', error);
+                    authorityStatus.innerHTML = '';
+                });
+        });
+
+        authorityInputGlobal.addEventListener('input', function() {
+            // Clear status message when user types again
+            authorityStatus.innerHTML = '';
+            authorityInputGlobal.style.borderColor = '';
+            authorityInputGlobal.style.backgroundColor = '';
+            authorityValid = true;
+            toggleSubmitButton();
+        });
+
         function toggleSubmitButton() {
-            if (!passportValid) {
+            if (!passportValid || !authorityValid) {
                 submitBtn.disabled = true;
                 submitBtn.style.opacity = '0.5';
                 submitBtn.style.cursor = 'not-allowed';
@@ -1022,9 +1070,15 @@ $current_page = basename($_SERVER['PHP_SELF']);
 
         // Form submission handler
         document.getElementById('visaForm').addEventListener('submit', function(e) {
-            if (!validateForm() || !passportValid) {
+            if (!validateForm() || !passportValid || !authorityValid) {
                 e.preventDefault();
-                alert(!passportValid ? 'This Passport Number already exists in the system!' : 'Please fill in all required fields correctly.');
+                let errMsg = 'Please fill in all required fields correctly.';
+                if (!passportValid) {
+                    errMsg = 'This Passport Number already exists in the system!';
+                } else if (!authorityValid) {
+                    errMsg = 'This Authority Number already exists in the system!';
+                }
+                alert(errMsg);
             }
         });
 

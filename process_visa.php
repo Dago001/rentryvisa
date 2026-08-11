@@ -153,6 +153,24 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
         exit();
     }
     mysqli_stmt_close($check_passport_stmt);
+
+    // Check if authority number already exists in the system
+    $check_auth_sql = "SELECT id FROM visa_applications WHERE authority = ?";
+    $check_auth_stmt = mysqli_prepare($conn, $check_auth_sql);
+    mysqli_stmt_bind_param($check_auth_stmt, "s", $authority);
+    mysqli_stmt_execute($check_auth_stmt);
+    mysqli_stmt_store_result($check_auth_stmt);
+    
+    if (mysqli_stmt_num_rows($check_auth_stmt) > 0) {
+        $_SESSION['message'] = [
+            'type' => 'error',
+            'text' => "This Authority Number '$authority' already exists in the system!"
+        ];
+        mysqli_stmt_close($check_auth_stmt);
+        header("Location: new-record");
+        exit();
+    }
+    mysqli_stmt_close($check_auth_stmt);
     
     // Insert into database
     $sql = "INSERT INTO visa_applications 
