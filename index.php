@@ -365,7 +365,7 @@ function showLoginForm() {
             .btn-login {
                 width: 100%;
                 padding: 9px;
-                background: linear-gradient(135deg, var(--primary), #2e7d46);
+                background: linear-gradient(135deg, #1e293b, #334155);
                 color: white;
                 border: none;
                 border-radius: 5px;
@@ -908,12 +908,12 @@ function showDashboard() {
             
             /* Welcome Banner */
             .welcome-banner {
-                background: linear-gradient(135deg, var(--primary), #2e7d46);
+                background: linear-gradient(135deg, #1e293b, #334155);
                 color: white;
                 padding: 20px;
                 border-radius: 12px;
                 margin-bottom: 20px;
-                box-shadow: 0 8px 25px rgba(26, 92, 46, 0.2);
+                box-shadow: 0 8px 25px rgba(30, 41, 59, 0.15);
                 position: relative;
                 overflow: hidden;
             }
@@ -1069,7 +1069,7 @@ function showDashboard() {
             }
             
             .view-all-btn {
-                background: linear-gradient(135deg, var(--primary), #2e7d46);
+                background: linear-gradient(135deg, #1e293b, #334155);
                 color: white;
                 padding: 6px 15px;
                 border-radius: 6px;

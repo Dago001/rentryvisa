@@ -248,12 +248,12 @@ $numb = $retrieve ? mysqli_num_rows($retrieve) : 0;
 
         /* Welcome Banner */
         .welcome-banner {
-            background: linear-gradient(135deg, var(--primary), #2e7d46);
+            background: linear-gradient(135deg, #1e293b, #334155);
             color: white;
             padding: 20px;
             border-radius: 12px;
             margin-bottom: 20px;
-            box-shadow: 0 8px 25px rgba(26, 92, 46, 0.2);
+            box-shadow: 0 8px 25px rgba(30, 41, 59, 0.15);
             position: relative;
             overflow: hidden;
         }
@@ -403,7 +403,7 @@ $numb = $retrieve ? mysqli_num_rows($retrieve) : 0;
         
         /* Button Styles */
         .btn-view {
-            background: linear-gradient(135deg, var(--primary), #2e7d46);
+            background: linear-gradient(135deg, #1e293b, #334155);
             color: white;
             border: none;
             padding: 6px 12px;
@@ -451,7 +451,7 @@ $numb = $retrieve ? mysqli_num_rows($retrieve) : 0;
     }
     
     .btn-view {
-        background: linear-gradient(135deg, var(--primary), #2e7d46);
+        background: linear-gradient(135deg, #1e293b, #334155);
         color: white;
         border: none;
         padding: 6px 12px;

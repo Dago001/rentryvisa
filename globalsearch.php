@@ -306,7 +306,7 @@ if (!empty($searchTerm)) {
         
         /* Action Buttons */
         .btn-view {
-            background: linear-gradient(135deg, var(--primary), #2e7d46);
+            background: linear-gradient(135deg, #1e293b, #334155);
             color: white;
             border: none;
             padding: 6px 12px;
