@@ -204,16 +204,16 @@ if (isset($_GET['id'])) {
         
         @media print {
             @page {
+                size: 260mm 184mm; /* Set exact page size to 16K landscape (260x184mm) */
                 margin: 0 !important;
                 padding: 0 !important;
-                size: auto; /* Set exact page size */
             }
             
             html, body {
                 margin: 0 !important;
                 padding: 0 !important;
-                width: 100% !important;
-                height: 100% !important;
+                width: 260mm !important;
+                height: 184mm !important;
                 background-color: transparent !important;
                 overflow: hidden !important;
                 -webkit-print-color-adjust: exact !important;
@@ -221,21 +221,18 @@ if (isset($_GET['id'])) {
             }
             
             body {
-                display: flex !important;
-                justify-content: center !important;
-                align-items: center !important;
-                min-height: 100vh !important;
+                display: block !important; /* Avoid centering shifts in print */
                 background: none !important;
             }
             
             .print-area {
                 width: 260mm !important;  /* Exact print dimensions */
                 height: 184mm !important; /* Exact print dimensions */
-                margin: 0 auto !important;
+                margin: 0 !important;
                 padding: 0 !important;
                 background-color: transparent !important;
                 box-shadow: none !important;
-                position: relative !important;
+                position: absolute !important;
                 top: 0 !important;
                 left: 0 !important;
                 transform: none !important;
