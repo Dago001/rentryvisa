@@ -1166,7 +1166,7 @@ $category_exists = in_array('category', $columns);
                                            class="form-control" 
                                            name="surname" 
                                            value="<?php echo htmlspecialchars(getFieldValue($record, 'surname')); ?>" 
-                                           required>
+                                           required style="text-transform: uppercase;">
                                 </div>
                             </div>
                             
@@ -1177,7 +1177,7 @@ $category_exists = in_array('category', $columns);
                                            class="form-control" 
                                            name="given_name" 
                                            value="<?php echo htmlspecialchars(getFieldValue($record, 'given_name')); ?>" 
-                                           required>
+                                           required style="text-transform: uppercase;">
                                 </div>
                             </div>
 

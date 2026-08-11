@@ -633,12 +633,12 @@ $current_page = basename($_SERVER['PHP_SELF']);
                             <div class="form-group">
                                 <label for="surname">Surname</label>
                                 <input type="text" id="surname" name="surname" required
-                                       oninput="validateText(this)" placeholder="enter surname">
+                                       oninput="validateText(this)" placeholder="enter surname" style="text-transform: uppercase;">
                             </div>
                             <div class="form-group">
                                 <label for="given_name">Given Names</label>
                                 <input type="text" id="given-name" name="given_name" required
-                                       oninput="validateText(this)" placeholder="enter given names">
+                                       oninput="validateText(this)" placeholder="enter given names" style="text-transform: uppercase;">
                             </div>
                         </div>
                         
@@ -909,6 +909,9 @@ $current_page = basename($_SERVER['PHP_SELF']);
                                 <label for="within">Within (Validity Period)</label>
                                 <input type="date" id="within" name="within" required>
                             </div>
+                            <div class="form-group">
+                                <!-- empty placeholder to reduce the date input width to half -->
+                            </div>
                         </div>
                     </div>
                     
@@ -921,13 +924,13 @@ $current_page = basename($_SERVER['PHP_SELF']);
     </div>
 
     <script>
-        // Function to validate text fields (alphabetic only and capitalize first letter)
+        // Function to validate text fields (alphabetic, spaces, hyphens, apostrophes, periods, and convert to uppercase)
         function validateText(input) {
-            // Remove non-alphabetic characters (allow spaces and hyphens)
-            input.value = input.value.replace(/[^a-zA-Z\s\-]/g, '');
+            // Remove non-alphabetic, non-space, non-hyphen, non-apostrophe, non-period characters
+            input.value = input.value.replace(/[^a-zA-Z\s\-\'\.]/g, '');
             
-            // Capitalize the first letter of each word
-            input.value = input.value.replace(/\b\w/g, (char) => char.toUpperCase());
+            // Convert to uppercase
+            input.value = input.value.toUpperCase();
             
             // Remove invalid class if value exists
             if (input.value.trim()) {
