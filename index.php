@@ -1371,8 +1371,8 @@ function showDashboard() {
                 <div class="row mb-4">
                     <div class="col-md-6 mb-3">
                         <div style="background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.05); border: 1px solid #e1e5e9; height: 100%;">
-                            <h5 class="fw-bold text-primary mb-3" style="font-size: 1.1rem;">
-                                <i class="fa fa-pie-chart me-2" style="color: var(--secondary);"></i>Visa Status Distribution
+                            <h5 class="fw-bold mb-3" style="font-size: 1.1rem; color: #5c3c1e;">
+                                <i class="fa fa-pie-chart me-2" style="color: #5c3c1e;"></i>Visa Status Distribution
                             </h5>
                             <div style="position: relative; height: 250px; width: 100%;">
                                 <canvas id="statusChart"></canvas>
@@ -1381,8 +1381,8 @@ function showDashboard() {
                     </div>
                     <div class="col-md-6 mb-3">
                         <div style="background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.05); border: 1px solid #e1e5e9; height: 100%;">
-                            <h5 class="fw-bold text-primary mb-3" style="font-size: 1.1rem;">
-                                <i class="fa fa-bar-chart me-2" style="color: var(--info);"></i>Visa Issuance (Last 6 Months)
+                            <h5 class="fw-bold mb-3" style="font-size: 1.1rem; color: #5c3c1e;">
+                                <i class="fa fa-bar-chart me-2" style="color: #5c3c1e;"></i>Visa Issuance (Last 6 Months)
                             </h5>
                             <div style="position: relative; height: 250px; width: 100%;">
                                 <canvas id="issuanceChart"></canvas>
