@@ -739,8 +739,8 @@ function showDashboard() {
         <script src="vendors/chartjs/chart.js"></script>
         <style>
             :root {
-                --primary: #3b82f6; /* Friendly Slate Blue */
-                --secondary: #6366f1; /* Friendly Indigo */
+                --primary: #5c3c1e; /* NIS Coffee Brown */
+                --secondary: #1a5c2e; /* NIS Green */
                 --dark: #0f172a;
                 --light: #f8fafc;
                 --warning: #f59e0b;
@@ -1549,8 +1549,8 @@ function showDashboard() {
                         datasets: [{
                             label: 'Visas Issued',
                             data: <?php echo json_encode($monthly_counts); ?>,
-                            backgroundColor: 'rgba(59, 130, 246, 0.85)',
-                            borderColor: '#3b82f6',
+                            backgroundColor: 'rgba(92, 60, 30, 0.85)',
+                            borderColor: '#5c3c1e',
                             borderWidth: 1.5,
                             borderRadius: 6
                         }]
