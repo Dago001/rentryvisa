@@ -167,7 +167,7 @@ try {
     <link rel="icon" href="assets/images/favicon.ico" type="image/x-icon">
     <link href="vendors/bootstrap/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="vendors/font-awesome/css/font-awesome.min.css" rel="stylesheet">
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="vendors/chartjs/chart.js"></script>
     <style>
         :root {
             --primary: #1a5c2e;

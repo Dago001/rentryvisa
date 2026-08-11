@@ -139,7 +139,7 @@ if(isset($_GET['id'])) {
     <!-- Bootstrap CSS -->
     <link href="vendors/bootstrap/dist/css/bootstrap.min.css" rel="stylesheet">
     <!-- Font Awesome -->
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="vendors/font-awesome/css/font-awesome.min.css">
     
     <style>
         :root {

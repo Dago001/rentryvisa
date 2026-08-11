@@ -138,7 +138,7 @@ $hasData = $numb > 0 || !empty($recent_applications);
     <link href="vendors/bootstrap/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="vendors/font-awesome/css/font-awesome.min.css" rel="stylesheet">
     <!-- Chart.js for simple charts -->
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="vendors/chartjs/chart.js"></script>
     <style>
         :root {
             --primary: #1a5c2e;
