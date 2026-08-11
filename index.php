@@ -1397,7 +1397,7 @@ function showDashboard() {
                     <div class="col-md-7 mb-4">
                         <div class="recent-card" style="height: 100%; margin-top: 0;">
                             <div class="card-header">
-                                <h5><i class="fa fa-history" style="color: var(--primary);"></i> Recent Applications</h5>
+                                <h5 style="color: #5c3c1e;"><i class="fa fa-history" style="color: #5c3c1e;"></i> Recent Applications</h5>
                                 <a href="re-entry-visa" class="view-all-btn">View All</a>
                             </div>
                             
