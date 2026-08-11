@@ -733,7 +733,22 @@ $numb = $retrieve ? mysqli_num_rows($retrieve) : 0;
                 transform: none;
             }
         }
-    </style>
+    
+        /* Welcome Banner Cream/Off-White Theme Override */
+        .welcome-banner {
+            background: #fdfbf7 !important;
+            color: #5c3c1e !important;
+            border: 1px solid #e2dcd0 !important;
+            box-shadow: 0 4px 15px rgba(92, 60, 30, 0.05) !important;
+        }
+        .welcome-banner h2, .welcome-text h2, #currentDateTime {
+            color: #5c3c1e !important;
+        }
+        .welcome-banner p, .welcome-text p, .location {
+            color: #7c6e60 !important;
+            opacity: 1 !important;
+        }
+</style>
 </head>
 <body>
     <!-- Shared Sidebar Component -->
