@@ -963,7 +963,7 @@ $numb = $retrieve ? mysqli_num_rows($retrieve) : 0;
         setInterval(updateDateTime, 1000);
         
         // Search functionality
-        document.addEventListener('DOMContentLoaded', function() {
+        function initSearch() {
             const searchInput = document.getElementById('searchInput');
             const clearSearch = document.getElementById('clearSearch');
             const table = document.getElementById('applicationsTable');
@@ -973,12 +973,12 @@ $numb = $retrieve ? mysqli_num_rows($retrieve) : 0;
             const tbody = table.getElementsByTagName('tbody')[0];
             if (!tbody) return;
             
-            const tableRows = tbody.getElementsByTagName('tr');
             const noResults = document.getElementById('noResults');
             
             // Search function
-            searchInput.addEventListener('keyup', function() {
+            searchInput.addEventListener('input', function() {
                 const searchTerm = this.value.toLowerCase().trim();
+                const tableRows = tbody.getElementsByTagName('tr');
                 let hasResults = false;
                 
                 // Loop through all table rows
@@ -1033,11 +1033,17 @@ $numb = $retrieve ? mysqli_num_rows($retrieve) : 0;
             if (clearSearch) {
                 clearSearch.addEventListener('click', function() {
                     searchInput.value = '';
-                    searchInput.dispatchEvent(new Event('keyup'));
+                    searchInput.dispatchEvent(new Event('input'));
                     searchInput.focus();
                 });
             }
-        });
+        }
+
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', initSearch);
+        } else {
+            initSearch();
+        }
     </script>
 </body>
 </html>

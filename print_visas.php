@@ -893,16 +893,21 @@ if (!$retrieve) {
         }
         
         // Search functionality
-        document.addEventListener('DOMContentLoaded', function() {
+        function initSearch() {
             const searchInput = document.getElementById('searchInput');
             const clearSearch = document.getElementById('clearSearch');
             const table = document.getElementById('applicationsTable');
-            const tableRows = table.getElementsByTagName('tbody')[0].getElementsByTagName('tr');
+            if (!table) return;
+            
+            const tbody = table.getElementsByTagName('tbody')[0];
+            if (!tbody) return;
+            
             const noResults = document.getElementById('noResults');
             
             // Search function
             searchInput.addEventListener('input', function() {
                 const searchTerm = this.value.toLowerCase().trim();
+                const tableRows = tbody.getElementsByTagName('tr');
                 let hasResults = false;
                 
                 // Loop through all table rows
@@ -964,9 +969,13 @@ if (!$retrieve) {
                 searchInput.dispatchEvent(new Event('input'));
                 searchInput.focus();
             });
-            
+        }
 
-        });
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', initSearch);
+        } else {
+            initSearch();
+        }
     </script>
 </body>
 </html>
