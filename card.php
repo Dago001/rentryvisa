@@ -27,17 +27,17 @@ if (isset($_GET['id'])) {
     if ($numb > 0) {
         $foundk = $retrieve->fetch_assoc();
         
-        // Assign variables
-        $profile = htmlspecialchars($foundk['visa_number']);
-        $passportnumber = htmlspecialchars($foundk['passport_number']);
-        $surname = htmlspecialchars($foundk['surname']);
-        $firstname = htmlspecialchars($foundk['given_name']);
-        $fees = htmlspecialchars($foundk['fees']);
+        // Assign variables (force uppercase for display)
+        $profile = strtoupper(htmlspecialchars($foundk['visa_number']));
+        $passportnumber = strtoupper(htmlspecialchars($foundk['passport_number']));
+        $surname = strtoupper(htmlspecialchars($foundk['surname']));
+        $firstname = strtoupper(htmlspecialchars($foundk['given_name']));
+        $fees = strtoupper(htmlspecialchars($foundk['fees']));
         $validuntil = htmlspecialchars($foundk['within']);
-        $journey = htmlspecialchars($foundk['journey']);
-        $place_of_issue = htmlspecialchars($foundk['place_of_issue']);
+        $journey = strtoupper(htmlspecialchars($foundk['journey']));
+        $place_of_issue = strtoupper(htmlspecialchars($foundk['place_of_issue']));
         $date_of_issue = htmlspecialchars($foundk['date_of_issue']);
-        $authority = htmlspecialchars($foundk['authority']);
+        $authority = strtoupper(htmlspecialchars($foundk['authority']));
         
 
     } else {

@@ -114,15 +114,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_record'])) {
         }
 
         // Sanitize input
-        $passport_number = mysqli_real_escape_string($conn, $_POST['passport_number']);
-        $surname = mysqli_real_escape_string($conn, $_POST['surname']);
-        $given_name = mysqli_real_escape_string($conn, $_POST['given_name']);
+        $passport_number = strtoupper(mysqli_real_escape_string($conn, $_POST['passport_number']));
+        $surname = strtoupper(mysqli_real_escape_string($conn, $_POST['surname']));
+        $given_name = strtoupper(mysqli_real_escape_string($conn, $_POST['given_name']));
         
         // Get the current visa number from hidden field
-        $current_visa_number = mysqli_real_escape_string($conn, $_POST['visa_number']);
+        $current_visa_number = strtoupper(mysqli_real_escape_string($conn, $_POST['visa_number']));
         
         // Check if visa number is being changed
-        $new_visa_number = mysqli_real_escape_string($conn, $_POST['new_visa_number']);
+        $new_visa_number = strtoupper(mysqli_real_escape_string($conn, $_POST['new_visa_number']));
         
         // Use new visa number if provided, otherwise keep current
         $final_visa_number = !empty($new_visa_number) ? $new_visa_number : $current_visa_number;
@@ -145,21 +145,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_record'])) {
                 
                 // Add optional fields if they exist in the database
                 $optionalFields = [
-                    'sex' => mysqli_real_escape_string($conn, $_POST['sex'] ?? ''),
-                    'place_of_birth' => mysqli_real_escape_string($conn, $_POST['place_of_birth'] ?? ''),
+                    'sex' => strtoupper(mysqli_real_escape_string($conn, $_POST['sex'] ?? '')),
+                    'place_of_birth' => strtoupper(mysqli_real_escape_string($conn, $_POST['place_of_birth'] ?? '')),
                     'date_of_birth' => mysqli_real_escape_string($conn, $_POST['date_of_birth'] ?? ''),
-                    'nationality' => mysqli_real_escape_string($conn, $_POST['nationality'] ?? ''),
-                    'permanent_address' => mysqli_real_escape_string($conn, $_POST['permanent_address'] ?? ''),
-                    'travelling_on' => mysqli_real_escape_string($conn, $_POST['travelling_on'] ?? ''),
-                    'port_of_entry' => mysqli_real_escape_string($conn, $_POST['port_of_entry'] ?? ''),
+                    'nationality' => strtoupper(mysqli_real_escape_string($conn, $_POST['nationality'] ?? '')),
+                    'permanent_address' => strtoupper(mysqli_real_escape_string($conn, $_POST['permanent_address'] ?? '')),
+                    'travelling_on' => strtoupper(mysqli_real_escape_string($conn, $_POST['travelling_on'] ?? '')),
+                    'port_of_entry' => strtoupper(mysqli_real_escape_string($conn, $_POST['port_of_entry'] ?? '')),
                     'date_of_arrival' => mysqli_real_escape_string($conn, $_POST['date_of_arrival'] ?? ''),
                     'valid_from' => mysqli_real_escape_string($conn, $_POST['valid_from'] ?? ''),
                     'valid_until' => mysqli_real_escape_string($conn, $_POST['valid_until'] ?? ''),
-                    'place_of_issue' => mysqli_real_escape_string($conn, $_POST['place_of_issue'] ?? ''),
+                    'place_of_issue' => strtoupper(mysqli_real_escape_string($conn, $_POST['place_of_issue'] ?? '')),
                     'date_of_issue' => mysqli_real_escape_string($conn, $_POST['date_of_issue'] ?? ''),
-                    'remarks' => mysqli_real_escape_string($conn, $_POST['remarks'] ?? ''),
-                    'purpose' => mysqli_real_escape_string($conn, $_POST['purpose'] ?? ''),
-                    'journey' => mysqli_real_escape_string($conn, $_POST['journey'] ?? ''),
+                    'remarks' => strtoupper(mysqli_real_escape_string($conn, $_POST['remarks'] ?? '')),
+                    'purpose' => strtoupper(mysqli_real_escape_string($conn, $_POST['purpose'] ?? '')),
+                    'journey' => strtoupper(mysqli_real_escape_string($conn, $_POST['journey'] ?? '')),
                     'within' => mysqli_real_escape_string($conn, $_POST['within'] ?? '')
                 ];
                 
@@ -217,21 +217,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_record'])) {
             
             // Add optional fields if they exist in the database
             $optionalFields = [
-                'sex' => mysqli_real_escape_string($conn, $_POST['sex'] ?? ''),
-                'place_of_birth' => mysqli_real_escape_string($conn, $_POST['place_of_birth'] ?? ''),
+                'sex' => strtoupper(mysqli_real_escape_string($conn, $_POST['sex'] ?? '')),
+                'place_of_birth' => strtoupper(mysqli_real_escape_string($conn, $_POST['place_of_birth'] ?? '')),
                 'date_of_birth' => mysqli_real_escape_string($conn, $_POST['date_of_birth'] ?? ''),
-                'nationality' => mysqli_real_escape_string($conn, $_POST['nationality'] ?? ''),
-                'permanent_address' => mysqli_real_escape_string($conn, $_POST['permanent_address'] ?? ''),
-                'travelling_on' => mysqli_real_escape_string($conn, $_POST['travelling_on'] ?? ''),
-                'port_of_entry' => mysqli_real_escape_string($conn, $_POST['port_of_entry'] ?? ''),
+                'nationality' => strtoupper(mysqli_real_escape_string($conn, $_POST['nationality'] ?? '')),
+                'permanent_address' => strtoupper(mysqli_real_escape_string($conn, $_POST['permanent_address'] ?? '')),
+                'travelling_on' => strtoupper(mysqli_real_escape_string($conn, $_POST['travelling_on'] ?? '')),
+                'port_of_entry' => strtoupper(mysqli_real_escape_string($conn, $_POST['port_of_entry'] ?? '')),
                 'date_of_arrival' => mysqli_real_escape_string($conn, $_POST['date_of_arrival'] ?? ''),
                 'valid_from' => mysqli_real_escape_string($conn, $_POST['valid_from'] ?? ''),
                 'valid_until' => mysqli_real_escape_string($conn, $_POST['valid_until'] ?? ''),
-                'place_of_issue' => mysqli_real_escape_string($conn, $_POST['place_of_issue'] ?? ''),
+                'place_of_issue' => strtoupper(mysqli_real_escape_string($conn, $_POST['place_of_issue'] ?? '')),
                 'date_of_issue' => mysqli_real_escape_string($conn, $_POST['date_of_issue'] ?? ''),
-                'remarks' => mysqli_real_escape_string($conn, $_POST['remarks'] ?? ''),
-                'purpose' => mysqli_real_escape_string($conn, $_POST['purpose'] ?? ''),
-                'journey' => mysqli_real_escape_string($conn, $_POST['journey'] ?? ''),
+                'remarks' => strtoupper(mysqli_real_escape_string($conn, $_POST['remarks'] ?? '')),
+                'purpose' => strtoupper(mysqli_real_escape_string($conn, $_POST['purpose'] ?? '')),
+                'journey' => strtoupper(mysqli_real_escape_string($conn, $_POST['journey'] ?? '')),
                 'within' => mysqli_real_escape_string($conn, $_POST['within'] ?? '')
             ];
             

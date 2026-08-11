@@ -180,6 +180,19 @@ $current_page = basename($_SERVER['PHP_SELF']);
             width: 250px;
         }
     }
+    
+    /* Force all text inputs, search boxes, textareas, dropdowns, table cells, and overlay texts to uppercase */
+    input[type="text"], 
+    input[type="search"], 
+    textarea, 
+    select, 
+    option, 
+    td, 
+    .table td, 
+    .table th,
+    .visa-text {
+        text-transform: uppercase !important;
+    }
 </style>
 
 <!-- Sidebar HTML Structure -->
@@ -297,6 +310,14 @@ document.querySelectorAll('a[href*="logout"]').forEach(link => {
             e.preventDefault();
         }
     });
+});
+
+// Automatically convert all text inputs to uppercase in real-time as the user types
+document.addEventListener('input', function(event) {
+    if (event.target && event.target.tagName === 'INPUT' && (event.target.type === 'text' || event.target.type === 'search')) {
+        // Exclude specific fields if necessary, but apply globally to text/search inputs
+        event.target.value = event.target.value.toUpperCase();
+    }
 });
 </script>
 

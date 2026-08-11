@@ -48,19 +48,19 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
         exit();
     }
 
-    // Sanitize and validate input data
-    $visa_number = mysqli_real_escape_string($conn, trim($_POST['visa_number']));
-    $passport_number = mysqli_real_escape_string($conn, trim($_POST['passport_number']));
-    $surname = mysqli_real_escape_string($conn, trim($_POST['surname']));
-    $given_name = mysqli_real_escape_string($conn, trim($_POST['given_name']));
-    $nationality = mysqli_real_escape_string($conn, trim($_POST['nationality']));
-    $place_of_issue = mysqli_real_escape_string($conn, trim($_POST['place_of_issue']));
+    // Sanitize and validate input data (force uppercase on all text inputs)
+    $visa_number = strtoupper(mysqli_real_escape_string($conn, trim($_POST['visa_number'])));
+    $passport_number = strtoupper(mysqli_real_escape_string($conn, trim($_POST['passport_number'])));
+    $surname = strtoupper(mysqli_real_escape_string($conn, trim($_POST['surname'])));
+    $given_name = strtoupper(mysqli_real_escape_string($conn, trim($_POST['given_name'])));
+    $nationality = strtoupper(mysqli_real_escape_string($conn, trim($_POST['nationality'])));
+    $place_of_issue = strtoupper(mysqli_real_escape_string($conn, trim($_POST['place_of_issue'])));
     $date_of_issue = mysqli_real_escape_string($conn, $_POST['date_of_issue']);
-    $embassy = mysqli_real_escape_string($conn, trim($_POST['embassy']));
-    $authority = mysqli_real_escape_string($conn, trim($_POST['authority']));
+    $embassy = strtoupper(mysqli_real_escape_string($conn, trim($_POST['embassy'])));
+    $authority = strtoupper(mysqli_real_escape_string($conn, trim($_POST['authority'])));
     $within = mysqli_real_escape_string($conn, $_POST['within']);
-    $journey = mysqli_real_escape_string($conn, $_POST['journey']);
-    $fees = mysqli_real_escape_string($conn, $_POST['fees']);
+    $journey = strtoupper(mysqli_real_escape_string($conn, $_POST['journey']));
+    $fees = strtoupper(mysqli_real_escape_string($conn, $_POST['fees']));
     $created_by = mysqli_real_escape_string($conn, $_SESSION['username']);
 
     // Validate dates
