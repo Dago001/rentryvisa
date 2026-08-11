@@ -78,9 +78,9 @@ if (isset($_GET['id'])) {
         }
         
         .print-area {
-            /* Standard visa sticker size in mm converted to pixels (1mm = 3.78px approx) */
-            width: 500px;  /* 184mm * 3.78 ≈ 696px */
-            height: 400px; /* 260mm * 3.78 ≈ 983px */
+            /* Visa sticker size in mm converted to pixels (104mm * 3.78 ≈ 393px, 73mm * 3.78 ≈ 276px) */
+            width: 393px;
+            height: 276px;
             position: relative;
             transform-origin: 0 0;
             background-color: transparent;
@@ -120,7 +120,7 @@ if (isset($_GET['id'])) {
         
         .category {
             top: 40.8%;
-            left: 17.6%;
+            left: 20%;
             font-size: 16px;
             writing-mode: vertical-rl;
             text-orientation: mixed;
@@ -204,7 +204,7 @@ if (isset($_GET['id'])) {
         
         @media print {
             @page {
-                size: 260mm 184mm; /* Force 16K landscape size (260x184mm) */
+                size: 104mm 73mm; /* Force 104x73mm landscape custom page size */
                 margin: 0 !important;
                 padding: 0 !important;
             }
@@ -212,8 +212,8 @@ if (isset($_GET['id'])) {
             html, body {
                 margin: 0 !important;
                 padding: 0 !important;
-                width: 260mm !important;
-                height: 184mm !important;
+                width: 104mm !important;
+                height: 73mm !important;
                 background-color: transparent !important;
                 overflow: hidden !important;
                 -webkit-print-color-adjust: exact !important;
@@ -226,8 +226,8 @@ if (isset($_GET['id'])) {
             }
             
             .print-area {
-                width: 260mm !important;  /* Landscape dimensions */
-                height: 184mm !important; /* Landscape dimensions */
+                width: 104mm !important;
+                height: 73mm !important;
                 margin: 0 !important;
                 padding: 0 !important;
                 background-color: transparent !important;
@@ -246,8 +246,8 @@ if (isset($_GET['id'])) {
             .visa-container {
                 width: 100% !important;
                 height: 100% !important;
-                background-size: cover !important; /* Ensure image covers entire area */
-                background-position: center center !important; /* Center the image */
+                background-size: cover !important;
+                background-position: center center !important;
                 background-repeat: no-repeat !important;
                 position: relative !important;
                 margin: 0 !important;
@@ -256,7 +256,84 @@ if (isset($_GET['id'])) {
                 overflow: hidden !important;
             }
             
-            /* MODIFIED: Hide visa number in print */
+            /* Enforce exact absolute physical millimeter coordinates and font size for print output */
+            .visa-text {
+                font-size: 10.5pt !important;
+                font-family: 'Courier New', Courier, monospace !important;
+                font-weight: bold !important;
+                color: #000 !important;
+            }
+            
+            .category {
+                top: 29.8mm !important;
+                left: 18.3mm !important;
+                height: 16.8mm !important;
+                font-size: 10.5pt !important;
+            }
+            
+            .unicef-tag {
+                top: 29.8mm !important;
+                left: 83.7mm !important;
+                height: 16.8mm !important;
+                font-size: 10.5pt !important;
+            }
+            
+            .full-name {
+                top: 38.0mm !important;
+                left: 36.0mm !important;
+                width: 59.0mm !important;
+                font-size: 10.5pt !important;
+            }
+            
+            .passport-number {
+                top: 45.0mm !important;
+                left: 36.0mm !important;
+                width: 25.0mm !important;
+                font-size: 10.5pt !important;
+            }
+            
+            .authority {
+                top: 45.0mm !important;
+                left: 59.0mm !important;
+                width: 25.0mm !important;
+                font-size: 10.5pt !important;
+            }
+            
+            .place-of-issue {
+                top: 52.0mm !important;
+                left: 34.0mm !important;
+                width: 25.0mm !important;
+                font-size: 10.5pt !important;
+            }
+            
+            .fees {
+                top: 52.0mm !important;
+                left: 71.0mm !important;
+                width: 25.0mm !important;
+                font-size: 10.5pt !important;
+            }
+            
+            .journey {
+                top: 59.0mm !important;
+                left: 46.0mm !important;
+                width: 50.0mm !important;
+                font-size: 10.5pt !important;
+            }
+            
+            .valid-until {
+                top: 66.0mm !important;
+                left: 32.0mm !important;
+                width: 25.0mm !important;
+                font-size: 10.5pt !important;
+            }
+            
+            .date-of-issue {
+                top: 66.0mm !important;
+                left: 55.0mm !important;
+                width: 25.0mm !important;
+                font-size: 10.5pt !important;
+            }
+            
             .visa-number {
                 display: none !important;
                 visibility: hidden !important;
