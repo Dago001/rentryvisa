@@ -868,7 +868,10 @@ if (!$retrieve) {
                 minute: '2-digit',
                 second: '2-digit'
             };
-            document.getElementById('currentDateTime').textContent = now.toLocaleDateString('en-US', options);
+            const dateTimeEl = document.getElementById('currentDateTime');
+            if (dateTimeEl) {
+                dateTimeEl.textContent = now.toLocaleDateString('en-US', options);
+            }
         }
         
         // Update date and time immediately and then every second
