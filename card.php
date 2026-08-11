@@ -120,7 +120,7 @@ if (isset($_GET['id'])) {
         
         .category {
             top: 40.8%;
-            left: 12.6%;
+            left: 17.6%;
             font-size: 16px;
             writing-mode: vertical-rl;
             text-orientation: mixed;
@@ -133,7 +133,7 @@ if (isset($_GET['id'])) {
         
         .unicef-tag {
             top: 40.8%;
-            left: 85.5%;
+            left: 80.5%;
             font-size: 16px;
             writing-mode: vertical-rl;
             text-orientation: mixed;
