@@ -4,33 +4,37 @@ require_once('db/db.php');
 
 header('Content-Type: application/json');
 
-// Check database connection
-if (!$conn) {
-    http_response_code(500);
-    echo json_encode(['error' => 'Database connection failed']);
+if (!isset($_SESSION['username'])) {
+    echo json_encode(['error' => 'Unauthorized']);
     exit();
 }
 
-$passport = $_GET['passport'] ?? '';
-$passport = trim($passport);
+$passport_no = isset($_GET['passport_number']) ? trim($_GET['passport_number']) : '';
 
-if (empty($passport)) {
+if (empty($passport_no)) {
     echo json_encode(['exists' => false]);
     exit();
 }
 
-// Search for any existing application with this passport number
-$sql = "SELECT id FROM visa_applications WHERE passport_number = ?";
-$stmt = mysqli_prepare($conn, $sql);
-if ($stmt) {
-    mysqli_stmt_bind_param($stmt, "s", $passport);
-    mysqli_stmt_execute($stmt);
-    mysqli_stmt_store_result($stmt);
-    $exists = mysqli_stmt_num_rows($stmt) > 0;
-    mysqli_stmt_close($stmt);
-    
-    echo json_encode(['exists' => $exists]);
+// Strip spaces and special characters for safety/consistency
+$passport_no = preg_replace('/[^a-zA-Z0-9]/', '', $passport_no);
+$passport_no = mysqli_real_escape_string($conn, $passport_no);
+
+// Query to find if the passport number already exists in the database
+$query = "SELECT surname, given_name FROM visa_applications 
+          WHERE REPLACE(passport_number, ' ', '') = '$passport_no' 
+          ORDER BY application_date DESC LIMIT 1";
+
+$result = mysqli_query($conn, $query);
+
+if ($result && mysqli_num_rows($result) > 0) {
+    $row = mysqli_fetch_assoc($result);
+    echo json_encode([
+        'exists' => true,
+        'surname' => strtoupper($row['surname']),
+        'given_name' => strtoupper($row['given_name'])
+    ]);
 } else {
-    http_response_code(500);
-    echo json_encode(['error' => 'Database query preparation failed']);
+    echo json_encode(['exists' => false]);
 }
+?>

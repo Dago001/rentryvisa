@@ -63,11 +63,17 @@ $fees = strtoupper(mysqli_real_escape_string($conn, $_POST['fees']));
 $remarks = strtoupper(mysqli_real_escape_string($conn, trim($_POST['remarks'] ?? '')));
 $created_by = mysqli_real_escape_string($conn, $_SESSION['username']);
 
-// Check duplicate passport
-$check_passport = mysqli_query($conn, "SELECT id FROM visa_applications WHERE passport_number = '$passport_number'");
+// Check duplicate passport (reject only if name doesn't match)
+$check_passport = mysqli_query($conn, "SELECT surname, given_name FROM visa_applications WHERE passport_number = '$passport_number' LIMIT 1");
 if ($check_passport && mysqli_num_rows($check_passport) > 0) {
-    echo json_encode(['status' => 'error', 'message' => "Passport Number '$passport_number' already exists in system."]);
-    exit();
+    $row_passport = mysqli_fetch_assoc($check_passport);
+    $existing_surname = strtoupper(trim($row_passport['surname']));
+    $existing_given = strtoupper(trim($row_passport['given_name']));
+    
+    if ($existing_surname !== $surname || $existing_given !== $given_name) {
+        echo json_encode(['status' => 'error', 'message' => "Passport Number '$passport_number' already exists in system for another person ($existing_surname $existing_given)."]);
+        exit();
+    }
 }
 
 // Check duplicate authority

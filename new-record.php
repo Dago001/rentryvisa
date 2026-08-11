@@ -624,7 +624,7 @@ $current_page = basename($_SERVER['PHP_SELF']);
                             <div class="form-group">
                                 <label for="passport_number">Passport Number</label>
                                 <input type="text" id="passport-number" name="passport_number" required
-                                       oninput="validateAlphaNumeric(this)" placeholder="enter passport number">
+                                       oninput="validatePassportNo(this)" placeholder="enter passport number">
                                 <div id="passport-status" style="margin-top: 5px; font-size: 0.85rem; font-weight: 600;"></div>
                             </div>
                         </div>
@@ -952,6 +952,20 @@ $current_page = basename($_SERVER['PHP_SELF']);
             }
         }
 
+        // Function to validate and capitalize passport number fields (no spaces)
+        function validatePassportNo(input) {
+            // Remove any non-alphanumeric characters (no spaces)
+            input.value = input.value.replace(/[^a-zA-Z0-9]/g, '');
+            
+            // Convert to uppercase
+            input.value = input.value.toUpperCase();
+            
+            // Remove invalid class if value exists
+            if (input.value.trim()) {
+                input.classList.remove('is-invalid');
+            }
+        }
+
         // Function to validate all required fields
         function validateForm() {
             let isValid = true;
@@ -1207,6 +1221,85 @@ $current_page = basename($_SERVER['PHP_SELF']);
         document.addEventListener('DOMContentLoaded', function() {
             updateDateTime();
             setInterval(updateDateTime, 1000);
+
+            // Passport number existence check
+            const passportInput = document.getElementById('passport-number');
+            if (passportInput) {
+                passportInput.addEventListener('change', function() {
+                    const passportNo = this.value.trim();
+                    if (!passportNo) return;
+
+                    // Enforce strict alphanumeric format
+                    this.value = passportNo.replace(/[^A-Z0-9]/g, '');
+
+                    // Make AJAX request to check_passport.php
+                    fetch('check_passport.php?passport_number=' + encodeURIComponent(this.value))
+                        .then(response => response.json())
+                        .then(data => {
+                            if (data.exists) {
+                                const message = "This Passport Number (" + this.value + ") already exists in the system for:\n" + 
+                                                data.surname + " " + data.given_name + 
+                                                "\n\nDo you want to proceed and tie this record to this person?";
+                                if (confirm(message)) {
+                                    // Populate surname and given name
+                                    const surnameInput = document.getElementById('surname');
+                                    const givenNameInput = document.getElementById('given-name');
+                                    
+                                    if (surnameInput) {
+                                        surnameInput.value = data.surname;
+                                        surnameInput.readOnly = true;
+                                        surnameInput.style.backgroundColor = '#e9ecef';
+                                        surnameInput.style.cursor = 'not-allowed';
+                                    }
+                                    if (givenNameInput) {
+                                        givenNameInput.value = data.given_name;
+                                        givenNameInput.readOnly = true;
+                                        givenNameInput.style.backgroundColor = '#e9ecef';
+                                        givenNameInput.style.cursor = 'not-allowed';
+                                    }
+                                } else {
+                                    // Clear passport number field
+                                    this.value = '';
+                                    
+                                    // Reset names
+                                    const surnameInput = document.getElementById('surname');
+                                    const givenNameInput = document.getElementById('given-name');
+                                    
+                                    if (surnameInput && surnameInput.readOnly) {
+                                        surnameInput.value = '';
+                                        surnameInput.readOnly = false;
+                                        surnameInput.style.backgroundColor = '';
+                                        surnameInput.style.cursor = '';
+                                    }
+                                    if (givenNameInput && givenNameInput.readOnly) {
+                                        givenNameInput.value = '';
+                                        givenNameInput.readOnly = false;
+                                        givenNameInput.style.backgroundColor = '';
+                                        givenNameInput.style.cursor = '';
+                                    }
+                                    this.focus();
+                                }
+                            } else {
+                                // Passport does not exist. Re-enable names if they were readonly
+                                const surnameInput = document.getElementById('surname');
+                                const givenNameInput = document.getElementById('given-name');
+                                if (surnameInput && surnameInput.readOnly) {
+                                    surnameInput.readOnly = false;
+                                    surnameInput.style.backgroundColor = '';
+                                    surnameInput.style.cursor = '';
+                                }
+                                if (givenNameInput && givenNameInput.readOnly) {
+                                    givenNameInput.readOnly = false;
+                                    givenNameInput.style.backgroundColor = '';
+                                    givenNameInput.style.cursor = '';
+                                }
+                            }
+                        })
+                        .catch(error => {
+                            console.error('Error checking passport number:', error);
+                        });
+                });
+            }
         });
         
         // Logout is handled globally by sidebar.js/php

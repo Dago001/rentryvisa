@@ -1322,7 +1322,7 @@ $category_exists = in_array('category', $columns);
 
                     <!-- Section 4: Travel & Validity Parameters -->
                     <div class="section">
-                        <h4 class="section-title"><i class="fa fa-plane-departure me-2"></i>Travel & Validity Parameters</h4>
+                        <h4 class="section-title"><i class="fa fa-plane-departure me-2"></i>Travel & Validity</h4>
                         <div class="row g-3">
                             <?php if ($within_exists): ?>
                             <div class="col-md-6 col-lg-3">

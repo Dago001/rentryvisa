@@ -64,6 +64,17 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     $category = strtoupper(mysqli_real_escape_string($conn, $_POST['category']));
     $created_by = mysqli_real_escape_string($conn, $_SESSION['username']);
 
+    // Validate Passport Number (Numbers and Alphabets only, no spaces or special characters)
+    $passport_clean = preg_replace('/[^A-Z0-9]/', '', $passport_number);
+    if ($passport_clean !== $passport_number || empty($passport_clean)) {
+        $_SESSION['message'] = [
+            'type' => 'error',
+            'text' => 'Passport Number must contain only alphabetic characters and numbers (no spaces or special characters).'
+        ];
+        header("Location: new-record");
+        exit();
+    }
+
     // Validate dates
     $current_date = date('Y-m-d');
     if ($date_of_issue > $current_date) {
@@ -139,20 +150,25 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     mysqli_stmt_close($check_stmt);
 
     // Check if passport number already exists in the system
-    $check_passport_sql = "SELECT id FROM visa_applications WHERE passport_number = ?";
+    $check_passport_sql = "SELECT surname, given_name FROM visa_applications WHERE passport_number = ?";
     $check_passport_stmt = mysqli_prepare($conn, $check_passport_sql);
     mysqli_stmt_bind_param($check_passport_stmt, "s", $passport_number);
     mysqli_stmt_execute($check_passport_stmt);
-    mysqli_stmt_store_result($check_passport_stmt);
+    $result_passport = mysqli_stmt_get_result($check_passport_stmt);
     
-    if (mysqli_stmt_num_rows($check_passport_stmt) > 0) {
-        $_SESSION['message'] = [
-            'type' => 'error',
-            'text' => 'This passport number already exists in the system!'
-        ];
-        mysqli_stmt_close($check_passport_stmt);
-        header("Location: new-record");
-        exit();
+    if ($row_passport = mysqli_fetch_assoc($result_passport)) {
+        $existing_surname = strtoupper(trim($row_passport['surname']));
+        $existing_given = strtoupper(trim($row_passport['given_name']));
+        
+        if ($existing_surname !== $surname || $existing_given !== $given_name) {
+            $_SESSION['message'] = [
+                'type' => 'error',
+                'text' => "This Passport Number already exists in the system under the name: $existing_surname $existing_given. To proceed, please use the matching name to tie this record to them."
+            ];
+            mysqli_stmt_close($check_passport_stmt);
+            header("Location: new-record");
+            exit();
+        }
     }
     mysqli_stmt_close($check_passport_stmt);
 
