@@ -119,6 +119,35 @@ try {
                 $performance_data[] = $row;
             }
         }
+
+        // Query user status distribution (only their own applications)
+        $status_data = ['ACTIVE' => 0, 'PENDING' => 0, 'EXPIRED' => 0];
+        $status_query = "SELECT status, COUNT(*) as count FROM visa_applications WHERE created_by = '$username' GROUP BY status";
+        $status_result = mysqli_query($conn, $status_query);
+        if ($status_result && mysqli_num_rows($status_result) > 0) {
+            while ($row = mysqli_fetch_assoc($status_result)) {
+                $status_data[strtoupper($row['status'])] = (int)$row['count'];
+            }
+        }
+
+        // Query user monthly distribution for the last 6 months
+        $monthly_labels = [];
+        $monthly_counts = [];
+        $month_query = "SELECT 
+                            DATE_FORMAT(application_date, '%b %Y') as month, 
+                            COUNT(*) as count 
+                        FROM visa_applications 
+                        WHERE created_by = '$username'
+                        AND application_date >= DATE_SUB(CURDATE(), INTERVAL 6 MONTH)
+                        GROUP BY YEAR(application_date), MONTH(application_date)
+                        ORDER BY YEAR(application_date) ASC, MONTH(application_date) ASC";
+        $month_result = mysqli_query($conn, $month_query);
+        if ($month_result && mysqli_num_rows($month_result) > 0) {
+            while ($row = mysqli_fetch_assoc($month_result)) {
+                $monthly_labels[] = strtoupper($row['month']);
+                $monthly_counts[] = (int)$row['count'];
+            }
+        }
     }
     
 } catch (Exception $e) {
@@ -889,40 +918,29 @@ $hasData = $numb > 0 || !empty($recent_applications);
                 </div>
             </div>
 
-            <div class="quick-actions">
-                <a href="new-record" class="user-action-btn">
-                    <i class="fa fa-plus-circle" style="color: var(--secondary);"></i>
-                    <strong>New Visa Application</strong>
-                    <small>Create new re-entry visa</small>
-                </a>
-                <a href="re-entry-visa" class="user-action-btn">
-                    <i class="fa fa-list-alt" style="color: var(--primary);"></i>
-                    <strong>My Applications</strong>
-                    <small>View all your visa records</small>
-                </a>
-                <a href="print_visas" class="user-action-btn">
-                    <i class="fa fa-print" style="color: var(--info);"></i>
-                    <strong>Print Visa</strong>
-                    <small>Print visa vignette</small>
-                </a>
-                <a href="#" class="user-action-btn" onclick="alert('Feature coming soon!')">
-                    <i class="fa fa-download" style="color: var(--warning);"></i>
-                    <strong>Export Data</strong>
-                    <small>Download your applications</small>
-                </a>
-            </div>
-
-            <!-- My Performance Chart - USER SPECIFIC -->
-            <?php if (!empty($performance_data)): ?>
-            <div class="performance-card">
-                <div class="card-header">
-                    <h5><i class="fa fa-chart-bar" style="color: var(--primary);"></i> My Performance (Last 30 Days)</h5>
+            <!-- My Visualizations & Performance Metrics -->
+            <div class="row mb-4">
+                <div class="col-md-6 mb-3">
+                    <div style="background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.05); border: 1px solid #e1e5e9; height: 100%;">
+                        <h5 class="fw-bold text-primary mb-3" style="font-size: 1.1rem;">
+                            <i class="fa fa-pie-chart me-2" style="color: var(--secondary);"></i>My Visa Status Distribution
+                        </h5>
+                        <div style="position: relative; height: 250px; width: 100%;">
+                            <canvas id="statusChart"></canvas>
+                        </div>
+                    </div>
                 </div>
-                <div class="chart-container">
-                    <canvas id="performanceChart"></canvas>
+                <div class="col-md-6 mb-3">
+                    <div style="background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.05); border: 1px solid #e1e5e9; height: 100%;">
+                        <h5 class="fw-bold text-primary mb-3" style="font-size: 1.1rem;">
+                            <i class="fa fa-bar-chart me-2" style="color: var(--info);"></i>My Visa Issuance (Last 6 Months)
+                        </h5>
+                        <div style="position: relative; height: 250px; width: 100%;">
+                            <canvas id="issuanceChart"></canvas>
+                        </div>
+                    </div>
                 </div>
             </div>
-            <?php endif; ?>
 
             <!-- Recent Activities - USER'S OWN ACTIVITIES ONLY -->
             <div class="recent-activities">
@@ -1024,31 +1042,21 @@ $hasData = $numb > 0 || !empty($recent_applications);
             
 
             
-            // Performance Chart
-            <?php if (!empty($performance_data)): ?>
-            const performanceData = <?php echo json_encode($performance_data); ?>;
-            
-            // Prepare chart data
-            const labels = performanceData.map(item => {
-                const date = new Date(item.date);
-                return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-            });
-            
-            const data = performanceData.map(item => item.count);
-            
-            const ctx = document.getElementById('performanceChart').getContext('2d');
-            const performanceChart = new Chart(ctx, {
-                type: 'line',
+            // Status Chart (Pie/Doughnut) - Scoped to User
+            const statusCtx = document.getElementById('statusChart').getContext('2d');
+            new Chart(statusCtx, {
+                type: 'doughnut',
                 data: {
-                    labels: labels,
+                    labels: ['ACTIVE', 'PENDING', 'EXPIRED'],
                     datasets: [{
-                        label: 'Applications',
-                        data: data,
-                        backgroundColor: 'rgba(26, 92, 46, 0.1)',
-                        borderColor: 'rgba(26, 92, 46, 1)',
+                        data: [
+                            <?php echo $status_data['ACTIVE']; ?>,
+                            <?php echo $status_data['PENDING']; ?>,
+                            <?php echo $status_data['EXPIRED']; ?>
+                        ],
+                        backgroundColor: ['#2e7d32', '#f9a825', '#c62828'],
                         borderWidth: 2,
-                        tension: 0.4,
-                        fill: true
+                        borderColor: '#ffffff'
                     }]
                 },
                 options: {
@@ -1056,32 +1064,46 @@ $hasData = $numb > 0 || !empty($recent_applications);
                     maintainAspectRatio: false,
                     plugins: {
                         legend: {
-                            display: false
-                        },
-                        tooltip: {
-                            mode: 'index',
-                            intersect: false
+                            position: 'bottom',
+                            labels: {
+                                font: { family: "'Segoe UI', sans-serif", weight: 'bold' },
+                                padding: 15
+                            }
                         }
+                    },
+                    cutout: '60%'
+                }
+            });
+
+            // Issuance Chart (Bar Chart) - Scoped to User
+            const issuanceCtx = document.getElementById('issuanceChart').getContext('2d');
+            new Chart(issuanceCtx, {
+                type: 'bar',
+                data: {
+                    labels: <?php echo json_encode($monthly_labels); ?>,
+                    datasets: [{
+                        label: 'Visas Issued',
+                        data: <?php echo json_encode($monthly_counts); ?>,
+                        backgroundColor: 'rgba(26, 92, 46, 0.85)',
+                        borderColor: '#1a5c2e',
+                        borderWidth: 1.5,
+                        borderRadius: 6
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false }
                     },
                     scales: {
                         y: {
                             beginAtZero: true,
-                            ticks: {
-                                stepSize: 1
-                            },
-                            grid: {
-                                drawBorder: false
-                            }
-                        },
-                        x: {
-                            grid: {
-                                display: false
-                            }
+                            ticks: { stepSize: 1 }
                         }
                     }
                 }
             });
-            <?php endif; ?>
         });
         
         // Logout is handled globally by sidebar.js/php

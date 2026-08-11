@@ -661,6 +661,34 @@ function showDashboard() {
                     $recent_applications[] = $row;
                 }
             }
+            
+            // Query status distribution (Admin and Supervisor see EVERYTHING)
+            $status_data = ['ACTIVE' => 0, 'PENDING' => 0, 'EXPIRED' => 0];
+            $status_query = "SELECT status, COUNT(*) as count FROM visa_applications GROUP BY status";
+            $status_result = mysqli_query($conn, $status_query);
+            if ($status_result && mysqli_num_rows($status_result) > 0) {
+                while ($row = mysqli_fetch_assoc($status_result)) {
+                    $status_data[strtoupper($row['status'])] = (int)$row['count'];
+                }
+            }
+
+            // Query monthly distribution for the last 6 months
+            $monthly_labels = [];
+            $monthly_counts = [];
+            $month_query = "SELECT 
+                                DATE_FORMAT(application_date, '%b %Y') as month, 
+                                COUNT(*) as count 
+                            FROM visa_applications 
+                            WHERE application_date >= DATE_SUB(CURDATE(), INTERVAL 6 MONTH)
+                            GROUP BY YEAR(application_date), MONTH(application_date)
+                            ORDER BY YEAR(application_date) ASC, MONTH(application_date) ASC";
+            $month_result = mysqli_query($conn, $month_query);
+            if ($month_result && mysqli_num_rows($month_result) > 0) {
+                while ($row = mysqli_fetch_assoc($month_result)) {
+                    $monthly_labels[] = strtoupper($row['month']);
+                    $monthly_counts[] = (int)$row['count'];
+                }
+            }
         }
         
     } catch (Exception $e) {
@@ -680,6 +708,7 @@ function showDashboard() {
         <link rel="icon" href="assets/images/favicon.ico" type="image/x-icon">
         <link href="vendors/bootstrap/dist/css/bootstrap.min.css" rel="stylesheet">
         <link href="vendors/font-awesome/css/font-awesome.min.css" rel="stylesheet">
+        <script src="vendors/chartjs/chart.js"></script>
         <style>
             :root {
                 --primary: #1a5c2e;
@@ -1285,55 +1314,28 @@ function showDashboard() {
                     </div>
                 </div>
 
-                <!-- Quick Actions -->
-                <div class="quick-actions">
-                    <?php if ($userRole === 'Admin' || $userRole === 'Supervisor'): ?>
-                        <a href="new-record" class="action-btn">
-                            <i class="fa fa-plus-circle" style="color: var(--secondary);"></i>
-                            <strong>New Re-Entry Visa</strong>
-                            <small>Create new visa application</small>
-                        </a>
-                        <a href="re-entry-visa" class="action-btn">
-                            <i class="fa fa-list-alt" style="color: var(--primary);"></i>
-                            <strong>View Re-Entry Visas</strong>
-                            <small>Browse all visa records</small>
-                        </a>
-                        <a href="print_visas" class="action-btn">
-                            <i class="fa fa-print" style="color: var(--info);"></i>
-                            <strong>Print Re-Entry Visa</strong>
-                            <small>Print visa vignette</small>
-                        </a>
-                        <?php if ($userRole === 'Admin' || $userRole === 'Supervisor'): ?>
-                            <a href="report" class="action-btn">
-                                <i class="fa fa-bar-chart" style="color: var(--warning);"></i>
-                                <strong>Reports</strong>
-                                <small>View system statistics</small>
-                            </a>
-                        <?php endif; ?>
-                        <?php if ($userRole === 'Admin'): ?>
-                            <a href="createuser" class="action-btn">
-                                <i class="fa fa-users" style="color: var(--danger);"></i>
-                                <strong>User Management</strong>
-                                <small>Manage system users</small>
-                            </a>
-                        <?php endif; ?>
-                    <?php else: ?>
-                        <a href="new-record" class="action-btn">
-                            <i class="fa fa-plus-circle" style="color: var(--secondary);"></i>
-                            <strong>New Re-Entry Visa</strong>
-                            <small>Create new visa application</small>
-                        </a>
-                        <a href="re-entry-visa" class="action-btn">
-                            <i class="fa fa-list-alt" style="color: var(--primary);"></i>
-                            <strong>View Re-Entry Visas</strong>
-                            <small>Browse all visa records</small>
-                        </a>
-                        <a href="print_visas" class="action-btn">
-                            <i class="fa fa-print" style="color: var(--info);"></i>
-                            <strong>Print Re-Entry Visa</strong>
-                            <small>Print visa vignette</small>
-                        </a>
-                    <?php endif; ?>
+                <!-- System Visualizations & Performance Metrics -->
+                <div class="row mb-4">
+                    <div class="col-md-6 mb-3">
+                        <div style="background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.05); border: 1px solid #e1e5e9; height: 100%;">
+                            <h5 class="fw-bold text-primary mb-3" style="font-size: 1.1rem;">
+                                <i class="fa fa-pie-chart me-2" style="color: var(--secondary);"></i>Visa Status Distribution
+                            </h5>
+                            <div style="position: relative; height: 250px; width: 100%;">
+                                <canvas id="statusChart"></canvas>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-6 mb-3">
+                        <div style="background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.05); border: 1px solid #e1e5e9; height: 100%;">
+                            <h5 class="fw-bold text-primary mb-3" style="font-size: 1.1rem;">
+                                <i class="fa fa-bar-chart me-2" style="color: var(--info);"></i>Visa Issuance (Last 6 Months)
+                            </h5>
+                            <div style="position: relative; height: 250px; width: 100%;">
+                                <canvas id="issuanceChart"></canvas>
+                            </div>
+                        </div>
+                    </div>
                 </div>
 
 
@@ -1417,7 +1419,68 @@ function showDashboard() {
                 updateDateTime();
                 setInterval(updateDateTime, 1000);
                 
+                // Status Chart (Pie/Doughnut)
+                const statusCtx = document.getElementById('statusChart').getContext('2d');
+                new Chart(statusCtx, {
+                    type: 'doughnut',
+                    data: {
+                        labels: ['ACTIVE', 'PENDING', 'EXPIRED'],
+                        datasets: [{
+                            data: [
+                                <?php echo $status_data['ACTIVE']; ?>,
+                                <?php echo $status_data['PENDING']; ?>,
+                                <?php echo $status_data['EXPIRED']; ?>
+                            ],
+                            backgroundColor: ['#2e7d32', '#f9a825', '#c62828'],
+                            borderWidth: 2,
+                            borderColor: '#ffffff'
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: {
+                                position: 'bottom',
+                                labels: {
+                                    font: { family: "'Segoe UI', sans-serif", weight: 'bold' },
+                                    padding: 15
+                                }
+                            }
+                        },
+                        cutout: '60%'
+                    }
+                });
 
+                // Issuance Chart (Bar Chart)
+                const issuanceCtx = document.getElementById('issuanceChart').getContext('2d');
+                new Chart(issuanceCtx, {
+                    type: 'bar',
+                    data: {
+                        labels: <?php echo json_encode($monthly_labels); ?>,
+                        datasets: [{
+                            label: 'Visas Issued',
+                            data: <?php echo json_encode($monthly_counts); ?>,
+                            backgroundColor: 'rgba(26, 92, 46, 0.85)',
+                            borderColor: '#1a5c2e',
+                            borderWidth: 1.5,
+                            borderRadius: 6
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: { display: false }
+                        },
+                        scales: {
+                            y: {
+                                beginAtZero: true,
+                                ticks: { stepSize: 1 }
+                            }
+                        }
+                    }
+                });
             });
             
             // Logout is handled globally by sidebar.js/php
