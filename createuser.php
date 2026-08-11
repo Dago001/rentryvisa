@@ -9,8 +9,8 @@ if (!isset($_SESSION['username'])) {
 }
 
 // Only Administrator and Supervisor roles can access User Management
-$userRole = $_SESSION['role'] ?? 'DataEntry';
-if ($userRole !== 'Admin' && $userRole !== 'Supervisor') {
+$currentUserRole = $_SESSION['role'] ?? 'DataEntry';
+if ($currentUserRole !== 'Admin' && $currentUserRole !== 'Supervisor') {
     header("Location: user_dashboard");
     exit();
 }
@@ -131,60 +131,67 @@ if (isset($_POST['regUser'])) {
     } else {
         $serviceNo = mysqli_real_escape_string($conn, $_POST['serviceNo']);
         $userRole = mysqli_real_escape_string($conn, $_POST['userRole']);
-        $fname = mysqli_real_escape_string($conn, $_POST['fname']);
-        $lname = mysqli_real_escape_string($conn, $_POST['lname']);
-        $email = mysqli_real_escape_string($conn, $_POST['email']);
-        $password = password_hash($_POST['password'], PASSWORD_DEFAULT);
         
-        $photo = '';
-        if (isset($_FILES['photo']) && $_FILES['photo']['error'] === 0) {
-            $allowed = ['jpg', 'jpeg', 'png'];
-            $filename = $_FILES['photo']['name'];
-            $filetmp = $_FILES['photo']['tmp_name'];
-            $fileSize = $_FILES['photo']['size'];
-            $ext = strtolower(pathinfo($filename, PATHINFO_EXTENSION));
+        if ($currentUserRole === 'Supervisor' && $userRole !== 'DataEntry') {
+            $error_msg = "Error: Supervisors are only authorized to create Data Entry officers.";
+        } else {
+            $fname = mysqli_real_escape_string($conn, $_POST['fname']);
+            $lname = mysqli_real_escape_string($conn, $_POST['lname']);
+            $email = mysqli_real_escape_string($conn, $_POST['email']);
+            $password = password_hash($_POST['password'], PASSWORD_DEFAULT);
             
-            if (in_array($ext, $allowed)) {
-                if ($fileSize <= 2097152) {
-                    $newFilename = uniqid() . '.' . $ext;
-                    $uploadPath = 'uploads/' . $newFilename;
-                    
-                    if (!is_dir('uploads')) {
-                        mkdir('uploads', 0755, true);
-                    }
-                    
-                    if (move_uploaded_file($filetmp, $uploadPath)) {
-                        $photo = $uploadPath;
+            $photo = '';
+            if (isset($_FILES['photo']) && $_FILES['photo']['error'] === 0) {
+                $allowed = ['jpg', 'jpeg', 'png'];
+                $filename = $_FILES['photo']['name'];
+                $filetmp = $_FILES['photo']['tmp_name'];
+                $fileSize = $_FILES['photo']['size'];
+                $ext = strtolower(pathinfo($filename, PATHINFO_EXTENSION));
+                
+                if (in_array($ext, $allowed)) {
+                    if ($fileSize <= 2097152) {
+                        $newFilename = uniqid() . '.' . $ext;
+                        $uploadPath = 'uploads/' . $newFilename;
+                        
+                        if (!is_dir('uploads')) {
+                            mkdir('uploads', 0755, true);
+                        }
+                        
+                        if (move_uploaded_file($filetmp, $uploadPath)) {
+                            $photo = $uploadPath;
+                        } else {
+                            $error_msg = "Failed to upload file.";
+                        }
                     } else {
-                        $error_msg = "Failed to upload file.";
+                        $error_msg = "File size must be less than 2MB.";
                     }
                 } else {
-                    $error_msg = "File size must be less than 2MB.";
+                    $error_msg = "Only JPG, JPEG, and PNG files are allowed.";
                 }
-            } else {
-                $error_msg = "Only JPG, JPEG, and PNG files are allowed.";
             }
-        }
-        
-        $check_sql = "SELECT id, service_no, email FROM users WHERE service_no = '$serviceNo' OR email = '$email' LIMIT 1";
-        $check_result = mysqli_query($conn, $check_sql);
-        
-        if (mysqli_num_rows($check_result) > 0) {
-            $existing = mysqli_fetch_assoc($check_result);
-            if ($existing['service_no'] == $serviceNo) {
-                $error_msg = "Error: Service number '$serviceNo' already exists!";
-            } else {
-                $error_msg = "Error: Email '$email' already exists!";
-            }
-        } else {
-            $sql = "INSERT INTO users (service_no, role, fname, lname, email, password, photo) 
-                    VALUES ('$serviceNo', '$userRole', '$fname', '$lname', '$email', '$password', '$photo')";
             
-            if (mysqli_query($conn, $sql)) {
-                $success_msg = "User created successfully!";
-                $_POST = array();
-            } else {
-                $error_msg = "Error: " . mysqli_error($conn);
+            if (!isset($error_msg)) {
+                $check_sql = "SELECT id, service_no, email FROM users WHERE service_no = '$serviceNo' OR email = '$email' LIMIT 1";
+                $check_result = mysqli_query($conn, $check_sql);
+                
+                if (mysqli_num_rows($check_result) > 0) {
+                    $existing = mysqli_fetch_assoc($check_result);
+                    if ($existing['service_no'] == $serviceNo) {
+                        $error_msg = "Error: Service number '$serviceNo' already exists!";
+                    } else {
+                        $error_msg = "Error: Email '$email' already exists!";
+                    }
+                } else {
+                    $sql = "INSERT INTO users (service_no, role, fname, lname, email, password, photo) 
+                            VALUES ('$serviceNo', '$userRole', '$fname', '$lname', '$email', '$password', '$photo')";
+                    
+                    if (mysqli_query($conn, $sql)) {
+                        $success_msg = "User created successfully!";
+                        $_POST = array();
+                    } else {
+                        $error_msg = "Error: " . mysqli_error($conn);
+                    }
+                }
             }
         }
     }
@@ -931,8 +938,10 @@ $total_users = mysqli_num_rows($users_result);
                                         <label for="userRole" class="form-label">User Role</label>
                                         <select name="userRole" class="form-select" id="userRole" required>
                                             <option value="">--Select User Role--</option>
-                                            <option value="Admin" <?php echo (isset($_POST['userRole']) && $_POST['userRole'] == 'Admin') ? 'selected' : ''; ?>>Administrator</option>
-                                            <option value="Supervisor" <?php echo (isset($_POST['userRole']) && $_POST['userRole'] == 'Supervisor') ? 'selected' : ''; ?>>Supervisor</option>
+                                            <?php if ($currentUserRole === 'Admin'): ?>
+                                                <option value="Admin" <?php echo (isset($_POST['userRole']) && $_POST['userRole'] == 'Admin') ? 'selected' : ''; ?>>Administrator</option>
+                                                <option value="Supervisor" <?php echo (isset($_POST['userRole']) && $_POST['userRole'] == 'Supervisor') ? 'selected' : ''; ?>>Supervisor</option>
+                                            <?php endif; ?>
                                             <option value="DataEntry" <?php echo (isset($_POST['userRole']) && $_POST['userRole'] == 'DataEntry') ? 'selected' : ''; ?>>Data Entry</option>
                                         </select>
                                     </div>
