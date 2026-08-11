@@ -32,41 +32,44 @@ if ($checkColumns) {
     mysqli_free_result($checkColumns);
 }
 
-// Build query based on available columns
-$selectColumns = ['visa_number', 'passport_number', 'surname', 'given_name'];
-
-// Add optional columns if they exist
+// Build query based on available columns using table alias to support join
+$sqluse = "SELECT v.visa_number, v.passport_number, v.surname, v.given_name, ";
 if (in_array('within', $columns)) {
-    $selectColumns[] = 'within';
+    $sqluse .= "v.within, ";
 } elseif (in_array('validity_date', $columns)) {
-    $selectColumns[] = 'validity_date as within';
+    $sqluse .= "v.validity_date as within, ";
 } elseif (in_array('expiry_date', $columns)) {
-    $selectColumns[] = 'expiry_date as within';
+    $sqluse .= "v.expiry_date as within, ";
 } else {
-    $selectColumns[] = "'' as within";
+    $sqluse .= "'' as within, ";
 }
 
 if (in_array('journey', $columns)) {
-    $selectColumns[] = 'journey';
+    $sqluse .= "v.journey, ";
 } elseif (in_array('purpose', $columns)) {
-    $selectColumns[] = 'purpose as journey';
+    $sqluse .= "v.purpose as journey, ";
 } elseif (in_array('travel_purpose', $columns)) {
-    $selectColumns[] = 'travel_purpose as journey';
+    $sqluse .= "v.travel_purpose as journey, ";
 } else {
-    $selectColumns[] = "'' as journey";
+    $sqluse .= "'' as journey, ";
 }
 
-$sqluse = "SELECT " . implode(', ', $selectColumns) . " FROM visa_applications";
+$sqluse .= "v.created_by, u.fname, u.lname 
+            FROM visa_applications v 
+            LEFT JOIN users u ON v.created_by = u.service_no";
+
 if ($userRole === 'DataEntry') {
-    $sqluse .= " WHERE created_by = '" . mysqli_real_escape_string($conn, $username) . "'";
+    $sqluse .= " WHERE v.created_by = '" . mysqli_real_escape_string($conn, $username) . "'";
 }
 $retrieve = mysqli_query($conn, $sqluse);
 
 if (!$retrieve) {
     // If complex query fails, try basic query
-    $sqluse = "SELECT visa_number, passport_number, surname, given_name FROM visa_applications";
+    $sqluse = "SELECT v.visa_number, v.passport_number, v.surname, v.given_name, v.created_by, u.fname, u.lname 
+               FROM visa_applications v 
+               LEFT JOIN users u ON v.created_by = u.service_no";
     if ($userRole === 'DataEntry') {
-        $sqluse .= " WHERE created_by = '" . mysqli_real_escape_string($conn, $username) . "'";
+        $sqluse .= " WHERE v.created_by = '" . mysqli_real_escape_string($conn, $username) . "'";
     }
     $retrieve = mysqli_query($conn, $sqluse);
 }
@@ -845,6 +848,7 @@ $numb = $retrieve ? mysqli_num_rows($retrieve) : 0;
                                     <th>Passport Number</th>
                                     <th>Journey</th>
                                     <th>Within (Validity Period)</th> 
+                                    <th>Processed By</th>
                                     <th>Action</th>
                                 </tr>
                             </thead>
@@ -868,6 +872,15 @@ $numb = $retrieve ? mysqli_num_rows($retrieve) : 0;
                 <td><?php echo $journey; ?></td>
                 <td><?php echo $within; ?></td>
                 <td>
+                    <?php 
+                        if (!empty($ret['fname'])) {
+                            echo htmlspecialchars(strtoupper($ret['fname'] . ' ' . $ret['lname'] . ' (' . $ret['created_by'] . ')'));
+                        } else {
+                            echo htmlspecialchars(strtoupper($ret['created_by'] ?? 'N/A'));
+                        }
+                    ?>
+                </td>
+                <td>
                     <div class="btn-group">
                         <button class="btn btn-view" type="button" 
                             onclick="viewRecord('<?php echo $visa_number; ?>')">
@@ -887,7 +900,7 @@ $numb = $retrieve ? mysqli_num_rows($retrieve) : 0;
         }
         mysqli_free_result($retrieve);
     } else {
-        echo "<tr><td colspan='6' class='text-center'>No records found</td></tr>";
+        echo "<tr><td colspan='7' class='text-center'>No records found</td></tr>";
     }
     
     // Close database connection
