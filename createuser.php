@@ -132,8 +132,8 @@ if (isset($_POST['regUser'])) {
         $serviceNo = mysqli_real_escape_string($conn, $_POST['serviceNo']);
         $userRole = mysqli_real_escape_string($conn, $_POST['userRole']);
         
-        if ($currentUserRole === 'Supervisor' && $userRole !== 'DataEntry') {
-            $error_msg = "Error: Supervisors are only authorized to create Data Entry officers.";
+        if ($currentUserRole === 'Supervisor' && $userRole === 'Admin') {
+            $error_msg = "Error: Supervisors are not authorized to create Admin users.";
         } else {
             $fname = mysqli_real_escape_string($conn, $_POST['fname']);
             $lname = mysqli_real_escape_string($conn, $_POST['lname']);
@@ -198,7 +198,11 @@ if (isset($_POST['regUser'])) {
 }
 
 // Fetch existing users for display
-$users_sql = "SELECT id, service_no, fname, lname, email, role, status, created_at FROM users ORDER BY created_at DESC";
+if ($currentUserRole === 'Supervisor') {
+    $users_sql = "SELECT id, service_no, fname, lname, email, role, status, photo, created_at FROM users WHERE role != 'Admin' ORDER BY created_at DESC";
+} else {
+    $users_sql = "SELECT id, service_no, fname, lname, email, role, status, photo, created_at FROM users ORDER BY created_at DESC";
+}
 $users_result = mysqli_query($conn, $users_sql);
 $total_users = mysqli_num_rows($users_result);
 ?>
@@ -940,6 +944,8 @@ $total_users = mysqli_num_rows($users_result);
                                             <option value="">--Select User Role--</option>
                                             <?php if ($currentUserRole === 'Admin'): ?>
                                                 <option value="Admin" <?php echo (isset($_POST['userRole']) && $_POST['userRole'] == 'Admin') ? 'selected' : ''; ?>>Administrator</option>
+                                            <?php endif; ?>
+                                            <?php if ($currentUserRole === 'Admin' || $currentUserRole === 'Supervisor'): ?>
                                                 <option value="Supervisor" <?php echo (isset($_POST['userRole']) && $_POST['userRole'] == 'Supervisor') ? 'selected' : ''; ?>>Supervisor</option>
                                             <?php endif; ?>
                                             <option value="DataEntry" <?php echo (isset($_POST['userRole']) && $_POST['userRole'] == 'DataEntry') ? 'selected' : ''; ?>>Data Entry</option>
