@@ -8,9 +8,9 @@ if (!isset($_SESSION['username'])) {
     die();
 }
 
-// Only Administrator role can access User Management
+// Only Administrator and Supervisor roles can access User Management
 $userRole = $_SESSION['role'] ?? 'DataEntry';
-if ($userRole !== 'Admin') {
+if ($userRole !== 'Admin' && $userRole !== 'Supervisor') {
     header("Location: user_dashboard");
     exit();
 }

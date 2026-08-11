@@ -211,20 +211,13 @@ $current_page = basename($_SERVER['PHP_SELF']);
     
     <div class="sidebar-menu">
         <ul>
-            <?php if ($role === 'Admin'): ?>
+            <?php if ($role === 'Admin' || $role === 'Supervisor'): ?>
                 <li><a href="index" class="<?php echo ($current_page === 'index.php') ? 'active' : ''; ?>"><i class="fa fa-dashboard"></i><span>Dashboard</span></a></li>
                 <li><a href="new-record" class="<?php echo ($current_page === 'new-record.php') ? 'active' : ''; ?>"><i class="fa fa-plus"></i><span>New Re-Entry Visa</span></a></li>
                 <li><a href="re-entry-visa" class="<?php echo ($current_page === 're-entry-visa.php') ? 'active' : ''; ?>"><i class="fa fa-list"></i><span>View Re-Entry Visas</span></a></li>
                 <li><a href="print_visas" class="<?php echo ($current_page === 'print_visas.php') ? 'active' : ''; ?>"><i class="fa fa-print"></i><span>Print Re-Entry Visa</span></a></li>
                 <li><a href="report" class="<?php echo ($current_page === 'report.php') ? 'active' : ''; ?>"><i class="fa fa-bar-chart"></i><span>Reports</span></a></li>
                 <li><a href="createuser" class="<?php echo ($current_page === 'createuser.php') ? 'active' : ''; ?>"><i class="fa fa-users"></i><span>User Management</span></a></li>
-                
-            <?php elseif ($role === 'Supervisor'): ?>
-                <li><a href="index" class="<?php echo ($current_page === 'index.php') ? 'active' : ''; ?>"><i class="fa fa-dashboard"></i><span>Dashboard</span></a></li>
-                <li><a href="new-record" class="<?php echo ($current_page === 'new-record.php') ? 'active' : ''; ?>"><i class="fa fa-plus"></i><span>New Re-Entry Visa</span></a></li>
-                <li><a href="re-entry-visa" class="<?php echo ($current_page === 're-entry-visa.php') ? 'active' : ''; ?>"><i class="fa fa-list"></i><span>View Re-Entry Visas</span></a></li>
-                <li><a href="print_visas" class="<?php echo ($current_page === 'print_visas.php') ? 'active' : ''; ?>"><i class="fa fa-print"></i><span>Print Re-Entry Visa</span></a></li>
-                <li><a href="report" class="<?php echo ($current_page === 'report.php') ? 'active' : ''; ?>"><i class="fa fa-bar-chart"></i><span>Reports</span></a></li>
                 
             <?php else: ?>
                 <li><a href="user_dashboard" class="<?php echo ($current_page === 'user_dashboard.php' || $current_page === 'index.php') ? 'active' : ''; ?>"><i class="fa fa-dashboard"></i><span>My Dashboard</span></a></li>
