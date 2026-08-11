@@ -353,8 +353,8 @@ $fees_exists = in_array('fees', $columns);
     
     <style>
         :root {
-            --primary: #0d9488;
-            --primary-hover: #0f172a;
+            --primary: #1a5c2e;
+            --primary-hover: #113f1f;
             --secondary: #d4af37;
             --dark: #2c3e50;
             --light: #f5f7fa;
@@ -713,7 +713,7 @@ $fees_exists = in_array('fees', $columns);
         }
         
         .btn-back {
-            background: linear-gradient(135deg, var(--primary), #1d4ed8);
+            background: linear-gradient(135deg, var(--primary), #2e7d46);
             color: white;
             border: none;
             padding: 10px 24px;
@@ -730,7 +730,7 @@ $fees_exists = in_array('fees', $columns);
         }
         
         .btn-back:hover {
-            background: linear-gradient(135deg, #1d4ed8, var(--primary));
+            background: linear-gradient(135deg, #2e7d46, var(--primary));
             color: white;
             transform: translateY(-2px);
             box-shadow: 0 4px 12px rgba(26, 92, 46, 0.3);

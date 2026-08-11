@@ -170,7 +170,7 @@ try {
     <script src="vendors/chartjs/chart.js"></script>
     <style>
         :root {
-            --primary: #0d9488;
+            --primary: #1a5c2e;
             --secondary: #27ae60;
             --dark: #2c3e50;
             --light: #f8f9fa;
@@ -531,26 +531,26 @@ try {
         }
         
         .btn-success {
-            background: linear-gradient(135deg, var(--secondary), #0f766e);
+            background: linear-gradient(135deg, var(--secondary), #219a52);
             border: none;
             color: white;
         }
         
         .btn-success:hover {
-            background: linear-gradient(135deg, #0f766e, #115e59);
+            background: linear-gradient(135deg, #219a52, #1e8a47);
             color: white;
             transform: translateY(-1px);
             box-shadow: 0 4px 12px rgba(39, 174, 96, 0.3);
         }
         
         .btn-info {
-            background: linear-gradient(135deg, var(--info), #1d4ed8);
+            background: linear-gradient(135deg, var(--info), #2e7d46);
             border: none;
             color: white;
         }
         
         .btn-info:hover {
-            background: linear-gradient(135deg, #1d4ed8, var(--info));
+            background: linear-gradient(135deg, #2e7d46, var(--info));
             color: white;
             transform: translateY(-1px);
             box-shadow: 0 4px 12px rgba(52, 152, 219, 0.3);
@@ -1144,7 +1144,7 @@ try {
                     label: 'Applications',
                     data: <?php echo !empty($user_stats) ? json_encode(array_column($user_stats, 'applications')) : json_encode([]); ?>,
                     backgroundColor: '#3498db',
-                    borderColor: '#1d4ed8',
+                    borderColor: '#2e7d46',
                     borderWidth: 1
                 }]
             },

@@ -88,7 +88,7 @@ $numb = $retrieve ? mysqli_num_rows($retrieve) : 0;
     
     <style>
         :root {
-            --primary: #0d9488;
+            --primary: #1a5c2e;
             --secondary: #27ae60;
             --dark: #2c3e50;
             --light: #f8f9fa;
@@ -248,7 +248,7 @@ $numb = $retrieve ? mysqli_num_rows($retrieve) : 0;
 
         /* Welcome Banner */
         .welcome-banner {
-            background: linear-gradient(135deg, var(--primary), #1d4ed8);
+            background: linear-gradient(135deg, var(--primary), #2e7d46);
             color: white;
             padding: 20px;
             border-radius: 12px;
@@ -403,7 +403,7 @@ $numb = $retrieve ? mysqli_num_rows($retrieve) : 0;
         
         /* Button Styles */
         .btn-view {
-            background: linear-gradient(135deg, var(--primary), #1d4ed8);
+            background: linear-gradient(135deg, var(--primary), #2e7d46);
             color: white;
             border: none;
             padding: 6px 12px;
@@ -420,7 +420,7 @@ $numb = $retrieve ? mysqli_num_rows($retrieve) : 0;
         }
         
         .btn-view:hover {
-            background: linear-gradient(135deg, #1d4ed8, var(--primary));
+            background: linear-gradient(135deg, #2e7d46, var(--primary));
             color: white;
             transform: translateY(-2px);
             box-shadow: 0 4px 12px rgba(26, 92, 46, 0.3);
@@ -451,7 +451,7 @@ $numb = $retrieve ? mysqli_num_rows($retrieve) : 0;
     }
     
     .btn-view {
-        background: linear-gradient(135deg, var(--primary), #1d4ed8);
+        background: linear-gradient(135deg, var(--primary), #2e7d46);
         color: white;
         border: none;
         padding: 6px 12px;
@@ -468,7 +468,7 @@ $numb = $retrieve ? mysqli_num_rows($retrieve) : 0;
     }
     
     .btn-view:hover {
-        background: linear-gradient(135deg, #1d4ed8, var(--primary));
+        background: linear-gradient(135deg, #2e7d46, var(--primary));
         color: white;
         transform: translateY(-2px);
         box-shadow: 0 4px 12px rgba(26, 92, 46, 0.3);

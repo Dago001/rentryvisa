@@ -221,7 +221,7 @@ $total_users = mysqli_num_rows($users_result);
     
     <style>
         :root {
-            --primary: #0d9488;
+            --primary: #1a5c2e;
             --secondary: #27ae60;
             --dark: #2c3e50;
             --light: #f8f9fa;
@@ -381,7 +381,7 @@ $total_users = mysqli_num_rows($users_result);
 
         /* Welcome Banner */
         .welcome-banner {
-            background: linear-gradient(135deg, var(--primary), #1d4ed8);
+            background: linear-gradient(135deg, var(--primary), #2e7d46);
             color: white;
             padding: 20px;
             border-radius: 12px;
@@ -483,7 +483,7 @@ $total_users = mysqli_num_rows($users_result);
         
         /* Button Styles */
         .btn-success {
-            background: linear-gradient(135deg, var(--secondary), #0f766e);
+            background: linear-gradient(135deg, var(--secondary), #219a52);
             color: white;
             border: none;
             padding: 10px 20px;
@@ -493,7 +493,7 @@ $total_users = mysqli_num_rows($users_result);
         }
         
         .btn-success:hover {
-            background: linear-gradient(135deg, #0f766e, #115e59);
+            background: linear-gradient(135deg, #219a52, #1e8a47);
             transform: translateY(-2px);
             box-shadow: 0 4px 12px rgba(39, 174, 96, 0.3);
         }
@@ -577,7 +577,7 @@ $total_users = mysqli_num_rows($users_result);
             display: flex;
             align-items: center;
             justify-content: center;
-            background: #0d9488;
+            background: #1a5c2e;
             color: white;
             font-weight: 600;
             font-size: 0.85rem;
@@ -1005,13 +1005,13 @@ $total_users = mysqli_num_rows($users_result);
                             <h4><i class="fa fa-key" style="color: var(--warning);"></i> User Roles</h4>
                         </div>
                         <div class="card-body">
-                            <!-- <div class="role-item">
+                            <div class="role-item">
                                 <div class="role-title text-primary">Administrator</div>
                                 <div class="role-description">Full system access with user management capabilities</div>
-                            </div> -->
+                            </div>
                             <div class="role-item">
-                                <div class="role-title text-info">Admin</div>
-                                <div class="role-description">Full Access</div>
+                                <div class="role-title text-info">Supervisor</div>
+                                <div class="role-description">Can create, edit, print and view reports</div>
                             </div>
                             <div class="role-item">
                                 <div class="role-title text-success">Data Entry</div>

@@ -296,7 +296,7 @@ if (isset($_GET['id'])) {
         
         .print-button:hover,
         .back-button:hover {
-            background-color: #0f172a;
+            background-color: #113f1f;
         }
         
         /* Responsive adjustments for screen view */

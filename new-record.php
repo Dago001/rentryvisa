@@ -30,7 +30,7 @@ $current_page = basename($_SERVER['PHP_SELF']);
     <link href="vendors/font-awesome/css/font-awesome.min.css" rel="stylesheet">
     <style>
         :root {
-            --primary: #0d9488;
+            --primary: #1a5c2e;
             --secondary: #27ae60;
             --dark: #2c3e50;
             --light: #f8f9fa;

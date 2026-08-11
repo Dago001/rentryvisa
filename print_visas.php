@@ -81,7 +81,7 @@ if (!$retrieve) {
     
     <style>
         :root {
-            --primary: #0d9488;
+            --primary: #1a5c2e;
             --secondary: #27ae60;
             --dark: #2c3e50;
             --light: #f8f9fa;
@@ -241,7 +241,7 @@ if (!$retrieve) {
 
         /* Welcome Banner */
         .welcome-banner {
-            background: linear-gradient(135deg, var(--primary), #1d4ed8);
+            background: linear-gradient(135deg, var(--primary), #2e7d46);
             color: white;
             padding: 20px;
             border-radius: 12px;
@@ -383,26 +383,26 @@ if (!$retrieve) {
         }
         
         .btn-secondary {
-            background: linear-gradient(135deg, var(--dark), #0f172a);
+            background: linear-gradient(135deg, var(--dark), #113f1f);
             color: white;
             border: none;
         }
         
         .btn-secondary:hover {
-            background: linear-gradient(135deg, #0f172a, var(--dark));
+            background: linear-gradient(135deg, #113f1f, var(--dark));
             color: white;
             transform: translateY(-1px);
             box-shadow: 0 4px 12px rgba(44, 62, 80, 0.3);
         }
         
         .btn-primary {
-            background: linear-gradient(135deg, var(--primary), #1d4ed8);
+            background: linear-gradient(135deg, var(--primary), #2e7d46);
             color: white;
             border: none;
         }
         
         .btn-primary:hover {
-            background: linear-gradient(135deg, #1d4ed8, var(--primary));
+            background: linear-gradient(135deg, #2e7d46, var(--primary));
             color: white;
             transform: translateY(-1px);
             box-shadow: 0 4px 12px rgba(26, 92, 46, 0.3);

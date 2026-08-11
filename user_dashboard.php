@@ -177,8 +177,8 @@ $hasData = $numb > 0 || !empty($recent_applications);
     <script src="vendors/chartjs/chart.js"></script>
     <style>
         :root {
-            --primary: #1e3a8a; /* NIS Coffee Brown */
-            --secondary: #0d9488; /* NIS Green */
+            --primary: #5c3c1e; /* NIS Coffee Brown */
+            --secondary: #1a5c2e; /* NIS Green */
             --dark: #0f172a;
             --light: #f8fafc;
             --warning: #f59e0b;
@@ -336,7 +336,7 @@ $hasData = $numb > 0 || !empty($recent_applications);
         
         /* Welcome Banner - SIMPLIFIED FOR USERS */
         .welcome-banner {
-            background: linear-gradient(135deg, var(--primary), #1d4ed8);
+            background: linear-gradient(135deg, var(--primary), #2e7d46);
             color: white;
             padding: 20px;
             border-radius: 12px;
@@ -534,7 +534,7 @@ $hasData = $numb > 0 || !empty($recent_applications);
         }
         
         .view-all-btn {
-            background: linear-gradient(135deg, var(--primary), #1d4ed8);
+            background: linear-gradient(135deg, var(--primary), #2e7d46);
             color: white;
             padding: 6px 15px;
             border-radius: 6px;
@@ -1091,8 +1091,8 @@ $hasData = $numb > 0 || !empty($recent_applications);
                     datasets: [{
                         label: 'Visas Issued',
                         data: <?php echo json_encode($monthly_counts); ?>,
-                        backgroundColor: 'rgba(30, 58, 138, 0.85)',
-                        borderColor: '#1e3a8a',
+                        backgroundColor: 'rgba(92, 60, 30, 0.85)',
+                        borderColor: '#5c3c1e',
                         borderWidth: 1.5,
                         borderRadius: 6
                     }]

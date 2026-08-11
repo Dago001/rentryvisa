@@ -174,7 +174,7 @@ function showLoginForm() {
         <script src="vendors/qrcodejs/qrcode.min.js"></script>
         <style>
             :root {
-                --primary: #0d9488;
+                --primary: #1a5c2e;
                 --secondary: #d4af37;
                 --dark: #2c3e50;
                 --light: #f8f9fa;
@@ -231,7 +231,7 @@ function showLoginForm() {
             }
             
             .login-header {
-                background: linear-gradient(135deg, var(--dark), #0f172a);
+                background: linear-gradient(135deg, var(--dark), #113f1f);
                 color: white;
                 padding: 16px 15px;
                 text-align: center;
@@ -365,7 +365,7 @@ function showLoginForm() {
             .btn-login {
                 width: 100%;
                 padding: 9px;
-                background: linear-gradient(135deg, var(--primary), #1d4ed8);
+                background: linear-gradient(135deg, var(--primary), #2e7d46);
                 color: white;
                 border: none;
                 border-radius: 5px;
@@ -381,7 +381,7 @@ function showLoginForm() {
             }
             
             .btn-login:hover {
-                background: linear-gradient(135deg, #1d4ed8, #0f172a);
+                background: linear-gradient(135deg, #2e7d46, #113f1f);
                 transform: translateY(-1px);
                 box-shadow: 0 5px 10px rgba(26, 92, 46, 0.25);
             }
@@ -593,7 +593,7 @@ function showLoginForm() {
                         text: <?php echo isset($otpauthUrl) ? json_encode($otpauthUrl) : "''"; ?>,
                         width: 150,
                         height: 150,
-                        colorDark : "#0d9488",
+                        colorDark : "#1a5c2e",
                         colorLight : "#ffffff",
                         correctLevel : QRCode.CorrectLevel.M
                     });
@@ -749,8 +749,8 @@ function showDashboard() {
         <script src="vendors/chartjs/chart.js"></script>
         <style>
             :root {
-                --primary: #1e3a8a; /* NIS Coffee Brown */
-                --secondary: #0d9488; /* NIS Green */
+                --primary: #5c3c1e; /* NIS Coffee Brown */
+                --secondary: #1a5c2e; /* NIS Green */
                 --dark: #0f172a;
                 --light: #f8fafc;
                 --warning: #f59e0b;
@@ -908,7 +908,7 @@ function showDashboard() {
             
             /* Welcome Banner */
             .welcome-banner {
-                background: linear-gradient(135deg, var(--primary), #1d4ed8);
+                background: linear-gradient(135deg, var(--primary), #2e7d46);
                 color: white;
                 padding: 20px;
                 border-radius: 12px;
@@ -1069,7 +1069,7 @@ function showDashboard() {
             }
             
             .view-all-btn {
-                background: linear-gradient(135deg, var(--primary), #1d4ed8);
+                background: linear-gradient(135deg, var(--primary), #2e7d46);
                 color: white;
                 padding: 6px 15px;
                 border-radius: 6px;
@@ -1559,8 +1559,8 @@ function showDashboard() {
                         datasets: [{
                             label: 'Visas Issued',
                             data: <?php echo json_encode($monthly_counts); ?>,
-                            backgroundColor: 'rgba(30, 58, 138, 0.85)',
-                            borderColor: '#1e3a8a',
+                            backgroundColor: 'rgba(92, 60, 30, 0.85)',
+                            borderColor: '#5c3c1e',
                             borderWidth: 1.5,
                             borderRadius: 6
                         }]
