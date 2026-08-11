@@ -79,8 +79,8 @@ if (isset($_GET['id'])) {
         
         .print-area {
             /* Standard visa sticker size in mm converted to pixels (1mm = 3.78px approx) */
-            width: 983px;  /* 184mm * 3.78 ≈ 696px */
-            height: 696px; /* 260mm * 3.78 ≈ 983px */
+            width: 500px;  /* 184mm * 3.78 ≈ 696px */
+            height: 400px; /* 260mm * 3.78 ≈ 983px */
             position: relative;
             transform-origin: 0 0;
             background-color: transparent;
@@ -120,7 +120,7 @@ if (isset($_GET['id'])) {
         
         .category {
             top: 40.8%;
-            left: 7.6%;
+            left: 12.6%;
             font-size: 19px;
             writing-mode: vertical-rl;
             text-orientation: mixed;
@@ -133,7 +133,7 @@ if (isset($_GET['id'])) {
         
         .unicef-tag {
             top: 40.8%;
-            left: 90.5%;
+            left: 85.5%;
             font-size: 19px;
             writing-mode: vertical-rl;
             text-orientation: mixed;
@@ -146,7 +146,7 @@ if (isset($_GET['id'])) {
         
         .full-name {
             top: 38.9%;
-            left: 26.5%;
+            left: 34.5%;
             font-size: 19px;
             width: 56.8%;
             text-transform: uppercase;
@@ -155,49 +155,49 @@ if (isset($_GET['id'])) {
         
         .passport-number {
             top: 45.4%;
-            left: 26.5%;
+            left: 34.5%;
             font-size: 19px;
             width: 37.9%;
         }
         
         .authority {
             top: 45.5%;
-            left: 64.4%;
+            left: 56.4%;
             font-size: 19px;
             width: 34.1%;
         }
         
         .place-of-issue {
             top: 53%;
-            left: 24.6%;
+            left: 32.6%;
             font-size: 19px;
             width: 37.9%;
         }
         
         .fees {
             top: 53.3%;
-            left: 75.8%;
+            left: 67.8%;
             font-size: 19px;
             width: 34.1%;
         }
         
         .journey {
             top: 58.9%;
-            left: 35.9%;
+            left: 43.9%;
             font-size: 19px;
             width: 60%;
         }
         
         .valid-until {
             top: 67%;
-            left: 22.7%;
+            left: 30.7%;
             font-size: 19px;
             width: 37.9%;
         }
         
         .date-of-issue {
             top: 74.5%;
-            left: 60.6%;
+            left: 52.6%;
             font-size: 19px;
             width: 34.1%;
         }
@@ -409,7 +409,7 @@ if (isset($_GET['id'])) {
             
             <!-- Journey -->
             <div class="visa-text journey">
-                <?php echo !empty($journey) ? ($journey . '&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;TO NIGERIA') : ''; ?>
+                <?php echo !empty($journey) ? ($journey . '&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;TO NIGERIA') : ''; ?>
             </div>
             
             <!-- Valid Until -->
