@@ -10,7 +10,11 @@ $conn = mysqli_connect(DB_SERVER, DB_USERNAME, DB_PASSWORD, DB_DATABASE) or die(
 if (mysqli_connect_errno()) {
     printf("Connect failed: %s\n", mysqli_connect_error());
     exit();
-}else{
-    //print("Connected successfully");
+}
+
+// Check if category column exists in visa_applications table, add if not
+$category_col_check = mysqli_query($conn, "SHOW COLUMNS FROM visa_applications LIKE 'category'");
+if ($category_col_check && mysqli_num_rows($category_col_check) == 0) {
+    mysqli_query($conn, "ALTER TABLE visa_applications ADD COLUMN category VARCHAR(50) NOT NULL DEFAULT 'NONE'");
 }
 ?>

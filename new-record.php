@@ -858,12 +858,7 @@ $current_page = basename($_SERVER['PHP_SELF']);
 
                             <div class="form-group">
                                 <label for="embassy">Embassy</label>
-                                <select id="embassy" name="embassy" required>
-                                    <option value="">Select Embassy Category</option>
-                                    <option value="DIPLOMAT">DIPLOMAT</option>
-                                    <option value="INT/ORG">INT/ORG</option>
-                                    <option value="NONE">NONE</option>
-                                </select>
+                                <input type="text" id="embassy" name="embassy" required oninput="validateText(this)" placeholder="Enter Embassy Name" style="text-transform: uppercase;">
                             </div>
                         </div>
                     </div>
@@ -899,6 +894,17 @@ $current_page = basename($_SERVER['PHP_SELF']);
                                 </select>
                             </div>
                            
+                            <div class="form-group">
+                                <label for="category">Category</label>
+                                <select id="category" name="category" required>
+                                    <option value="NONE">NONE</option>
+                                    <option value="DIPLOMAT">DIPLOMAT</option>
+                                    <option value="INT/ORG">INT/ORG</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="form-row">
                             <div class="form-group">
                                 <label for="within">Within (Validity Period)</label>
                                 <input type="date" id="within" name="within" required>

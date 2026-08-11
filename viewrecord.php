@@ -12,7 +12,7 @@ if (!$conn) {
 
 // Initialize variables
 $visa_number = $passport_number = $surname = $given_name = $nationality = $place_of_issue = '';
-$date_of_issue = $embassy = $authority = $within = $journey = $fees = $application_date = $status = '';
+$date_of_issue = $embassy = $authority = $within = $journey = $fees = $application_date = $status = $category = '';
 
 // Check if ID parameter is provided
 if(isset($_GET['id'])) {
@@ -35,7 +35,7 @@ if(isset($_GET['id'])) {
     $optionalColumns = [
         'nationality', 'place_of_issue', 'date_of_issue', 'embassy', 'authority',
         'within', 'validity_date', 'expiry_date', 'journey', 'purpose', 'travel_purpose',
-        'fees', 'application_date', 'created_at', 'status', 'created_by'
+        'fees', 'application_date', 'created_at', 'status', 'created_by', 'category'
     ];
     
     foreach($optionalColumns as $col) {
@@ -68,6 +68,7 @@ if(isset($_GET['id'])) {
         $date_of_issue = formatNISDate($foundk['date_of_issue'] ?? '');
         $embassy = strtoupper($foundk['embassy'] ?? 'N/A');
         $authority = strtoupper($foundk['authority'] ?? 'N/A');
+        $category = strtoupper($foundk['category'] ?? 'NONE');
         
         // Check for within/validity period
         if (isset($foundk['within'])) {
@@ -710,19 +711,25 @@ if(isset($_GET['id'])) {
                 <div class="section">
                     <h4 class="section-title"><i class="fa fa-plane-departure me-2"></i>Travel & Validity Parameters</h4>
                     <div class="row g-3">
-                        <div class="col-md-6 col-lg-4">
+                        <div class="col-md-6 col-lg-3">
                             <div class="form-group">
                                 <label>Validity Period (Within)</label>
                                 <div class="detail-value-field"><?php echo htmlspecialchars($within); ?></div>
                             </div>
                         </div>
-                        <div class="col-md-6 col-lg-4">
+                        <div class="col-md-6 col-lg-3">
                             <div class="form-group">
                                 <label>Allowed Journeys</label>
                                 <div class="detail-value-field"><?php echo htmlspecialchars($journey); ?></div>
                             </div>
                         </div>
-                        <div class="col-md-12 col-lg-4">
+                        <div class="col-md-6 col-lg-3">
+                            <div class="form-group">
+                                <label>Category</label>
+                                <div class="detail-value-field"><?php echo htmlspecialchars($category); ?></div>
+                            </div>
+                        </div>
+                        <div class="col-md-6 col-lg-3">
                             <div class="form-group">
                                 <label>Processing Fees</label>
                                 <div class="detail-value-field fw-bold text-success" style="background-color: #f0fdf4; border-color: #bbf7d0;">

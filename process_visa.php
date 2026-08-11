@@ -29,7 +29,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     // Check if all required fields are present
     $required_fields = [
         'visa_number', 'passport_number', 'surname', 'given_name', 'nationality',
-        'place_of_issue', 'date_of_issue', 'embassy', 'authority', 'within', 'journey', 'fees'
+        'place_of_issue', 'date_of_issue', 'embassy', 'authority', 'within', 'journey', 'fees', 'category'
     ];
     
     $missing_fields = [];
@@ -61,6 +61,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     $within = mysqli_real_escape_string($conn, $_POST['within']);
     $journey = strtoupper(mysqli_real_escape_string($conn, $_POST['journey']));
     $fees = strtoupper(mysqli_real_escape_string($conn, $_POST['fees']));
+    $category = strtoupper(mysqli_real_escape_string($conn, $_POST['category']));
     $created_by = mysqli_real_escape_string($conn, $_SESSION['username']);
 
     // Validate dates
@@ -101,6 +102,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             within DATE NOT NULL,
             journey VARCHAR(20) NOT NULL,
             fees VARCHAR(50) NOT NULL,
+            category VARCHAR(50) NOT NULL DEFAULT 'NONE',
             application_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             status VARCHAR(20) DEFAULT 'pending',
             created_by VARCHAR(100),
@@ -175,15 +177,15 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     // Insert into database
     $sql = "INSERT INTO visa_applications 
             (visa_number, passport_number, surname, given_name, nationality, place_of_issue, 
-             date_of_issue, embassy, authority, within, journey, fees, created_by, status) 
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active')";
+             date_of_issue, embassy, authority, within, journey, fees, category, created_by, status) 
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active')";
     
     $stmt = mysqli_prepare($conn, $sql);
     if ($stmt) {
-        mysqli_stmt_bind_param($stmt, "sssssssssssss", 
+        mysqli_stmt_bind_param($stmt, "ssssssssssssss", 
             $visa_number, $passport_number, $surname, $given_name, $nationality,
             $place_of_issue, $date_of_issue, $embassy, $authority, $within, 
-            $journey, $fees, $created_by);
+            $journey, $fees, $category, $created_by);
         
         if ($stmt->execute()) {
     $applicationId = $conn->insert_id;

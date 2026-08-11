@@ -61,7 +61,7 @@ if (in_array('journey', $columns)) {
 // Add any other columns that might exist
 $additionalColumns = ['sex', 'place_of_birth', 'date_of_birth', 'nationality', 'permanent_address', 
                      'travelling_on', 'port_of_entry', 'date_of_arrival', 'valid_from', 'valid_until',
-                     'place_of_issue', 'date_of_issue', 'remarks', 'created_by', 'embassy', 'authority', 'fees'];
+                     'place_of_issue', 'date_of_issue', 'remarks', 'created_by', 'embassy', 'authority', 'fees', 'category'];
 
 foreach ($additionalColumns as $column) {
     if (in_array($column, $columns)) {
@@ -163,7 +163,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_record'])) {
                     'within' => mysqli_real_escape_string($conn, $_POST['within'] ?? ''),
                     'embassy' => strtoupper(mysqli_real_escape_string($conn, $_POST['embassy'] ?? '')),
                     'authority' => strtoupper(mysqli_real_escape_string($conn, $_POST['authority'] ?? '')),
-                    'fees' => strtoupper(mysqli_real_escape_string($conn, $_POST['fees'] ?? ''))
+                    'fees' => strtoupper(mysqli_real_escape_string($conn, $_POST['fees'] ?? '')),
+                    'category' => strtoupper(mysqli_real_escape_string($conn, $_POST['category'] ?? 'NONE'))
                 ];
                 
                 foreach ($optionalFields as $field => $value) {
@@ -238,7 +239,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_record'])) {
                 'within' => mysqli_real_escape_string($conn, $_POST['within'] ?? ''),
                 'embassy' => strtoupper(mysqli_real_escape_string($conn, $_POST['embassy'] ?? '')),
                 'authority' => strtoupper(mysqli_real_escape_string($conn, $_POST['authority'] ?? '')),
-                'fees' => strtoupper(mysqli_real_escape_string($conn, $_POST['fees'] ?? ''))
+                'fees' => strtoupper(mysqli_real_escape_string($conn, $_POST['fees'] ?? '')),
+                'category' => strtoupper(mysqli_real_escape_string($conn, $_POST['category'] ?? 'NONE'))
             ];
             
             foreach ($optionalFields as $field => $value) {
@@ -337,6 +339,7 @@ $within_exists = in_array('within', $columns);
 $embassy_exists = in_array('embassy', $columns);
 $authority_exists = in_array('authority', $columns);
 $fees_exists = in_array('fees', $columns);
+$category_exists = in_array('category', $columns);
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -1296,18 +1299,7 @@ $fees_exists = in_array('fees', $columns);
                                 <div class="col-md-6 col-lg-3">
                                     <div class="form-group">
                                         <label class="form-label">Embassy</label>
-                                        <select class="form-select" name="embassy">
-                                            <option value="">Select Embassy Category</option>
-                                            <option value="DIPLOMAT" <?php echo (strtoupper(getFieldValue($record, 'embassy')) === 'DIPLOMAT') ? 'selected' : ''; ?>>DIPLOMAT</option>
-                                            <option value="INT/ORG" <?php echo (strtoupper(getFieldValue($record, 'embassy')) === 'INT/ORG') ? 'selected' : ''; ?>>INT/ORG</option>
-                                            <option value="NONE" <?php echo (strtoupper(getFieldValue($record, 'embassy')) === 'NONE') ? 'selected' : ''; ?>>NONE</option>
-                                            <?php 
-                                            $curr_embassy = getFieldValue($record, 'embassy');
-                                            if (!empty($curr_embassy) && !in_array(strtoupper($curr_embassy), ['DIPLOMAT', 'INT/ORG', 'NONE'])) {
-                                                echo "<option value=\"" . htmlspecialchars($curr_embassy) . "\" selected>" . htmlspecialchars($curr_embassy) . "</option>";
-                                            }
-                                            ?>
-                                        </select>
+                                        <input type="text" class="form-control" name="embassy" value="<?php echo htmlspecialchars(getFieldValue($record, 'embassy')); ?>" placeholder="Enter Embassy Name" style="text-transform: uppercase;">
                                     </div>
                                 </div>
                                 <?php endif; ?>
@@ -1361,6 +1353,19 @@ $fees_exists = in_array('fees', $columns);
                                             echo "<option value=\"" . htmlspecialchars($curr_journey) . "\" selected>" . htmlspecialchars($curr_journey) . "</option>";
                                         }
                                         ?>
+                                    </select>
+                                </div>
+                            </div>
+                            <?php endif; ?>
+
+                            <?php if ($category_exists): ?>
+                            <div class="col-md-6 col-lg-3">
+                                <div class="form-group">
+                                    <label class="form-label">Category</label>
+                                    <select class="form-select" name="category">
+                                        <option value="NONE" <?php echo (strtoupper(getFieldValue($record, 'category')) === 'NONE') ? 'selected' : ''; ?>>NONE</option>
+                                        <option value="DIPLOMAT" <?php echo (strtoupper(getFieldValue($record, 'category')) === 'DIPLOMAT') ? 'selected' : ''; ?>>DIPLOMAT</option>
+                                        <option value="INT/ORG" <?php echo (strtoupper(getFieldValue($record, 'category')) === 'INT/ORG') ? 'selected' : ''; ?>>INT/ORG</option>
                                     </select>
                                 </div>
                             </div>
