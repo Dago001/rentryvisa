@@ -203,7 +203,7 @@ if (!empty($user['photo'])) {
     
     <style>
         :root {
-            --primary: #1a5c2e;
+            --primary: #0d9488;
             --secondary: #27ae60;
             --dark: #2c3e50;
             --light: #f8f9fa;
@@ -374,7 +374,7 @@ if (!empty($user['photo'])) {
         
         .profile-header-banner {
             height: 140px;
-            background: linear-gradient(135deg, var(--primary), #113f1f);
+            background: linear-gradient(135deg, var(--primary), #0f172a);
             position: relative;
         }
         
@@ -499,7 +499,7 @@ if (!empty($user['photo'])) {
         }
         
         .btn-submit:hover {
-            background: #113f1f;
+            background: #0f172a;
             color: white;
             transform: translateY(-1px);
             box-shadow: 0 6px 15px rgba(26, 92, 46, 0.3);

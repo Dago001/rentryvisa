@@ -144,8 +144,8 @@ if(isset($_GET['id'])) {
     
     <style>
         :root {
-            --primary: #1a5c2e;
-            --primary-hover: #113f1f;
+            --primary: #0d9488;
+            --primary-hover: #0f172a;
             --secondary: #d4af37;
             --dark: #2c3e50;
             --light: #f5f7fa;

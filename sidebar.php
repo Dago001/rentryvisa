@@ -15,7 +15,7 @@ $current_page = basename($_SERVER['PHP_SELF']);
         left: 0;
         bottom: 0;
         width: var(--sidebar-width);
-        background: linear-gradient(180deg, #1a5c2e, #113f1f);
+        background: linear-gradient(180deg, #0d9488, #0f172a);
         color: white;
         z-index: 1050;
         transition: transform 0.3s ease-in-out;

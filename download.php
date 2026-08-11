@@ -33,7 +33,7 @@ $record = mysqli_fetch_assoc($result);
     <style>
         body { font-family: Arial; margin: 40px; }
         .header { text-align: center; margin-bottom: 30px; }
-        .title { font-size: 24px; font-weight: bold; color: #1a5c2e; }
+        .title { font-size: 24px; font-weight: bold; color: #0d9488; }
         .subtitle { color: #666; }
         .info { margin: 20px 0; }
         .label { font-weight: bold; }
@@ -63,7 +63,7 @@ $record = mysqli_fetch_assoc($result);
     </div>
     
     <div style="text-align: center; margin-top: 30px;">
-        <button onclick="window.print()" style="padding: 10px 20px; background: #1a5c2e; color: white; border: none; cursor: pointer;">
+        <button onclick="window.print()" style="padding: 10px 20px; background: #0d9488; color: white; border: none; cursor: pointer;">
             Print / Save as PDF
         </button>
         <p style="font-size: 12px; color: #666; margin-top: 10px;">
