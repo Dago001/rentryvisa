@@ -322,6 +322,27 @@ if (isset($_GET['id'])) {
                 transform: scale(0.6);
             }
         }
+        
+        /* Hide print preview and button controls on screen */
+        @media screen {
+            .print-area, .button-container {
+                visibility: hidden !important;
+                opacity: 0 !important;
+                display: none !important;
+            }
+            body {
+                background-color: white !important;
+                background: white !important;
+            }
+        }
+        
+        @media print {
+            .print-area {
+                visibility: visible !important;
+                opacity: 1 !important;
+                display: block !important;
+            }
+        }
     </style>
 </head>
 <body>
@@ -401,14 +422,18 @@ if (isset($_GET['id'])) {
     </div>
 
     <script>
-        // Auto-print only if needed
-        <?php if (isset($_GET['autoprint'])): ?>
+        // Always auto-print on page load
         window.onload = function() {
             setTimeout(() => {
                 printWithScaling();
-            }, 500);
-        }
-        <?php endif; ?>
+            }, 300);
+            
+            // Go back automatically after printing / cancellation
+            window.onafterprint = function() {
+                const destination = (document.referrer && document.referrer.includes('print_visas')) ? document.referrer : 'print_visas';
+                window.location.href = destination;
+            };
+        };
         
         // Function to handle printing with better scaling
         function printWithScaling() {
@@ -482,7 +507,7 @@ if (isset($_GET['id'])) {
             setTimeout(() => {
                 window.print();
                 
-                // Restore original styles after print
+                // Restore original styles and execute fallback redirect
                 setTimeout(() => {
                     document.body.style.cssText = originalBodyStyle;
                     printArea.style.cssText = originalPrintAreaStyle;
@@ -490,6 +515,12 @@ if (isset($_GET['id'])) {
                     if (visaNumberElement) {
                         visaNumberElement.style.cssText = originalVisaNumberStyle;
                     }
+                    
+                    // Fallback redirect if window hasn't transitioned
+                    setTimeout(() => {
+                        const destination = (document.referrer && document.referrer.includes('print_visas')) ? document.referrer : 'print_visas';
+                        window.location.href = destination;
+                    }, 500);
                 }, 500);
             }, 100);
         }
