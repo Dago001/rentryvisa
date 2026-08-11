@@ -386,7 +386,7 @@ if (isset($_GET['id'])) {
             
             <!-- Journey -->
             <div class="visa-text journey">
-                <?php echo !empty($journey) ? ($journey . ' TO NIGERIA') : ''; ?>
+                <?php echo !empty($journey) ? ($journey . '&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;TO NIGERIA') : ''; ?>
             </div>
             
             <!-- Valid Until -->
