@@ -204,7 +204,7 @@ if (isset($_GET['id'])) {
         
         @media print {
             @page {
-                size: 260mm 184mm; /* Force 16K landscape size (260x184mm) */
+                size: auto; /* Allows switching layout orientation in print dialog */
                 margin: 0 !important;
                 padding: 0 !important;
             }
