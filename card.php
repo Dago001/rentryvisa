@@ -437,57 +437,8 @@ if (isset($_GET['id'])) {
             };
         };
         
-        // Function to handle printing with better scaling
+        // Function to handle printing
         function printWithScaling() {
-            // Store original styles
-            const originalBodyStyle = document.body.style.cssText;
-            const originalPrintAreaStyle = document.querySelector('.print-area').style.cssText;
-            const originalVisaContainerStyle = document.querySelector('.visa-container').style.cssText;
-            
-            // Apply print styles
-            document.body.style.cssText = `
-                margin: 0 !important;
-                padding: 0 !important;
-                background-color: transparent !important;
-                display: flex !important;
-                justify-content: center !important;
-                align-items: center !important;
-                min-height: 100vh !important;
-                overflow: hidden !important;
-                -webkit-print-color-adjust: exact !important;
-                print-color-adjust: exact !important;
-            `;
-            
-            // Set exact print dimensions
-            const printArea = document.querySelector('.print-area');
-            printArea.style.cssText = `
-                width: 260mm !important;
-                height: 184mm !important;
-                margin: 0 auto !important;
-                padding: 0 !important;
-                background-color: transparent !important;
-                box-shadow: none !important;
-                position: relative !important;
-                page-break-inside: avoid !important;
-                page-break-after: avoid !important;
-                page-break-before: avoid !important;
-                overflow: hidden !important;
-            `;
-            
-            const visaContainer = document.querySelector('.visa-container');
-            visaContainer.style.cssText = `
-                width: 100% !important;
-                height: 100% !important;
-                background-size: cover !important;
-                background-position: center center !important;
-                background-repeat: no-repeat !important;
-                position: relative !important;
-                margin: 0 !important;
-                -webkit-print-color-adjust: exact !important;
-                print-color-adjust: exact !important;
-                overflow: hidden !important;
-            `;
-            
             // Hide visa number during printing (if it exists)
             const visaNumberElement = document.querySelector('.visa-number');
             let originalVisaNumberStyle = '';
@@ -500,20 +451,12 @@ if (isset($_GET['id'])) {
                 `;
             }
             
-            // Force single page by setting page breaks
-            document.body.style.pageBreakInside = 'avoid';
-            document.body.style.pageBreakAfter = 'avoid';
-            document.body.style.pageBreakBefore = 'avoid';
-            
             // Print
             setTimeout(() => {
                 window.print();
                 
-                // Restore original styles and execute fallback redirect
+                // Restore original styles
                 setTimeout(() => {
-                    document.body.style.cssText = originalBodyStyle;
-                    printArea.style.cssText = originalPrintAreaStyle;
-                    visaContainer.style.cssText = originalVisaContainerStyle;
                     if (visaNumberElement) {
                         visaNumberElement.style.cssText = originalVisaNumberStyle;
                     }
