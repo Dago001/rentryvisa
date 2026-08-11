@@ -184,7 +184,7 @@ if (isset($_GET['id'])) {
             top: 58.9%;
             left: 35.9%;
             font-size: 19px;
-            width: 37.9%;
+            width: 60%;
         }
         
         .valid-until {
