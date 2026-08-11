@@ -661,10 +661,12 @@ function showDashboard() {
                 $stats['recent_visas'] = $recent_data['recent_visas'] ?? 0;
             }
             
-            $query3 = "SELECT visa_number, surname, given_name, passport_number, application_date 
-                      FROM visa_applications 
-                      ORDER BY application_date DESC 
-                      LIMIT 5";
+            $query3 = "SELECT v.visa_number, v.surname, v.given_name, v.passport_number, v.application_date, v.created_by,
+                              u.fname, u.lname
+                       FROM visa_applications v
+                       LEFT JOIN users u ON v.created_by = u.service_no
+                       ORDER BY v.application_date DESC 
+                       LIMIT 5";
             $result3 = mysqli_query($conn, $query3);
             if ($result3 && mysqli_num_rows($result3) > 0) {
                 while ($row = mysqli_fetch_assoc($result3)) {
@@ -1410,6 +1412,7 @@ function showDashboard() {
                                                 <th>Applicant Name</th>
                                                 <th>Passport Number</th>
                                                 <th>Date Applied</th>
+                                                <th>Processed By</th>
                                             </tr>
                                         </thead>
                                         <tbody>
@@ -1427,6 +1430,15 @@ function showDashboard() {
                                                                 echo date('M j, Y g:i A', strtotime($app['application_date']));
                                                             } else {
                                                                 echo 'N/A';
+                                                            }
+                                                        ?>
+                                                    </td>
+                                                    <td>
+                                                        <?php 
+                                                            if (!empty($app['fname'])) {
+                                                                echo htmlspecialchars(strtoupper($app['fname'] . ' ' . $app['lname'] . ' (' . $app['created_by'] . ')'));
+                                                            } else {
+                                                                echo htmlspecialchars(strtoupper($app['created_by'] ?? 'N/A'));
                                                             }
                                                         ?>
                                                     </td>

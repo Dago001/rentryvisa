@@ -755,14 +755,11 @@ if (!empty($user['photo'])) {
             </div>
             
             <!-- Footer Section -->
-            <footer class="main-footer">
-                <div>
-                    All Rights Reserved by Nigeria Immigration Service. Designed and Developed by
-                    <a href="https://www.immigration.gov.ng" target="_blank">
-                        NIS Web Team
-                    </a>
-                </div>
-            </footer>
+            <?php 
+            if (file_exists('footer.php')) {
+                include('footer.php');
+            }
+            ?>
         </div>
     </div>
     

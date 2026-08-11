@@ -1130,6 +1130,11 @@ $hasData = $numb > 0 || !empty($recent_applications);
         
         // Logout is handled globally by sidebar.js/php
     </script>
+    <?php 
+    if (file_exists('footer.php')) {
+        include('footer.php');
+    }
+    ?>
 </body>
 </html>
 

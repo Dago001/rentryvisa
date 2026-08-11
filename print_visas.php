@@ -781,9 +781,6 @@ if (!$retrieve) {
                             <button id="clearSearch" class="btn btn-outline-secondary">
                                 <i class="fa fa-times"></i> Clear
                             </button>
-                            <button id="printTable" class="btn btn-secondary">
-                                <i class="fa fa-print"></i> Print Table
-                            </button>
                         </div>
                     </div>
                     
@@ -849,14 +846,11 @@ if (!$retrieve) {
         </div>
         
         <!-- Footer Section -->
-        <footer class="main-footer">
-            <div>
-                All Rights Reserved by Nigeria Immigration Service. Designed and Developed by
-                <a href="https://www.immigration.gov.ng" target="_blank">
-                    NIS Web Team
-                </a>
-            </div>
-        </footer>
+        <?php 
+        if (file_exists('footer.php')) {
+            include('footer.php');
+        }
+        ?>
     </div>
     <!-- Bootstrap JS -->
     <script src="vendors/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
@@ -902,7 +896,6 @@ if (!$retrieve) {
         document.addEventListener('DOMContentLoaded', function() {
             const searchInput = document.getElementById('searchInput');
             const clearSearch = document.getElementById('clearSearch');
-            const printTable = document.getElementById('printTable');
             const table = document.getElementById('applicationsTable');
             const tableRows = table.getElementsByTagName('tbody')[0].getElementsByTagName('tr');
             const noResults = document.getElementById('noResults');
@@ -964,11 +957,6 @@ if (!$retrieve) {
                 searchInput.value = '';
                 searchInput.dispatchEvent(new Event('keyup'));
                 searchInput.focus();
-            });
-            
-            // Print table function
-            printTable.addEventListener('click', function() {
-                window.print();
             });
             
 

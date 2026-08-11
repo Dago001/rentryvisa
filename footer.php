@@ -11,10 +11,16 @@
     color: #6c757d;
 ">
     <div style="float: right;">
-        All Rights Reserved by Nigeria Immigration Service. Designed and Developed by
-        <a href="https://www.immigration.gov.ng" 
+        All Rights Reserved by 
+        <a href="https://www.immigration.gov.ng/" 
            target="_blank" 
-           style="color: #27ae60; text-decoration: none;">
+           style="color: #5c3c1e; text-decoration: none; font-weight: bold;">
+            Nigeria Immigration Service
+        </a>. 
+        Designed and Developed by 
+        <a href="https://www.immigration.gov.ng/" 
+           target="_blank" 
+           style="color: #1a5c2e; text-decoration: none; font-weight: bold;">
             NIS Web Team
         </a>
     </div>

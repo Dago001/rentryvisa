@@ -675,15 +675,12 @@ if (!empty($searchTerm)) {
             <?php endif; ?>
         </div>
 
-        <!-- Footer -->
-        <footer class="main-footer">
-            <div>
-                All Rights Reserved by Nigeria Immigration Service. Designed and Developed by
-                <a href="https://www.immigration.gov.ng" target="_blank">
-                    NIS Web Team
-                </a>
-            </div>
-        </footer>
+        <!-- Footer Section -->
+        <?php 
+        if (file_exists('footer.php')) {
+            include('footer.php');
+        }
+        ?>
     </div>
 
     <!-- Bootstrap JS -->

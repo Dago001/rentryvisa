@@ -904,14 +904,11 @@ $numb = $retrieve ? mysqli_num_rows($retrieve) : 0;
         </div>
         
         <!-- Footer Section -->
-        <footer class="main-footer">
-            <div>
-                All Rights Reserved by Nigeria Immigration Service. Designed and Developed by
-                <a href="https://www.immigration.gov.ng" target="_blank">
-                    NIS Web Team
-                </a>
-            </div>
-        </footer>
+        <?php 
+        if (file_exists('footer.php')) {
+            include('footer.php');
+        }
+        ?>
     </div>
     <!-- Bootstrap JS -->
     <script src="vendors/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
