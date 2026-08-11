@@ -113,7 +113,7 @@ if (isset($_GET['id'])) {
         .visa-number {
             top: 3.8%;
             left: 70.9%;
-            font-size: 19px;
+            font-size: 16px;
             letter-spacing: 1.5px;
             width: 40%;
         }
@@ -121,7 +121,7 @@ if (isset($_GET['id'])) {
         .category {
             top: 40.8%;
             left: 12.6%;
-            font-size: 19px;
+            font-size: 16px;
             writing-mode: vertical-rl;
             text-orientation: mixed;
             height: 23.1%;
@@ -134,7 +134,7 @@ if (isset($_GET['id'])) {
         .unicef-tag {
             top: 40.8%;
             left: 85.5%;
-            font-size: 19px;
+            font-size: 16px;
             writing-mode: vertical-rl;
             text-orientation: mixed;
             height: 23.1%;
@@ -147,7 +147,7 @@ if (isset($_GET['id'])) {
         .full-name {
             top: 38.9%;
             left: 34.5%;
-            font-size: 19px;
+            font-size: 16px;
             width: 56.8%;
             text-transform: uppercase;
             max-height: 4.6%;
@@ -156,49 +156,49 @@ if (isset($_GET['id'])) {
         .passport-number {
             top: 45.4%;
             left: 34.5%;
-            font-size: 19px;
+            font-size: 16px;
             width: 37.9%;
         }
         
         .authority {
             top: 45.5%;
             left: 56.4%;
-            font-size: 19px;
+            font-size: 16px;
             width: 34.1%;
         }
         
         .place-of-issue {
             top: 53%;
             left: 32.6%;
-            font-size: 19px;
+            font-size: 16px;
             width: 37.9%;
         }
         
         .fees {
             top: 53.3%;
             left: 67.8%;
-            font-size: 19px;
+            font-size: 16px;
             width: 34.1%;
         }
         
         .journey {
             top: 58.9%;
             left: 43.9%;
-            font-size: 19px;
+            font-size: 16px;
             width: 60%;
         }
         
         .valid-until {
             top: 67%;
             left: 30.7%;
-            font-size: 19px;
+            font-size: 16px;
             width: 37.9%;
         }
         
         .date-of-issue {
             top: 74.5%;
             left: 52.6%;
-            font-size: 19px;
+            font-size: 16px;
             width: 34.1%;
         }
         
