@@ -1367,7 +1367,7 @@ function showDashboard() {
                 </div>
 
 
-                <div class="row">
+                <div class="row mt-5" style="margin-top: 3rem !important;">
                     <!-- Recent Applications -->
                     <div class="col-md-7 mb-4">
                         <div class="recent-card" style="height: 100%; margin-top: 0;">

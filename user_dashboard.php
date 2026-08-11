@@ -943,7 +943,7 @@ $hasData = $numb > 0 || !empty($recent_applications);
             </div>
 
             <!-- Recent Activities - USER'S OWN ACTIVITIES ONLY -->
-            <div class="recent-activities">
+            <div class="recent-activities" style="margin-top: 3rem !important;">
                 <div class="activities-header">
                     <h5><i class="fa fa-history" style="color: var(--primary);"></i> My Recent Activities</h5>
                     <a href="re-entry-visa" class="view-all-btn">View All Applications</a>
