@@ -17,6 +17,15 @@ if ($userRole !== 'Admin') {
 
 require_once('db/db.php');
 
+// Sync current user's profile photo from database to ensure it's always up to date
+if (isset($_SESSION['user_id'])) {
+    $current_uid = $_SESSION['user_id'];
+    $photo_sync = mysqli_query($conn, "SELECT photo FROM users WHERE id = '$current_uid'");
+    if ($photo_sync && $photo_row = mysqli_fetch_assoc($photo_sync)) {
+        $_SESSION['photo'] = $photo_row['photo'];
+    }
+}
+
 // Check if users table exists, create if not
 $table_check = mysqli_query($conn, "SHOW TABLES LIKE 'users'");
 if (mysqli_num_rows($table_check) == 0) {
@@ -971,15 +980,44 @@ $total_users = mysqli_num_rows($users_result);
                         </div>
                     </div>
 
-                    <!-- Existing Users Table -->
+                </div> <!-- End of col-lg-8 col-md-7 -->
+                
+                <!-- Sidebar Cards -->
+                <div class="col-lg-4 col-md-5">
+                    <!-- User Roles Card -->
                     <div class="card">
-                        <div class="card-header d-flex justify-content-between align-items-center">
-                            <h4 class="mb-0"><i class="fa fa-users" style="color: var(--primary);"></i> Existing Users (<?php echo $total_users; ?>)</h4>
+                        <div class="card-header">
+                            <h4><i class="fa fa-key" style="color: var(--warning);"></i> User Roles</h4>
                         </div>
-                        <div class="card-body p-0">
+                        <div class="card-body">
+                            <div class="role-item">
+                                <div class="role-title text-primary">Administrator</div>
+                                <div class="role-description">Full system access with user management capabilities</div>
+                            </div>
+                            <div class="role-item">
+                                <div class="role-title text-info">Supervisor</div>
+                                <div class="role-description">Can create, edit, print and view reports</div>
+                            </div>
+                            <div class="role-item">
+                                <div class="role-title text-success">Data Entry</div>
+                                <div class="role-description">Can create, edit and print visa applications</div>
+                            </div>
+                        </div>
+                    </div>
+                </div> <!-- End of col-lg-4 col-md-5 -->
+            </div> <!-- End of first row -->
+
+            <!-- Existing Users Table - Expanded Full Width -->
+            <div class="row mt-4">
+                <div class="col-12">
+                    <div class="card shadow-sm border-0">
+                        <div class="card-header d-flex justify-content-between align-items-center">
+                            <h4 class="mb-0 text-primary fw-bold"><i class="fa fa-users" style="color: var(--secondary);"></i> Existing Users (<?php echo $total_users; ?>)</h4>
+                        </div>
+                        <div class="card-body">
                             <?php if ($total_users > 0): ?>
                                 <div class="table-responsive">
-                                    <table class="table table-hover align-middle mb-0" style="font-size: 0.9rem;">
+                                    <table class="table table-hover align-middle mb-0" style="font-size: 0.9rem; width: 100%;">
                                         <thead class="table-light">
                                             <tr>
                                                 <th style="padding-left: 20px;">User Profile</th>
@@ -1082,30 +1120,6 @@ $total_users = mysqli_num_rows($users_result);
                                     <p class="text-muted">No users found. Create your first user above.</p>
                                 </div>
                             <?php endif; ?>
-                        </div>
-                    </div>
-                </div>
-                
-                <!-- Sidebar Cards -->
-                <div class="col-lg-4 col-md-5">
-                    <!-- User Roles Card -->
-                    <div class="card">
-                        <div class="card-header">
-                            <h4><i class="fa fa-key" style="color: var(--warning);"></i> User Roles</h4>
-                        </div>
-                        <div class="card-body">
-                            <div class="role-item">
-                                <div class="role-title text-primary">Administrator</div>
-                                <div class="role-description">Full system access with user management capabilities</div>
-                            </div>
-                            <div class="role-item">
-                                <div class="role-title text-info">Supervisor</div>
-                                <div class="role-description">Can create, edit, print and view reports</div>
-                            </div>
-                            <div class="role-item">
-                                <div class="role-title text-success">Data Entry</div>
-                                <div class="role-description">Can create, edit and print visa applications</div>
-                            </div>
                         </div>
                     </div>
                 </div>

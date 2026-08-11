@@ -3,6 +3,16 @@ require_once('security.php');
 error_reporting(E_ALL);
 ini_set('display_errors', 1);
 require_once('db/db.php');
+
+// Sync current user's profile photo from database to ensure it's always up to date
+if (isset($_SESSION['user_id'])) {
+    $current_uid = $_SESSION['user_id'];
+    $photo_sync = mysqli_query($conn, "SELECT photo FROM users WHERE id = '$current_uid'");
+    if ($photo_sync && $photo_row = mysqli_fetch_assoc($photo_sync)) {
+        $_SESSION['photo'] = $photo_row['photo'];
+    }
+}
+
 require_once('GoogleAuthenticator.php');
 require_once('vendors/phpqrcode/qrlib.php');
 
