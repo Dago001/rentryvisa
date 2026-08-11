@@ -77,8 +77,9 @@ if (isset($_GET['id'])) {
         }
         
         .print-area {
-            width: 104mm;
-            height: 73mm;
+            /* Standard visa sticker size in mm converted to pixels (1mm = 3.78px approx) */
+            width: 983px;  /* 184mm * 3.78 ≈ 696px */
+            height: 696px; /* 260mm * 3.78 ≈ 983px */
             position: relative;
             transform-origin: 0 0;
             background-color: transparent;
@@ -90,9 +91,9 @@ if (isset($_GET['id'])) {
             width: 100%;
             height: 100%;
             background-image: url('assets/images/visa_vignette.jpg');
-            background-size: cover;
+            background-size: cover; /* Changed from 100% 100% to cover */
             background-repeat: no-repeat;
-            background-position: center center;
+            background-position: center center; /* Ensure center positioning */
             position: relative;
             overflow: hidden;
         }
@@ -107,13 +108,22 @@ if (isset($_GET['id'])) {
             transform-origin: 0 0;
         }
         
+        /* MODIFIED: Visa number will be hidden in print */
+        .visa-number {
+            top: 3.8%;
+            left: 70.9%;
+            font-size: 19px;
+            letter-spacing: 1.5px;
+            width: 40%;
+        }
+        
         .category {
-            top: 30mm;
-            left: 8mm;
-            font-size: 3.2mm;
+            top: 40.8%;
+            left: 7.6%;
+            font-size: 19px;
             writing-mode: vertical-rl;
             text-orientation: mixed;
-            height: 18mm;
+            height: 23.1%;
             line-height: 1.3;
             text-align: center;
             transform: rotate(180deg);
@@ -121,12 +131,12 @@ if (isset($_GET['id'])) {
         }
         
         .unicef-tag {
-            top: 30mm;
-            left: 95mm;
-            font-size: 3.2mm;
+            top: 40.8%;
+            left: 90.5%;
+            font-size: 19px;
             writing-mode: vertical-rl;
             text-orientation: mixed;
-            height: 18mm;
+            height: 23.1%;
             line-height: 1.3;
             text-align: center;
             transform: rotate(180deg);
@@ -134,74 +144,75 @@ if (isset($_GET['id'])) {
         }
         
         .full-name {
-            top: 37mm;
-            left: 27mm;
-            font-size: 3.2mm;
-            width: 60mm;
+            top: 38.9%;
+            left: 26.5%;
+            font-size: 19px;
+            width: 56.8%;
             text-transform: uppercase;
+            max-height: 4.6%;
         }
         
         .passport-number {
-            top: 42.5mm;
-            left: 27mm;
-            font-size: 3.2mm;
-            width: 32mm;
+            top: 45.4%;
+            left: 26.5%;
+            font-size: 19px;
+            width: 37.9%;
         }
         
         .authority {
-            top: 42.5mm;
-            left: 65mm;
-            font-size: 3.2mm;
-            width: 32mm;
+            top: 45.5%;
+            left: 64.4%;
+            font-size: 19px;
+            width: 34.1%;
         }
         
         .place-of-issue {
-            top: 48mm;
-            left: 27mm;
-            font-size: 3.2mm;
-            width: 32mm;
+            top: 53%;
+            left: 24.6%;
+            font-size: 19px;
+            width: 37.9%;
         }
         
         .fees {
-            top: 48mm;
-            left: 77mm;
-            font-size: 3.2mm;
-            width: 20mm;
+            top: 53.3%;
+            left: 75.8%;
+            font-size: 19px;
+            width: 34.1%;
         }
         
         .journey {
-            top: 54mm;
-            left: 36mm;
-            font-size: 3.2mm;
-            width: 60mm;
+            top: 58.9%;
+            left: 35.9%;
+            font-size: 19px;
+            width: 60%;
         }
         
         .valid-until {
-            top: 59.5mm;
-            left: 27mm;
-            font-size: 3.2mm;
-            width: 32mm;
+            top: 67%;
+            left: 22.7%;
+            font-size: 19px;
+            width: 37.9%;
         }
         
         .date-of-issue {
-            top: 59.5mm;
-            left: 62mm;
-            font-size: 3.2mm;
-            width: 32mm;
+            top: 74.5%;
+            left: 60.6%;
+            font-size: 19px;
+            width: 34.1%;
         }
         
         @media print {
             @page {
                 margin: 0 !important;
                 padding: 0 !important;
-                size: 104mm 73mm !important;
+                size: auto; /* Set exact page size */
             }
             
             html, body {
                 margin: 0 !important;
                 padding: 0 !important;
-                width: 104mm !important;
-                height: 73mm !important;
+                width: 100% !important;
+                height: 100% !important;
                 background-color: transparent !important;
                 overflow: hidden !important;
                 -webkit-print-color-adjust: exact !important;
@@ -217,8 +228,8 @@ if (isset($_GET['id'])) {
             }
             
             .print-area {
-                width: 104mm !important;
-                height: 73mm !important;
+                width: 260mm !important;  /* Exact print dimensions */
+                height: 184mm !important; /* Exact print dimensions */
                 margin: 0 auto !important;
                 padding: 0 !important;
                 background-color: transparent !important;
@@ -235,10 +246,10 @@ if (isset($_GET['id'])) {
             }
             
             .visa-container {
-                width: 104mm !important;
-                height: 73mm !important;
-                background-size: cover !important;
-                background-position: center center !important;
+                width: 100% !important;
+                height: 100% !important;
+                background-size: cover !important; /* Ensure image covers entire area */
+                background-position: center center !important; /* Center the image */
                 background-repeat: no-repeat !important;
                 position: relative !important;
                 margin: 0 !important;
@@ -247,11 +258,7 @@ if (isset($_GET['id'])) {
                 overflow: hidden !important;
             }
             
-            .visa-container.hide-bg-print {
-                background-image: none !important;
-                background: transparent !important;
-            }
-            
+            /* MODIFIED: Hide visa number in print */
             .visa-number {
                 display: none !important;
                 visibility: hidden !important;
@@ -318,11 +325,8 @@ if (isset($_GET['id'])) {
     </style>
 </head>
 <body>
-    <!-- Button container for both buttons and background print toggle -->
-    <div class="button-container no-print" style="align-items: center;">
-        <label style="color: white; display: inline-flex; align-items: center; gap: 6px; font-family: Arial, sans-serif; font-size: 13px; cursor: pointer; background: #2c3e50; padding: 10px 15px; border-radius: 5px; height: 41px;">
-            <input type="checkbox" id="toggleBgPrint" checked onchange="toggleBackgroundPrint(this)" style="cursor: pointer; transform: scale(1.15);"> Print Background
-        </label>
+    <!-- Button container for both buttons -->
+    <div class="button-container no-print">
         <button class="print-button" onclick="printWithScaling()">
             Print Visa
         </button>
@@ -406,16 +410,6 @@ if (isset($_GET['id'])) {
         }
         <?php endif; ?>
         
-        // Function to toggle background visibility on/off dynamically
-        function toggleBackgroundPrint(checkbox) {
-            const container = document.querySelector('.visa-container');
-            if (checkbox.checked) {
-                container.classList.remove('hide-bg-print');
-            } else {
-                container.classList.add('hide-bg-print');
-            }
-        }
-        
         // Function to handle printing with better scaling
         function printWithScaling() {
             // Store original styles
@@ -440,8 +434,8 @@ if (isset($_GET['id'])) {
             // Set exact print dimensions
             const printArea = document.querySelector('.print-area');
             printArea.style.cssText = `
-                width: 104mm !important;
-                height: 73mm !important;
+                width: 260mm !important;
+                height: 184mm !important;
                 margin: 0 auto !important;
                 padding: 0 !important;
                 background-color: transparent !important;
@@ -453,14 +447,10 @@ if (isset($_GET['id'])) {
                 overflow: hidden !important;
             `;
             
-            const bgPrintCheckbox = document.getElementById('toggleBgPrint');
-            const bgImage = (bgPrintCheckbox && !bgPrintCheckbox.checked) ? 'none !important' : 'url("assets/images/visa_vignette.jpg") !important';
-            
             const visaContainer = document.querySelector('.visa-container');
             visaContainer.style.cssText = `
                 width: 100% !important;
                 height: 100% !important;
-                background-image: ${bgImage};
                 background-size: cover !important;
                 background-position: center center !important;
                 background-repeat: no-repeat !important;
