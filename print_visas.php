@@ -907,6 +907,7 @@ if (!$retrieve) {
             // Search function
             searchInput.addEventListener('input', function() {
                 const searchTerm = this.value.toLowerCase().trim();
+                const searchWords = searchTerm.split(/\s+/).filter(word => word.length > 0);
                 const tableRows = tbody.getElementsByTagName('tr');
                 let hasResults = false;
                 
@@ -920,30 +921,25 @@ if (!$retrieve) {
                         continue;
                     }
                     
-                    let rowMatches = false;
+                    let rowMatches = true;
                     
-                    // Check visa number (first cell)
-                    if (cells[0] && cells[0].textContent.toLowerCase().includes(searchTerm)) {
-                        rowMatches = true;
-                    }
+                    const visaNo = cells[0] ? cells[0].textContent.toLowerCase() : '';
+                    const surname = cells[1] ? cells[1].textContent.toLowerCase() : '';
+                    const givenName = cells[2] ? cells[2].textContent.toLowerCase() : '';
+                    const passportNo = cells[3] ? cells[3].textContent.toLowerCase() : '';
                     
-                    // Check surname (second cell)
-                    if (cells[1] && cells[1].textContent.toLowerCase().includes(searchTerm)) {
-                        rowMatches = true;
-                    }
+                    const combinedRowText = `${visaNo} ${surname} ${givenName} ${passportNo}`;
                     
-                    // Check given name (third cell)
-                    if (cells[2] && cells[2].textContent.toLowerCase().includes(searchTerm)) {
-                        rowMatches = true;
-                    }
-                    
-                    // Check passport number (fourth cell)
-                    if (cells[3] && cells[3].textContent.toLowerCase().includes(searchTerm)) {
-                        rowMatches = true;
+                    // All words of the search query must match somewhere in the row text
+                    for (let j = 0; j < searchWords.length; j++) {
+                        if (!combinedRowText.includes(searchWords[j])) {
+                            rowMatches = false;
+                            break;
+                        }
                     }
                     
                     // Show or hide the row based on search match
-                    if (rowMatches) {
+                    if (rowMatches || searchWords.length === 0) {
                         row.style.display = '';
                         hasResults = true;
                     } else {

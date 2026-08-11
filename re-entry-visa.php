@@ -978,6 +978,7 @@ $numb = $retrieve ? mysqli_num_rows($retrieve) : 0;
             // Search function
             searchInput.addEventListener('input', function() {
                 const searchTerm = this.value.toLowerCase().trim();
+                const searchWords = searchTerm.split(/\s+/).filter(word => word.length > 0);
                 const tableRows = tbody.getElementsByTagName('tr');
                 let hasResults = false;
                 
@@ -991,25 +992,24 @@ $numb = $retrieve ? mysqli_num_rows($retrieve) : 0;
                         continue;
                     }
                     
-                    let rowMatches = false;
+                    let rowMatches = true;
                     
-                    // Check visa number (first cell)
-                    if (cells[0] && cells[0].textContent.toLowerCase().includes(searchTerm)) {
-                        rowMatches = true;
-                    }
+                    const visaNo = cells[0] ? cells[0].textContent.toLowerCase() : '';
+                    const fullName = cells[1] ? cells[1].textContent.toLowerCase() : '';
+                    const passportNo = cells[2] ? cells[2].textContent.toLowerCase() : '';
                     
-                    // Check full name (second cell)
-                    if (cells[1] && cells[1].textContent.toLowerCase().includes(searchTerm)) {
-                        rowMatches = true;
-                    }
+                    const combinedRowText = `${visaNo} ${fullName} ${passportNo}`;
                     
-                    // Check passport number (third cell)
-                    if (cells[2] && cells[2].textContent.toLowerCase().includes(searchTerm)) {
-                        rowMatches = true;
+                    // All words of the search query must match somewhere in the row text
+                    for (let j = 0; j < searchWords.length; j++) {
+                        if (!combinedRowText.includes(searchWords[j])) {
+                            rowMatches = false;
+                            break;
+                        }
                     }
                     
                     // Show or hide the row based on search match
-                    if (rowMatches) {
+                    if (rowMatches || searchWords.length === 0) {
                         row.style.display = '';
                         hasResults = true;
                     } else {
