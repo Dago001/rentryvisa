@@ -873,7 +873,7 @@ $current_page = basename($_SERVER['PHP_SELF']);
                             <div class="form-group">
                                 <label for="authority">Authority</label>
                                 <input type="text" id="authority" name="authority" required
-                                       oninput="validateText(this)" placeholder="enter authority">
+                                       value="ABJ/HQ/DIP/" placeholder="ABJ/HQ/DIP/...">
                             </div>
 
                             <div class="form-group">
@@ -944,7 +944,14 @@ $current_page = basename($_SERVER['PHP_SELF']);
             const requiredInputs = document.querySelectorAll('#visaForm [required]');
 
             requiredInputs.forEach(input => {
-                if (!input.value.trim()) {
+                if (input.id === 'authority') {
+                    if (input.value.trim() === 'ABJ/HQ/DIP/' || input.value.trim().length <= 11) {
+                        isValid = false;
+                        input.classList.add('is-invalid');
+                    } else {
+                        input.classList.remove('is-invalid');
+                    }
+                } else if (!input.value.trim()) {
                     isValid = false;
                     input.classList.add('is-invalid');
                 } else {
@@ -1027,7 +1034,13 @@ $current_page = basename($_SERVER['PHP_SELF']);
             
             allInputs.forEach(input => {
                 input.addEventListener('blur', function() {
-                    if (this.hasAttribute('required') && !this.value.trim()) {
+                    if (this.id === 'authority') {
+                        if (this.value.trim() === 'ABJ/HQ/DIP/' || this.value.trim().length <= 11) {
+                            this.classList.add('is-invalid');
+                        } else {
+                            this.classList.remove('is-invalid');
+                        }
+                    } else if (this.hasAttribute('required') && !this.value.trim()) {
                         this.classList.add('is-invalid');
                     } else {
                         this.classList.remove('is-invalid');
@@ -1035,11 +1048,53 @@ $current_page = basename($_SERVER['PHP_SELF']);
                 });
                 
                 input.addEventListener('input', function() {
-                    if (this.value.trim()) {
+                    if (this.id === 'authority') {
+                        if (this.value.trim() !== 'ABJ/HQ/DIP/' && this.value.trim().length > 11) {
+                            this.classList.remove('is-invalid');
+                        }
+                    } else if (this.value.trim()) {
                         this.classList.remove('is-invalid');
                     }
                 });
             });
+
+            // Specific validation and prefix preservation for Authority
+            const authorityInput = document.getElementById('authority');
+            if (authorityInput) {
+                const prefix = "ABJ/HQ/DIP/";
+                
+                // Helper function to enforce prefix and strip invalid characters
+                function formatAuthority(el) {
+                    let val = el.value;
+                    
+                    // Enforce prefix
+                    if (!val.startsWith(prefix)) {
+                        el.value = prefix;
+                        return;
+                    }
+                    
+                    // Allow only alphabet, numbers, and / in suffix
+                    let suffix = val.substring(prefix.length).toUpperCase();
+                    suffix = suffix.replace(/[^A-Z0-9\/]/g, '');
+                    
+                    el.value = prefix + suffix;
+                }
+                
+                authorityInput.addEventListener('focus', function() {
+                    if (!this.value) {
+                        this.value = prefix;
+                    }
+                });
+                
+                authorityInput.addEventListener('input', function() {
+                    formatAuthority(this);
+                });
+                
+                // Initialize if empty
+                if (!authorityInput.value) {
+                    authorityInput.value = prefix;
+                }
+            }
         });
 
         // Date validation
