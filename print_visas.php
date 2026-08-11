@@ -901,8 +901,8 @@ if (!$retrieve) {
             const noResults = document.getElementById('noResults');
             
             // Search function
-            searchInput.addEventListener('keyup', function() {
-                const searchTerm = this.value.toLowerCase();
+            searchInput.addEventListener('input', function() {
+                const searchTerm = this.value.toLowerCase().trim();
                 let hasResults = false;
                 
                 // Loop through all table rows
@@ -910,26 +910,30 @@ if (!$retrieve) {
                     const row = tableRows[i];
                     const cells = row.getElementsByTagName('td');
                     
-                    // Check if any cell in the row matches the search term
+                    // Skip if the row has fewer than 4 cells (e.g. "No records found" or footer/message row)
+                    if (cells.length < 4) {
+                        continue;
+                    }
+                    
                     let rowMatches = false;
                     
                     // Check visa number (first cell)
-                    if (cells[0].textContent.toLowerCase().includes(searchTerm)) {
+                    if (cells[0] && cells[0].textContent.toLowerCase().includes(searchTerm)) {
                         rowMatches = true;
                     }
                     
                     // Check surname (second cell)
-                    if (cells[1].textContent.toLowerCase().includes(searchTerm)) {
+                    if (cells[1] && cells[1].textContent.toLowerCase().includes(searchTerm)) {
                         rowMatches = true;
                     }
                     
                     // Check given name (third cell)
-                    if (cells[2].textContent.toLowerCase().includes(searchTerm)) {
+                    if (cells[2] && cells[2].textContent.toLowerCase().includes(searchTerm)) {
                         rowMatches = true;
                     }
                     
                     // Check passport number (fourth cell)
-                    if (cells[3].textContent.toLowerCase().includes(searchTerm)) {
+                    if (cells[3] && cells[3].textContent.toLowerCase().includes(searchTerm)) {
                         rowMatches = true;
                     }
                     
@@ -943,19 +947,21 @@ if (!$retrieve) {
                 }
                 
                 // Show/hide no results message
-                if (hasResults || searchTerm === '') {
-                    noResults.style.display = 'none';
-                    table.style.display = '';
-                } else {
-                    noResults.style.display = 'block';
-                    table.style.display = 'none';
+                if (noResults) {
+                    if (hasResults || searchTerm === '') {
+                        noResults.style.display = 'none';
+                        table.style.display = '';
+                    } else {
+                        noResults.style.display = 'block';
+                        table.style.display = 'none';
+                    }
                 }
             });
             
             // Clear search function
             clearSearch.addEventListener('click', function() {
                 searchInput.value = '';
-                searchInput.dispatchEvent(new Event('keyup'));
+                searchInput.dispatchEvent(new Event('input'));
                 searchInput.focus();
             });
             

@@ -18,9 +18,9 @@
             Nigeria Immigration Service
         </a>. 
         Designed and Developed by 
-        <a href="https://www.immigration.gov.ng/" 
-           target="_blank" 
-           style="color: #1a5c2e; text-decoration: none; font-weight: bold;">
+        <!-- <a href="https://www.immigration.gov.ng/" 
+           target="_blank"  -->
+           <!-- style="color: #1a5c2e; text-decoration: none; font-weight: bold;"> -->
             NIS Web Team
         </a>
     </div>
