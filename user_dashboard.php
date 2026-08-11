@@ -170,14 +170,14 @@ $hasData = $numb > 0 || !empty($recent_applications);
     <script src="vendors/chartjs/chart.js"></script>
     <style>
         :root {
-            --primary: #1a5c2e;
-            --secondary: #27ae60;
-            --dark: #2c3e50;
-            --light: #f8f9fa;
-            --warning: #f39c12;
-            --info: #3498db;
-            --danger: #dc3545;
-            --gray: #6c757d;
+            --primary: #3b82f6; /* Friendly Slate Blue */
+            --secondary: #6366f1; /* Friendly Indigo */
+            --dark: #0f172a;
+            --light: #f8fafc;
+            --warning: #f59e0b;
+            --info: #0ea5e9;
+            --danger: #f43f5e;
+            --gray: #64748b;
             --sidebar-width: 260px;
         }
         
@@ -1084,8 +1084,8 @@ $hasData = $numb > 0 || !empty($recent_applications);
                     datasets: [{
                         label: 'Visas Issued',
                         data: <?php echo json_encode($monthly_counts); ?>,
-                        backgroundColor: 'rgba(26, 92, 46, 0.85)',
-                        borderColor: '#1a5c2e',
+                        backgroundColor: 'rgba(59, 130, 246, 0.85)',
+                        borderColor: '#3b82f6',
                         borderWidth: 1.5,
                         borderRadius: 6
                     }]

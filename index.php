@@ -689,6 +689,34 @@ function showDashboard() {
                     $monthly_counts[] = (int)$row['count'];
                 }
             }
+
+            // Query expired visas
+            $expired_visas = [];
+            $expired_query = "SELECT visa_number, surname, given_name, passport_number, within 
+                             FROM visa_applications 
+                             WHERE within < CURDATE() 
+                             ORDER BY within DESC 
+                             LIMIT 10";
+            $expired_result = mysqli_query($conn, $expired_query);
+            if ($expired_result && mysqli_num_rows($expired_result) > 0) {
+                while ($row = mysqli_fetch_assoc($expired_result)) {
+                    $expired_visas[] = $row;
+                }
+            }
+
+            // Query visas expiring soon (next 30 days)
+            $expiring_soon_visas = [];
+            $expiring_soon_query = "SELECT visa_number, surname, given_name, passport_number, within 
+                                   FROM visa_applications 
+                                   WHERE within >= CURDATE() AND within <= DATE_ADD(CURDATE(), INTERVAL 30 DAY) 
+                                   ORDER BY within ASC 
+                                   LIMIT 10";
+            $expiring_soon_result = mysqli_query($conn, $expiring_soon_query);
+            if ($expiring_soon_result && mysqli_num_rows($expiring_soon_result) > 0) {
+                while ($row = mysqli_fetch_assoc($expiring_soon_result)) {
+                    $expiring_soon_visas[] = $row;
+                }
+            }
         }
         
     } catch (Exception $e) {
@@ -711,14 +739,14 @@ function showDashboard() {
         <script src="vendors/chartjs/chart.js"></script>
         <style>
             :root {
-                --primary: #1a5c2e;
-                --secondary: #27ae60;
-                --dark: #2c3e50;
-                --light: #f8f9fa;
-                --warning: #f39c12;
-                --info: #3498db;
-                --danger: #dc3545;
-                --gray: #6c757d;
+                --primary: #3b82f6; /* Friendly Slate Blue */
+                --secondary: #6366f1; /* Friendly Indigo */
+                --dark: #0f172a;
+                --light: #f8fafc;
+                --warning: #f59e0b;
+                --info: #0ea5e9;
+                --danger: #f43f5e;
+                --gray: #64748b;
                 --sidebar-width: 260px;
             }
             
@@ -1339,62 +1367,122 @@ function showDashboard() {
                 </div>
 
 
-                <!-- Recent Applications -->
-                <div class="recent-card">
-                    <div class="card-header">
-                        <h5><i class="fa fa-history" style="color: var(--primary);"></i> Recent Applications</h5>
-                        <a href="re-entry-visa" class="view-all-btn">View All Applications</a>
+                <div class="row">
+                    <!-- Recent Applications -->
+                    <div class="col-md-7 mb-4">
+                        <div class="recent-card" style="height: 100%; margin-top: 0;">
+                            <div class="card-header">
+                                <h5><i class="fa fa-history" style="color: var(--primary);"></i> Recent Applications</h5>
+                                <a href="re-entry-visa" class="view-all-btn">View All</a>
+                            </div>
+                            
+                            <?php if (!empty($recent_applications)): ?>
+                                <div class="table-responsive">
+                                    <table class="table">
+                                        <thead>
+                                            <tr>
+                                                <th>Visa Number</th>
+                                                <th>Applicant Name</th>
+                                                <th>Passport Number</th>
+                                                <th>Date Applied</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            <?php foreach ($recent_applications as $app): ?>
+                                                <tr>
+                                                    <td><strong><?php echo htmlspecialchars($app['visa_number'] ?? 'N/A'); ?></strong></td>
+                                                    <td><?php 
+                                                        $name = ($app['surname'] ?? '') . ', ' . ($app['given_name'] ?? '');
+                                                        echo htmlspecialchars(trim($name, ', ')); 
+                                                    ?></td>
+                                                    <td><code><?php echo htmlspecialchars($app['passport_number'] ?? 'N/A'); ?></code></td>
+                                                    <td>
+                                                        <?php 
+                                                            if (!empty($app['application_date'])) {
+                                                                echo date('M j, Y g:i A', strtotime($app['application_date']));
+                                                            } else {
+                                                                echo 'N/A';
+                                                            }
+                                                        ?>
+                                                    </td>
+                                                </tr>
+                                            <?php endforeach; ?>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            <?php elseif (!$hasData): ?>
+                                <div class="alert alert-info" style="background: #e3f2fd; border: 1px solid #bbdefb; color: #1976d2; padding: 15px; border-radius: 8px; text-align: center; margin: 15px;">
+                                    <i class="fa fa-info-circle fa-2x mb-2"></i>
+                                    <h5>No Visa Applications Found</h5>
+                                    <p class="mb-0">There are no visa applications in the system yet.</p>
+                                </div>
+                            <?php else: ?>
+                                <div class="no-data" style="padding: 30px; text-align: center;">
+                                    <i class="fa fa-inbox fa-3x mb-3 text-muted"></i>
+                                    <h5>No Recent Applications</h5>
+                                </div>
+                            <?php endif; ?>
+                        </div>
                     </div>
-                    
-                    <?php if (!empty($recent_applications)): ?>
-                        <div class="table-responsive">
-                            <table class="table">
-                                <thead>
-                                    <tr>
-                                        <th>Visa Number</th>
-                                        <th>Applicant Name</th>
-                                        <th>Passport Number</th>
-                                        <th>Date Applied</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    <?php foreach ($recent_applications as $app): ?>
-                                        <tr>
-                                            <td><strong><?php echo htmlspecialchars($app['passport_number'] ?? 'N/A'); ?></strong></td>
-                                            <td><?php 
-                                                $name = ($app['surname'] ?? '') . ', ' . ($app['given_name'] ?? '');
-                                                echo htmlspecialchars(trim($name, ', ')); 
-                                            ?></td>
-                                            <td><code><?php echo htmlspecialchars($app['passport_number'] ?? 'N/A'); ?></code></td>
-                                            <td>
-                                                <?php 
-                                                    if (!empty($app['application_date'])) {
-                                                    echo date('M j, Y g:i A', strtotime($app['application_date']));
-                                                    } else {
-                                                        echo 'N/A';
-                                                    }
-                                                ?>
-                                            </td>
-                                        </tr>
-                                    <?php endforeach; ?>
-                                </tbody>
-                            </table>
+
+                    <!-- Expiration Alerts -->
+                    <div class="col-md-5 mb-4">
+                        <div class="recent-card" style="height: 100%; margin-top: 0; background: #fffdf5; border: 1px solid #ffeeba;">
+                            <div class="card-header">
+                                <h5 style="color: #856404; font-weight: 600;"><i class="fa fa-exclamation-triangle" style="color: #ea580c;"></i> Expiration Alerts</h5>
+                            </div>
+                            
+                            <!-- Expired Visas Section -->
+                            <div class="mb-4" style="padding: 0 10px;">
+                                <h6 style="color: #b91c1c; font-weight: bold; font-size: 0.9rem; border-bottom: 2px solid #fee2e2; padding-bottom: 6px; margin-bottom: 10px;" class="d-flex justify-content-between align-items-center">
+                                    <span>Already Expired</span>
+                                    <span class="badge bg-danger"><?php echo count($expired_visas); ?></span>
+                                </h6>
+                                <?php if (!empty($expired_visas)): ?>
+                                    <div style="max-height: 140px; overflow-y: auto;">
+                                        <ul class="list-unstyled mb-0" style="font-size: 0.85rem;">
+                                            <?php foreach ($expired_visas as $ev): ?>
+                                                <li class="py-2 border-bottom d-flex justify-content-between align-items-center">
+                                                    <div>
+                                                        <strong style="color: #0f172a;"><?php echo htmlspecialchars(strtoupper($ev['surname'] . ' ' . $ev['given_name'])); ?></strong>
+                                                        <div class="text-muted" style="font-size: 0.75rem;">Passport: <?php echo htmlspecialchars(strtoupper($ev['passport_number'])); ?></div>
+                                                    </div>
+                                                    <span class="text-danger font-weight-bold" style="font-size: 0.8rem;"><?php echo formatNISDate($ev['within']); ?></span>
+                                                </li>
+                                            <?php endforeach; ?>
+                                        </ul>
+                                    </div>
+                                <?php else: ?>
+                                    <p class="text-muted mb-0" style="font-size: 0.82rem; font-style: italic;">No expired visas found.</p>
+                                <?php endif; ?>
+                            </div>
+
+                            <!-- Expiring Soon Section -->
+                            <div style="padding: 0 10px;">
+                                <h6 style="color: #d97706; font-weight: bold; font-size: 0.9rem; border-bottom: 2px solid #fef3c7; padding-bottom: 6px; margin-bottom: 10px;" class="d-flex justify-content-between align-items-center">
+                                    <span>Expiring Soon (30 Days)</span>
+                                    <span class="badge bg-warning text-dark"><?php echo count($expiring_soon_visas); ?></span>
+                                </h6>
+                                <?php if (!empty($expiring_soon_visas)): ?>
+                                    <div style="max-height: 140px; overflow-y: auto;">
+                                        <ul class="list-unstyled mb-0" style="font-size: 0.85rem;">
+                                            <?php foreach ($expiring_soon_visas as $es): ?>
+                                                <li class="py-2 border-bottom d-flex justify-content-between align-items-center">
+                                                    <div>
+                                                        <strong style="color: #0f172a;"><?php echo htmlspecialchars(strtoupper($es['surname'] . ' ' . $es['given_name'])); ?></strong>
+                                                        <div class="text-muted" style="font-size: 0.75rem;">Passport: <?php echo htmlspecialchars(strtoupper($es['passport_number'])); ?></div>
+                                                    </div>
+                                                    <span class="text-warning font-weight-bold" style="font-size: 0.8rem;"><?php echo formatNISDate($es['within']); ?></span>
+                                                </li>
+                                            <?php endforeach; ?>
+                                        </ul>
+                                    </div>
+                                <?php else: ?>
+                                    <p class="text-muted mb-0" style="font-size: 0.82rem; font-style: italic;">No visas expiring soon.</p>
+                                <?php endif; ?>
+                            </div>
                         </div>
-                    <?php elseif (!$hasData): ?>
-                        <div class="alert alert-info" style="background: #e3f2fd; border: 1px solid #bbdefb; color: #1976d2; padding: 15px; border-radius: 8px; text-align: center;">
-                            <i class="fa fa-info-circle fa-2x mb-2"></i>
-                            <h5>No Visa Applications Found</h5>
-                            <p class="mb-0">There are no visa applications in the system yet.</p>
-                            <a href="new-record" class="btn btn-primary mt-2">Create Your First Application</a>
-                        </div>
-                    <?php else: ?>
-                        <div class="no-data">
-                            <i class="fa fa-inbox"></i>
-                            <h5>No Recent Applications</h5>
-                            <p class="text-muted mb-3">There are no recent applications to display.</p>
-                            <a href="new-record" class="view-all-btn">Create New Application</a>
-                        </div>
-                    <?php endif; ?>
+                    </div>
                 </div>
             </div>
         </div>
@@ -1461,8 +1549,8 @@ function showDashboard() {
                         datasets: [{
                             label: 'Visas Issued',
                             data: <?php echo json_encode($monthly_counts); ?>,
-                            backgroundColor: 'rgba(26, 92, 46, 0.85)',
-                            borderColor: '#1a5c2e',
+                            backgroundColor: 'rgba(59, 130, 246, 0.85)',
+                            borderColor: '#3b82f6',
                             borderWidth: 1.5,
                             borderRadius: 6
                         }]
