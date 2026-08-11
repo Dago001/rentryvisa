@@ -1076,7 +1076,7 @@ $hasData = $numb > 0 || !empty($recent_applications);
                             <?php echo $status_data['PENDING']; ?>,
                             <?php echo $status_data['EXPIRED']; ?>
                         ],
-                        backgroundColor: ['#2e7d32', '#f9a825', '#c62828'],
+                        backgroundColor: ['#1a5c2e', '#2e7d46', '#86efac'],
                         borderWidth: 2,
                         borderColor: '#ffffff'
                     }]
@@ -1106,8 +1106,8 @@ $hasData = $numb > 0 || !empty($recent_applications);
                     datasets: [{
                         label: 'Visas Issued',
                         data: <?php echo json_encode($monthly_counts); ?>,
-                        backgroundColor: 'rgba(92, 60, 30, 0.85)',
-                        borderColor: '#5c3c1e',
+                        backgroundColor: 'rgba(26, 92, 46, 0.85)',
+                        borderColor: '#1a5c2e',
                         borderWidth: 1.5,
                         borderRadius: 6
                     }]
