@@ -204,7 +204,7 @@ if (isset($_GET['id'])) {
         
         @media print {
             @page {
-                size: 184mm 260mm; /* Force 16K portrait size (184x260mm) */
+                size: 260mm 184mm; /* Force 16K landscape size (260x184mm) */
                 margin: 0 !important;
                 padding: 0 !important;
             }
@@ -212,8 +212,8 @@ if (isset($_GET['id'])) {
             html, body {
                 margin: 0 !important;
                 padding: 0 !important;
-                width: 184mm !important;
-                height: 260mm !important;
+                width: 260mm !important;
+                height: 184mm !important;
                 background-color: transparent !important;
                 overflow: hidden !important;
                 -webkit-print-color-adjust: exact !important;
@@ -223,7 +223,6 @@ if (isset($_GET['id'])) {
             body {
                 display: block !important;
                 background: none !important;
-                position: relative !important;
             }
             
             .print-area {
@@ -234,11 +233,9 @@ if (isset($_GET['id'])) {
                 background-color: transparent !important;
                 box-shadow: none !important;
                 position: absolute !important;
-                /* Center and rotate the landscape card on the portrait sheet */
-                top: 50% !important;
-                left: 50% !important;
-                transform: translate(-50%, -50%) rotate(90deg) !important;
-                transform-origin: center center !important;
+                top: 0 !important;
+                left: 0 !important;
+                transform: none !important;
                 page-break-inside: avoid !important;
                 page-break-after: avoid !important;
                 page-break-before: avoid !important;
