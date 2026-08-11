@@ -61,7 +61,7 @@ if (in_array('journey', $columns)) {
 // Add any other columns that might exist
 $additionalColumns = ['sex', 'place_of_birth', 'date_of_birth', 'nationality', 'permanent_address', 
                      'travelling_on', 'port_of_entry', 'date_of_arrival', 'valid_from', 'valid_until',
-                     'place_of_issue', 'date_of_issue', 'remarks', 'created_by'];
+                     'place_of_issue', 'date_of_issue', 'remarks', 'created_by', 'embassy', 'authority', 'fees'];
 
 foreach ($additionalColumns as $column) {
     if (in_array($column, $columns)) {
@@ -160,7 +160,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_record'])) {
                     'remarks' => strtoupper(mysqli_real_escape_string($conn, $_POST['remarks'] ?? '')),
                     'purpose' => strtoupper(mysqli_real_escape_string($conn, $_POST['purpose'] ?? '')),
                     'journey' => strtoupper(mysqli_real_escape_string($conn, $_POST['journey'] ?? '')),
-                    'within' => mysqli_real_escape_string($conn, $_POST['within'] ?? '')
+                    'within' => mysqli_real_escape_string($conn, $_POST['within'] ?? ''),
+                    'embassy' => strtoupper(mysqli_real_escape_string($conn, $_POST['embassy'] ?? '')),
+                    'authority' => strtoupper(mysqli_real_escape_string($conn, $_POST['authority'] ?? '')),
+                    'fees' => strtoupper(mysqli_real_escape_string($conn, $_POST['fees'] ?? ''))
                 ];
                 
                 foreach ($optionalFields as $field => $value) {
@@ -232,7 +235,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_record'])) {
                 'remarks' => strtoupper(mysqli_real_escape_string($conn, $_POST['remarks'] ?? '')),
                 'purpose' => strtoupper(mysqli_real_escape_string($conn, $_POST['purpose'] ?? '')),
                 'journey' => strtoupper(mysqli_real_escape_string($conn, $_POST['journey'] ?? '')),
-                'within' => mysqli_real_escape_string($conn, $_POST['within'] ?? '')
+                'within' => mysqli_real_escape_string($conn, $_POST['within'] ?? ''),
+                'embassy' => strtoupper(mysqli_real_escape_string($conn, $_POST['embassy'] ?? '')),
+                'authority' => strtoupper(mysqli_real_escape_string($conn, $_POST['authority'] ?? '')),
+                'fees' => strtoupper(mysqli_real_escape_string($conn, $_POST['fees'] ?? ''))
             ];
             
             foreach ($optionalFields as $field => $value) {
@@ -328,6 +334,9 @@ $remarks_exists = in_array('remarks', $columns);
 $purpose_exists = in_array('purpose', $columns);
 $journey_exists = in_array('journey', $columns);
 $within_exists = in_array('within', $columns);
+$embassy_exists = in_array('embassy', $columns);
+$authority_exists = in_array('authority', $columns);
+$fees_exists = in_array('fees', $columns);
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -1163,6 +1172,43 @@ $within_exists = in_array('within', $columns);
                                            value="<?php echo htmlspecialchars(getFieldValue($record, 'date_of_issue')); ?>">
                                 </div>
                                 <?php endif; ?>
+
+                                <?php if ($embassy_exists): ?>
+                                <div class="col-md-6 mb-3">
+                                    <label class="form-label">Embassy</label>
+                                    <input type="text" 
+                                           class="form-control" 
+                                           name="embassy" 
+                                           value="<?php echo htmlspecialchars(getFieldValue($record, 'embassy')); ?>">
+                                </div>
+                                <?php endif; ?>
+                                
+                                <?php if ($authority_exists): ?>
+                                <div class="col-md-6 mb-3">
+                                    <label class="form-label">Authority</label>
+                                    <input type="text" 
+                                           class="form-control" 
+                                           id="authority"
+                                           name="authority" 
+                                           value="<?php echo htmlspecialchars(getFieldValue($record, 'authority')); ?>">
+                                    <div id="authority-status" style="margin-top: 5px; font-size: 0.82rem;"></div>
+                                </div>
+                                <?php endif; ?>
+
+                                <?php if ($fees_exists): ?>
+                                <div class="col-md-6 mb-3">
+                                    <label class="form-label">Fees/Tax</label>
+                                    <select class="form-select" name="fees">
+                                        <option value="GRATIS" <?php echo (strtoupper(getFieldValue($record, 'fees')) === 'GRATIS') ? 'selected' : ''; ?>>GRATIS</option>
+                                        <?php 
+                                        $curr_fees = getFieldValue($record, 'fees');
+                                        if (!empty($curr_fees) && strtoupper($curr_fees) !== 'GRATIS') {
+                                            echo "<option value=\"" . htmlspecialchars($curr_fees) . "\" selected>" . htmlspecialchars($curr_fees) . "</option>";
+                                        }
+                                        ?>
+                                    </select>
+                                </div>
+                                <?php endif; ?>
                             </div>
                         </div>
                         
@@ -1297,11 +1343,127 @@ $within_exists = in_array('within', $columns);
         }
         
         // Form validation
+        const authorityInput = document.getElementById('authority');
+        const authorityStatus = document.getElementById('authority-status');
+        const submitBtn = document.querySelector('button[name="update_record"]');
+        let authorityValid = true;
+
+        if (authorityInput) {
+            const prefix = "ABJ/HQ/DIP/";
+            
+            // Protect prefix from deletion or editing
+            authorityInput.addEventListener('keydown', function(e) {
+                const len = prefix.length;
+                if (this.selectionStart < len || this.selectionEnd < len) {
+                    const allowedKeys = ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Tab', 'Shift', 'Control', 'Alt', 'Meta'];
+                    if (!allowedKeys.includes(e.key) && !(e.ctrlKey || e.metaKey)) {
+                        e.preventDefault();
+                    }
+                } else if (e.key === 'Backspace' && this.selectionStart === len && this.selectionEnd === len) {
+                    e.preventDefault();
+                }
+            });
+
+            authorityInput.addEventListener('input', function(e) {
+                if (!this.value.startsWith(prefix)) {
+                    this.value = prefix;
+                }
+                
+                let suffix = this.value.substring(prefix.length);
+                let cleanedSuffix = suffix.toUpperCase().replace(/[^A-Z0-9\/]/g, '');
+                
+                if (suffix !== cleanedSuffix) {
+                    this.value = prefix + cleanedSuffix;
+                }
+            });
+            
+            authorityInput.addEventListener('paste', function(e) {
+                setTimeout(() => {
+                    if (!this.value.startsWith(prefix)) {
+                        this.value = prefix;
+                    }
+                    let suffix = this.value.substring(prefix.length);
+                    this.value = prefix + suffix.toUpperCase().replace(/[^A-Z0-9\/]/g, '');
+                }, 0);
+            });
+
+            if (authorityStatus) {
+                const currentVisaNumber = "<?php echo htmlspecialchars(getFieldValue($record, 'visa_number')); ?>";
+                
+                authorityInput.addEventListener('blur', function() {
+                    const auth = this.value.trim();
+                    if (!auth || auth === 'ABJ/HQ/DIP/' || auth.length <= 11) {
+                        authorityStatus.innerHTML = '';
+                        return;
+                    }
+
+                    authorityStatus.innerHTML = '<span style="color: #666;"><i class="fa fa-spinner fa-spin"></i> Checking...</span>';
+                    
+                    fetch(`check_authority?authority=${encodeURIComponent(auth)}&exclude_visa=${encodeURIComponent(currentVisaNumber)}`)
+                        .then(response => response.json())
+                        .then(data => {
+                            if (data.exists) {
+                                authorityStatus.innerHTML = `<span style="color: #d9534f;"><i class="fa fa-exclamation-circle"></i> Authority number ${data.authority} already exists in the system!</span>`;
+                                authorityInput.style.borderColor = '#d9534f';
+                                authorityInput.style.backgroundColor = '#fdf2f2';
+                                authorityValid = false;
+                            } else {
+                                authorityStatus.innerHTML = '<span style="color: #2b7a43;"><i class="fa fa-check-circle"></i> Authority number is valid</span>';
+                                authorityInput.style.borderColor = '#2b7a43';
+                                authorityInput.style.backgroundColor = '#f2fdf5';
+                                authorityValid = true;
+                            }
+                            toggleSubmitButton();
+                        })
+                        .catch(error => {
+                            console.error('Error checking authority:', error);
+                            authorityStatus.innerHTML = '';
+                        });
+                });
+
+                authorityInput.addEventListener('input', function() {
+                    authorityStatus.innerHTML = '';
+                    authorityInput.style.borderColor = '';
+                    authorityInput.style.backgroundColor = '';
+                    authorityValid = true;
+                    toggleSubmitButton();
+                });
+            }
+        }
+
+        function toggleSubmitButton() {
+            if (submitBtn) {
+                if (!authorityValid) {
+                    submitBtn.disabled = true;
+                    submitBtn.style.opacity = '0.5';
+                    submitBtn.style.cursor = 'not-allowed';
+                } else {
+                    submitBtn.disabled = false;
+                    submitBtn.style.opacity = '1';
+                    submitBtn.style.cursor = 'pointer';
+                }
+            }
+        }
+
         document.getElementById('editForm').addEventListener('submit', function(e) {
             const validFrom = document.getElementsByName('valid_from')[0];
             const validUntil = document.getElementsByName('valid_until')[0];
             const dateOfIssue = document.getElementsByName('date_of_issue')[0];
             
+            // Check Authority duplicate status
+            if (!authorityValid) {
+                alert('This Authority Number already exists in the system!');
+                e.preventDefault();
+                return false;
+            }
+
+            // Check if Authority prefix is complete
+            if (authorityInput && (authorityInput.value.trim() === 'ABJ/HQ/DIP/' || authorityInput.value.trim().length <= 11)) {
+                alert('Please enter a suffix value for the Authority field.');
+                e.preventDefault();
+                return false;
+            }
+
             // Check if valid until is after valid from (if both exist)
             if (validFrom && validUntil && validFrom.value && validUntil.value) {
                 const fromDate = new Date(validFrom.value);

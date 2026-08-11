@@ -59,15 +59,15 @@ if(isset($_GET['id'])) {
         }
         
         // Assign values with proper null checks
-        $visa_number = $foundk['visa_number'] ?? '';
-        $passport_number = $foundk['passport_number'] ?? '';
-        $surname = $foundk['surname'] ?? '';
-        $given_name = $foundk['given_name'] ?? '';
-        $nationality = $foundk['nationality'] ?? 'N/A';
-        $place_of_issue = $foundk['place_of_issue'] ?? 'N/A';
+        $visa_number = strtoupper($foundk['visa_number'] ?? '');
+        $passport_number = strtoupper($foundk['passport_number'] ?? '');
+        $surname = strtoupper($foundk['surname'] ?? '');
+        $given_name = strtoupper($foundk['given_name'] ?? '');
+        $nationality = strtoupper($foundk['nationality'] ?? 'N/A');
+        $place_of_issue = strtoupper($foundk['place_of_issue'] ?? 'N/A');
         $date_of_issue = formatNISDate($foundk['date_of_issue'] ?? '');
-        $embassy = $foundk['embassy'] ?? 'N/A';
-        $authority = $foundk['authority'] ?? 'N/A';
+        $embassy = strtoupper($foundk['embassy'] ?? 'N/A');
+        $authority = strtoupper($foundk['authority'] ?? 'N/A');
         
         // Check for within/validity period
         if (isset($foundk['within'])) {
@@ -82,16 +82,17 @@ if(isset($_GET['id'])) {
         
         // Check for journey
         if (isset($foundk['journey'])) {
-            $journey = $foundk['journey'];
+            $journey = strtoupper($foundk['journey']);
         } elseif (isset($foundk['purpose'])) {
-            $journey = $foundk['purpose'];
+            $journey = strtoupper($foundk['purpose']);
         } elseif (isset($foundk['travel_purpose'])) {
-            $journey = $foundk['travel_purpose'];
+            $journey = strtoupper($foundk['travel_purpose']);
         } else {
             $journey = 'N/A';
         }
         
-        $fees = $foundk['fees'] ?? 'N/A';
+        // Check for fees
+        $fees = strtoupper($foundk['fees'] ?? 'N/A');
         
         // Check for application date
         if (isset($foundk['application_date'])) {

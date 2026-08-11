@@ -19,11 +19,24 @@ if (empty($authority)) {
     exit();
 }
 
+$exclude_visa = $_GET['exclude_visa'] ?? '';
+
 // Search for any existing application with this authority number
-$sql = "SELECT id FROM visa_applications WHERE authority = ?";
-$stmt = mysqli_prepare($conn, $sql);
+if (!empty($exclude_visa)) {
+    $sql = "SELECT id FROM visa_applications WHERE authority = ? AND visa_number != ?";
+    $stmt = mysqli_prepare($conn, $sql);
+    if ($stmt) {
+        mysqli_stmt_bind_param($stmt, "ss", $authority, $exclude_visa);
+    }
+} else {
+    $sql = "SELECT id FROM visa_applications WHERE authority = ?";
+    $stmt = mysqli_prepare($conn, $sql);
+    if ($stmt) {
+        mysqli_stmt_bind_param($stmt, "s", $authority);
+    }
+}
+
 if ($stmt) {
-    mysqli_stmt_bind_param($stmt, "s", $authority);
     mysqli_stmt_execute($stmt);
     mysqli_stmt_store_result($stmt);
     $exists = mysqli_stmt_num_rows($stmt) > 0;

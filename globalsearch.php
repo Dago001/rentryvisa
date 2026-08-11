@@ -600,13 +600,13 @@ if (!empty($searchTerm)) {
                                     <tbody>
                                         <?php while ($row = mysqli_fetch_assoc($results)): ?>
                                             <tr>
-                                                <td style="padding-left: 20px;"><strong><?php echo htmlspecialchars($row['visa_number']); ?></strong></td>
+                                                <td style="padding-left: 20px;"><strong><?php echo htmlspecialchars(strtoupper($row['visa_number'])); ?></strong></td>
                                                 <td><?php echo htmlspecialchars(strtoupper(($row['surname'] ?? '') . ' ' . ($row['given_name'] ?? ''))); ?></td>
-                                                <td><?php echo htmlspecialchars($row['passport_number']); ?></td>
-                                                <td><?php echo htmlspecialchars($row['nationality'] ?? 'N/A'); ?></td>
+                                                <td><?php echo htmlspecialchars(strtoupper($row['passport_number'])); ?></td>
+                                                <td><?php echo htmlspecialchars(strtoupper($row['nationality'] ?? 'N/A')); ?></td>
                                                 <td>
                                                     <span class="badge bg-light text-dark border">
-                                                        <?php echo htmlspecialchars($row['journey'] ?? 'N/A'); ?>
+                                                        <?php echo htmlspecialchars(strtoupper($row['journey'] ?? 'N/A')); ?>
                                                     </span>
                                                 </td>
                                                 <td>
