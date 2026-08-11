@@ -846,7 +846,7 @@ $current_page = basename($_SERVER['PHP_SELF']);
                             <div class="form-group">
                                 <label for="place_of_issue">Place of Issue</label>
                                 <input type="text" id="place-of-issue" name="place_of_issue" required
-                                       oninput="validateText(this)" placeholder="enter place of issue">
+                                       value="ABUJA HQTRS" oninput="validateText(this)" placeholder="enter place of issue">
                             </div>
                         </div>
                         
