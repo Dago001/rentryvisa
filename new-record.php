@@ -858,8 +858,12 @@ $current_page = basename($_SERVER['PHP_SELF']);
 
                             <div class="form-group">
                                 <label for="embassy">Embassy</label>
-                                <input type="text" id="embassy" name="embassy" required
-                                       oninput="validateText(this)" placeholder="enter embassy">
+                                <select id="embassy" name="embassy" required>
+                                    <option value="">Select Embassy Category</option>
+                                    <option value="DIPLOMAT">DIPLOMAT</option>
+                                    <option value="INT/ORG">INT/ORG</option>
+                                    <option value="NONE">NONE</option>
+                                </select>
                             </div>
                         </div>
                     </div>

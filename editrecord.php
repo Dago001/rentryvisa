@@ -1062,10 +1062,7 @@ $fees_exists = in_array('fees', $columns);
         <div class="page-content">
 
 
-            <!-- Page Title -->
-            <div class="page-title">
-                <h3>Edit Visa Record</h3>
-            </div>
+            
             
             <!-- Alerts -->
             <?php if ($success_message): ?>
@@ -1280,17 +1277,25 @@ $fees_exists = in_array('fees', $columns);
                             </div>
                             <?php endif; ?>
 
-                            <?php if ($embassy_exists): ?>
-                            <div class="col-md-6 col-lg-3">
-                                <div class="form-group">
-                                    <label class="form-label">Embassy / Mission</label>
-                                    <input type="text" 
-                                           class="form-control" 
-                                           name="embassy" 
-                                           value="<?php echo htmlspecialchars(getFieldValue($record, 'embassy')); ?>">
+                                <?php if ($embassy_exists): ?>
+                                <div class="col-md-6 col-lg-3">
+                                    <div class="form-group">
+                                        <label class="form-label">Embassy</label>
+                                        <select class="form-select" name="embassy">
+                                            <option value="">Select Embassy Category</option>
+                                            <option value="DIPLOMAT" <?php echo (strtoupper(getFieldValue($record, 'embassy')) === 'DIPLOMAT') ? 'selected' : ''; ?>>DIPLOMAT</option>
+                                            <option value="INT/ORG" <?php echo (strtoupper(getFieldValue($record, 'embassy')) === 'INT/ORG') ? 'selected' : ''; ?>>INT/ORG</option>
+                                            <option value="NONE" <?php echo (strtoupper(getFieldValue($record, 'embassy')) === 'NONE') ? 'selected' : ''; ?>>NONE</option>
+                                            <?php 
+                                            $curr_embassy = getFieldValue($record, 'embassy');
+                                            if (!empty($curr_embassy) && !in_array(strtoupper($curr_embassy), ['DIPLOMAT', 'INT/ORG', 'NONE'])) {
+                                                echo "<option value=\"" . htmlspecialchars($curr_embassy) . "\" selected>" . htmlspecialchars($curr_embassy) . "</option>";
+                                            }
+                                            ?>
+                                        </select>
+                                    </div>
                                 </div>
-                            </div>
-                            <?php endif; ?>
+                                <?php endif; ?>
 
                             <?php if ($authority_exists): ?>
                             <div class="col-md-6 col-lg-3">

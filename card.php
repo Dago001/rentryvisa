@@ -38,6 +38,7 @@ if (isset($_GET['id'])) {
         $place_of_issue = strtoupper(htmlspecialchars($foundk['place_of_issue']));
         $date_of_issue = formatNISDate($foundk['date_of_issue']);
         $authority = strtoupper(htmlspecialchars($foundk['authority']));
+        $embassy = isset($foundk['embassy']) ? strtoupper(htmlspecialchars($foundk['embassy'])) : '';
         
 
     } else {
@@ -119,6 +120,19 @@ if (isset($_GET['id'])) {
         .category {
             top: 40.8%;
             left: 7.6%;
+            font-size: 19px;
+            writing-mode: vertical-rl;
+            text-orientation: mixed;
+            height: 23.1%;
+            line-height: 1.3;
+            text-align: center;
+            transform: rotate(180deg);
+            transform-origin: center;
+        }
+        
+        .unicef-tag {
+            top: 40.8%;
+            left: 90.5%;
             font-size: 19px;
             writing-mode: vertical-rl;
             text-orientation: mixed;
@@ -330,7 +344,16 @@ if (isset($_GET['id'])) {
             
             <!-- Category (DIPLOMAT) -->
             <div class="visa-text category">
-                DIPLOMAT
+                <?php 
+                    if (!empty($embassy) && $embassy !== 'NONE') {
+                        echo $embassy; 
+                    }
+                ?>
+            </div>
+            
+            <!-- Static UNICEF Tag -->
+            <div class="visa-text unicef-tag">
+                UNICEF
             </div>
             
             <!-- Full Name -->
