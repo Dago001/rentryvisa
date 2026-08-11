@@ -354,9 +354,10 @@ $fees_exists = in_array('fees', $columns);
     <style>
         :root {
             --primary: #1a5c2e;
-            --secondary: #27ae60;
+            --primary-hover: #113f1f;
+            --secondary: #d4af37;
             --dark: #2c3e50;
-            --light: #f8f9fa;
+            --light: #f5f7fa;
             --warning: #f39c12;
             --info: #3498db;
             --danger: #dc3545;
@@ -842,6 +843,135 @@ $fees_exists = in_array('fees', $columns);
                 justify-content: center;
             }
         }
+
+        /* Visa Application Container styling to match viewrecord.php */
+        .visa-application-container {
+            background: white;
+            padding: 25px;
+            border-radius: 12px;
+            box-shadow: 0 5px 25px rgba(0,0,0,0.08);
+            border: 1px solid #e1e5e9;
+            margin-bottom: 24px;
+        }
+        
+        .form-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 25px;
+            padding-bottom: 15px;
+            border-bottom: 3px solid var(--primary);
+        }
+        
+        .visa-application-title {
+            color: var(--primary);
+            margin: 0;
+            font-size: 1.6rem;
+            font-weight: 700;
+        }
+        
+        .section {
+            margin-bottom: 25px;
+            padding: 20px;
+            background-color: #f9f9f9;
+            border-radius: 8px;
+            border: 1px solid #e2e8f0;
+        }
+        
+        /* Status pill badge design matching viewrecord.php */
+        .status-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 14px;
+            border-radius: 30px;
+            font-size: 0.85rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+        }
+        
+        .status-pill.status-active {
+            background-color: #dcfce7;
+            color: #15803d;
+        }
+        
+        .status-pill.status-pending {
+            background-color: #fef9c3;
+            color: #a16207;
+        }
+        
+        .status-pill.status-expired {
+            background-color: #fee2e2;
+            color: #b91c1c;
+        }
+        
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            display: inline-block;
+            background-color: currentColor;
+        }
+
+        /* Aligned Action Buttons */
+        .btn-action {
+            font-weight: 600;
+            padding: 8px 18px;
+            border-radius: 6px;
+            transition: all 0.2s;
+            font-size: 0.88rem;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            border: none;
+            cursor: pointer;
+        }
+        
+        .btn-gold {
+            background-color: var(--secondary) !important;
+            border-color: var(--secondary) !important;
+            color: #000 !important;
+        }
+        
+        .btn-gold:hover {
+            background-color: #c5a02e !important;
+            border-color: #c5a02e !important;
+            color: #000 !important;
+        }
+        
+        .btn-green {
+            background-color: var(--primary) !important;
+            border-color: var(--primary) !important;
+            color: white !important;
+        }
+        
+        .btn-green:hover {
+            background-color: var(--primary-hover) !important;
+            border-color: var(--primary-hover) !important;
+            color: white !important;
+        }
+        
+        .btn-back {
+            background: white;
+            border: 1.5px solid var(--primary) !important;
+            color: var(--primary) !important;
+            font-weight: 600;
+            padding: 8px 18px;
+            border-radius: 6px;
+            transition: all 0.2s;
+            font-size: 0.88rem;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            text-decoration: none;
+        }
+        
+        .btn-back:hover {
+            background: var(--primary) !important;
+            border-color: var(--primary) !important;
+            color: white !important;
+        }
         
         /* Print Styles */
         @media print {
@@ -950,20 +1080,39 @@ $fees_exists = in_array('fees', $columns);
                 </div>
             <?php endif; ?>
             
-            <?php if ($record): ?>
+            <?php if ($record): 
+                $status = getFieldValue($record, 'status') ?: 'ACTIVE';
+            ?>
             <!-- Edit Form -->
-            <div class="card">
-                <div class="card-body">
-                    <form method="POST" action="" id="editForm">
-                        <input type="hidden" name="csrf_token" value="<?php echo $_SESSION['csrf_token']; ?>">
-                        <input type="hidden" name="visa_number" value="<?php echo htmlspecialchars(getFieldValue($record, 'visa_number')); ?>">
-                        <input type="hidden" name="ref" value="<?php echo htmlspecialchars($_GET['ref'] ?? ($_POST['ref'] ?? '')); ?>">
-                        
-                        <!-- Section 1: Visa Details -->
-                        <div class="form-section">
-                            <h4 class="section-title">Visa Details</h4>
-                            <div class="row">
-                                <div class="col-md-6 mb-3">
+            <div class="visa-application-container">
+                <form method="POST" action="" id="editForm">
+                    <input type="hidden" name="csrf_token" value="<?php echo $_SESSION['csrf_token']; ?>">
+                    <input type="hidden" name="visa_number" value="<?php echo htmlspecialchars(getFieldValue($record, 'visa_number')); ?>">
+                    <input type="hidden" name="ref" value="<?php echo htmlspecialchars($_GET['ref'] ?? ($_POST['ref'] ?? '')); ?>">
+                    
+                    <div class="form-header flex-column flex-md-row gap-3">
+                        <div>
+                            <h2 class="visa-application-title">
+                                <i class="fa fa-edit me-2"></i>Edit Visa Application Details
+                            </h2>
+                        </div>
+                        <div class="text-md-end d-flex flex-column align-items-md-end gap-2">
+                            <span class="status-pill status-<?php echo strtolower($status); ?>">
+                                <span class="status-dot"></span>
+                                <?php echo htmlspecialchars($status); ?>
+                            </span>
+                            <span class="small text-muted font-monospace fw-bold">
+                                Visa No: <?php echo htmlspecialchars(getFieldValue($record, 'visa_number')); ?>
+                            </span>
+                        </div>
+                    </div>
+
+                    <!-- Section 1: Visa Details -->
+                    <div class="section">
+                        <h4 class="section-title"><i class="fa fa-passport me-2"></i>Visa Details</h4>
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <div class="form-group">
                                     <label class="form-label">Visa Number *</label>
                                     <div class="visa-number-container">
                                         <input type="text" 
@@ -987,8 +1136,38 @@ $fees_exists = in_array('fees', $columns);
                                         Changing visa number will create a new record. The old number will become available.
                                     </small>
                                 </div>
-                                
-                                <div class="col-md-6 mb-3">
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Section 2: Personal Profile -->
+                    <div class="section">
+                        <h4 class="section-title"><i class="fa fa-user me-2"></i>Personal Profile</h4>
+                        <div class="row g-3">
+                            <div class="col-md-6 col-lg-3">
+                                <div class="form-group">
+                                    <label class="form-label">Surname *</label>
+                                    <input type="text" 
+                                           class="form-control" 
+                                           name="surname" 
+                                           value="<?php echo htmlspecialchars(getFieldValue($record, 'surname')); ?>" 
+                                           required>
+                                </div>
+                            </div>
+                            
+                            <div class="col-md-6 col-lg-3">
+                                <div class="form-group">
+                                    <label class="form-label">Given Name *</label>
+                                    <input type="text" 
+                                           class="form-control" 
+                                           name="given_name" 
+                                           value="<?php echo htmlspecialchars(getFieldValue($record, 'given_name')); ?>" 
+                                           required>
+                                </div>
+                            </div>
+
+                            <div class="col-md-6 col-lg-3">
+                                <div class="form-group">
                                     <label class="form-label">Passport Number *</label>
                                     <input type="text" 
                                            class="form-control" 
@@ -999,64 +1178,10 @@ $fees_exists = in_array('fees', $columns);
                                            required>
                                 </div>
                             </div>
-                        </div>
-                        
-                        <!-- Section 2: Personal Information -->
-                        <div class="form-section">
-                            <h4 class="section-title">Personal Information</h4>
-                            <div class="row">
-                                <div class="col-md-6 mb-3">
-                                    <label class="form-label">Surname *</label>
-                                    <input type="text" 
-                                           class="form-control" 
-                                           name="surname" 
-                                           value="<?php echo htmlspecialchars(getFieldValue($record, 'surname')); ?>" 
-                                           required>
-                                </div>
-                                
-                                <div class="col-md-6 mb-3">
-                                    <label class="form-label">Given Name *</label>
-                                    <input type="text" 
-                                           class="form-control" 
-                                           name="given_name" 
-                                           value="<?php echo htmlspecialchars(getFieldValue($record, 'given_name')); ?>" 
-                                           required>
-                                </div>
-                                
-                                <?php if ($sex_exists): ?>
-                                <div class="col-md-3 mb-3">
-                                    <label class="form-label">Sex</label>
-                                    <select class="form-select" name="sex">
-                                        <option value="">Select</option>
-                                        <option value="Male" <?php echo (getFieldValue($record, 'sex') == 'Male') ? 'selected' : ''; ?>>Male</option>
-                                        <option value="Female" <?php echo (getFieldValue($record, 'sex') == 'Female') ? 'selected' : ''; ?>>Female</option>
-                                        <option value="Other" <?php echo (getFieldValue($record, 'sex') == 'Other') ? 'selected' : ''; ?>>Other</option>
-                                    </select>
-                                </div>
-                                <?php endif; ?>
-                                
-                                <?php if ($date_of_birth_exists): ?>
-                                <div class="col-md-4 mb-3">
-                                    <label class="form-label">Date of Birth</label>
-                                    <input type="date" 
-                                           class="form-control" 
-                                           name="date_of_birth" 
-                                           value="<?php echo htmlspecialchars(getFieldValue($record, 'date_of_birth')); ?>">
-                                </div>
-                                <?php endif; ?>
-                                
-                                <?php if ($place_of_birth_exists): ?>
-                                <div class="col-md-5 mb-3">
-                                    <label class="form-label">Place of Birth</label>
-                                    <input type="text" 
-                                           class="form-control" 
-                                           name="place_of_birth" 
-                                           value="<?php echo htmlspecialchars(getFieldValue($record, 'place_of_birth')); ?>">
-                                </div>
-                                <?php endif; ?>
-                                
-                                <?php if ($nationality_exists): ?>
-                                <div class="col-md-6 mb-3">
+
+                            <?php if ($nationality_exists): ?>
+                            <div class="col-md-6 col-lg-3">
+                                <div class="form-group">
                                     <label class="form-label">Nationality</label>
                                     <select class="form-select" name="nationality" id="nationality">
                                         <option value="">Select Nationality</option>
@@ -1072,119 +1197,104 @@ $fees_exists = in_array('fees', $columns);
                                         ?>
                                     </select>
                                 </div>
-                                <?php endif; ?>
-                                
-                                <?php if ($permanent_address_exists): ?>
-                                <div class="col-md-6 mb-3">
+                            </div>
+                            <?php endif; ?>
+
+                            <?php if ($sex_exists): ?>
+                            <div class="col-md-6 col-lg-3">
+                                <div class="form-group">
+                                    <label class="form-label">Sex</label>
+                                    <select class="form-select" name="sex">
+                                        <option value="">Select</option>
+                                        <option value="Male" <?php echo (getFieldValue($record, 'sex') == 'Male') ? 'selected' : ''; ?>>Male</option>
+                                        <option value="Female" <?php echo (getFieldValue($record, 'sex') == 'Female') ? 'selected' : ''; ?>>Female</option>
+                                        <option value="Other" <?php echo (getFieldValue($record, 'sex') == 'Other') ? 'selected' : ''; ?>>Other</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <?php endif; ?>
+
+                            <?php if ($date_of_birth_exists): ?>
+                            <div class="col-md-6 col-lg-3">
+                                <div class="form-group">
+                                    <label class="form-label">Date of Birth</label>
+                                    <input type="date" 
+                                           class="form-control" 
+                                           name="date_of_birth" 
+                                           value="<?php echo htmlspecialchars(getFieldValue($record, 'date_of_birth')); ?>">
+                                </div>
+                            </div>
+                            <?php endif; ?>
+
+                            <?php if ($place_of_birth_exists): ?>
+                            <div class="col-md-6 col-lg-3">
+                                <div class="form-group">
+                                    <label class="form-label">Place of Birth</label>
+                                    <input type="text" 
+                                           class="form-control" 
+                                           name="place_of_birth" 
+                                           value="<?php echo htmlspecialchars(getFieldValue($record, 'place_of_birth')); ?>">
+                                </div>
+                            </div>
+                            <?php endif; ?>
+
+                            <?php if ($permanent_address_exists): ?>
+                            <div class="col-12">
+                                <div class="form-group">
                                     <label class="form-label">Permanent Address</label>
                                     <input type="text" 
                                            class="form-control" 
                                            name="permanent_address" 
                                            value="<?php echo htmlspecialchars(getFieldValue($record, 'permanent_address')); ?>">
                                 </div>
-                                <?php endif; ?>
                             </div>
+                            <?php endif; ?>
                         </div>
-                        
-                        <!-- Section 3: Travel Information -->
-                        <div class="form-section">
-                            <h4 class="section-title">Travel Information</h4>
-                            <div class="row">
-                                <?php if ($travelling_on_exists): ?>
-                                <div class="col-md-4 mb-3">
-                                    <label class="form-label">Travelling On</label>
-                                    <input type="text" 
-                                           class="form-control" 
-                                           name="travelling_on" 
-                                           value="<?php echo htmlspecialchars(getFieldValue($record, 'travelling_on')); ?>">
-                                </div>
-                                <?php endif; ?>
-                                
-                                <?php if ($port_of_entry_exists): ?>
-                                <div class="col-md-4 mb-3">
-                                    <label class="form-label">Port of Entry</label>
-                                    <input type="text" 
-                                           class="form-control" 
-                                           name="port_of_entry" 
-                                           value="<?php echo htmlspecialchars(getFieldValue($record, 'port_of_entry')); ?>">
-                                </div>
-                                <?php endif; ?>
-                                
-                                <?php if ($date_of_arrival_exists): ?>
-                                <div class="col-md-4 mb-3">
-                                    <label class="form-label">Date of Arrival</label>
-                                    <input type="date" 
-                                           class="form-control" 
-                                           name="date_of_arrival" 
-                                           value="<?php echo htmlspecialchars(getFieldValue($record, 'date_of_arrival')); ?>">
-                                </div>
-                                <?php endif; ?>
-                                
-                                <?php if ($valid_from_exists): ?>
-                                <div class="col-md-4 mb-3">
-                                    <label class="form-label">Valid From</label>
-                                    <input type="date" 
-                                           class="form-control" 
-                                           name="valid_from" 
-                                           value="<?php echo htmlspecialchars(getFieldValue($record, 'valid_from')); ?>">
-                                </div>
-                                <?php endif; ?>
-                                
-                                <?php if ($valid_until_exists): ?>
-                                <div class="col-md-4 mb-3">
-                                    <label class="form-label">Valid Until</label>
-                                    <input type="date" 
-                                           class="form-control" 
-                                           name="valid_until" 
-                                           value="<?php echo htmlspecialchars(getFieldValue($record, 'valid_until')); ?>">
-                                </div>
-                                <?php endif; ?>
-                                
-                                <?php if ($within_exists): ?>
-                                <div class="col-md-4 mb-3">
-                                    <label class="form-label">Within (Validity Period)</label>
-                                    <input type="date" 
-                                           class="form-control" 
-                                           name="within" 
-                                           value="<?php 
-                                               $wVal = getFieldValue($record, 'within'); 
-                                               echo !empty($wVal) ? date('Y-m-d', strtotime($wVal)) : ''; 
-                                           ?>">
-                                </div>
-                                <?php endif; ?>
-                                
-                                <?php if ($place_of_issue_exists): ?>
-                                <div class="col-md-6 mb-3">
+                    </div>
+
+                    <!-- Section 3: Visa Specifications -->
+                    <div class="section">
+                        <h4 class="section-title"><i class="fa fa-file-signature me-2"></i>Visa Specifications</h4>
+                        <div class="row g-3">
+                            <?php if ($place_of_issue_exists): ?>
+                            <div class="col-md-6 col-lg-3">
+                                <div class="form-group">
                                     <label class="form-label">Place of Issue</label>
                                     <input type="text" 
                                            class="form-control" 
                                            name="place_of_issue" 
                                            value="<?php echo htmlspecialchars(getFieldValue($record, 'place_of_issue')); ?>">
                                 </div>
-                                <?php endif; ?>
-                                
-                                <?php if ($date_of_issue_exists): ?>
-                                <div class="col-md-6 mb-3">
+                            </div>
+                            <?php endif; ?>
+
+                            <?php if ($date_of_issue_exists): ?>
+                            <div class="col-md-6 col-lg-3">
+                                <div class="form-group">
                                     <label class="form-label">Date of Issue</label>
                                     <input type="date" 
                                            class="form-control" 
                                            name="date_of_issue" 
                                            value="<?php echo htmlspecialchars(getFieldValue($record, 'date_of_issue')); ?>">
                                 </div>
-                                <?php endif; ?>
+                            </div>
+                            <?php endif; ?>
 
-                                <?php if ($embassy_exists): ?>
-                                <div class="col-md-6 mb-3">
-                                    <label class="form-label">Embassy</label>
+                            <?php if ($embassy_exists): ?>
+                            <div class="col-md-6 col-lg-3">
+                                <div class="form-group">
+                                    <label class="form-label">Embassy / Mission</label>
                                     <input type="text" 
                                            class="form-control" 
                                            name="embassy" 
                                            value="<?php echo htmlspecialchars(getFieldValue($record, 'embassy')); ?>">
                                 </div>
-                                <?php endif; ?>
-                                
-                                <?php if ($authority_exists): ?>
-                                <div class="col-md-6 mb-3">
+                            </div>
+                            <?php endif; ?>
+
+                            <?php if ($authority_exists): ?>
+                            <div class="col-md-6 col-lg-3">
+                                <div class="form-group">
                                     <label class="form-label">Authority</label>
                                     <input type="text" 
                                            class="form-control" 
@@ -1193,41 +1303,33 @@ $fees_exists = in_array('fees', $columns);
                                            value="<?php echo htmlspecialchars(getFieldValue($record, 'authority')); ?>">
                                     <div id="authority-status" style="margin-top: 5px; font-size: 0.82rem;"></div>
                                 </div>
-                                <?php endif; ?>
-
-                                <?php if ($fees_exists): ?>
-                                <div class="col-md-6 mb-3">
-                                    <label class="form-label">Fees/Tax</label>
-                                    <select class="form-select" name="fees">
-                                        <option value="GRATIS" <?php echo (strtoupper(getFieldValue($record, 'fees')) === 'GRATIS') ? 'selected' : ''; ?>>GRATIS</option>
-                                        <?php 
-                                        $curr_fees = getFieldValue($record, 'fees');
-                                        if (!empty($curr_fees) && strtoupper($curr_fees) !== 'GRATIS') {
-                                            echo "<option value=\"" . htmlspecialchars($curr_fees) . "\" selected>" . htmlspecialchars($curr_fees) . "</option>";
-                                        }
-                                        ?>
-                                    </select>
-                                </div>
-                                <?php endif; ?>
                             </div>
+                            <?php endif; ?>
                         </div>
-                        
-                        <!-- Section 4: Additional Information -->
-                        <div class="form-section">
-                            <h4 class="section-title">Additional Information</h4>
-                            <div class="row">
-                                <?php if ($purpose_exists): ?>
-                                <div class="col-md-6 mb-3">
-                                    <label class="form-label">Purpose of Travel</label>
-                                    <input type="text" 
+                    </div>
+
+                    <!-- Section 4: Travel & Validity Parameters -->
+                    <div class="section">
+                        <h4 class="section-title"><i class="fa fa-plane-departure me-2"></i>Travel & Validity Parameters</h4>
+                        <div class="row g-3">
+                            <?php if ($within_exists): ?>
+                            <div class="col-md-6 col-lg-3">
+                                <div class="form-group">
+                                    <label class="form-label">Validity Period (Within)</label>
+                                    <input type="date" 
                                            class="form-control" 
-                                           name="purpose" 
-                                           value="<?php echo htmlspecialchars(getFieldValue($record, 'purpose')); ?>">
+                                           name="within" 
+                                           value="<?php 
+                                               $wVal = getFieldValue($record, 'within'); 
+                                               echo !empty($wVal) ? date('Y-m-d', strtotime($wVal)) : ''; 
+                                           ?>">
                                 </div>
-                                <?php endif; ?>
-                                
-                                <?php if ($journey_exists): ?>
-                                <div class="col-md-6 mb-3">
+                            </div>
+                            <?php endif; ?>
+
+                            <?php if ($journey_exists): ?>
+                            <div class="col-md-6 col-lg-3">
+                                <div class="form-group">
                                     <label class="form-label">Journey</label>
                                     <select class="form-select" name="journey">
                                         <option value="">Select Journey</option>
@@ -1241,33 +1343,124 @@ $fees_exists = in_array('fees', $columns);
                                         ?>
                                     </select>
                                 </div>
-                                <?php endif; ?>
-                                
-                                <?php if ($remarks_exists): ?>
-                                <div class="col-12 mb-3">
+                            </div>
+                            <?php endif; ?>
+
+                            <?php if ($fees_exists): ?>
+                            <div class="col-md-6 col-lg-3">
+                                <div class="form-group">
+                                    <label class="form-label">Fees/Tax</label>
+                                    <select class="form-select" name="fees">
+                                        <option value="GRATIS" <?php echo (strtoupper(getFieldValue($record, 'fees')) === 'GRATIS') ? 'selected' : ''; ?>>GRATIS</option>
+                                        <?php 
+                                        $curr_fees = getFieldValue($record, 'fees');
+                                        if (!empty($curr_fees) && strtoupper($curr_fees) !== 'GRATIS') {
+                                            echo "<option value=\"" . htmlspecialchars($curr_fees) . "\" selected>" . htmlspecialchars($curr_fees) . "</option>";
+                                        }
+                                        ?>
+                                    </select>
+                                </div>
+                            </div>
+                            <?php endif; ?>
+
+                            <?php if ($purpose_exists): ?>
+                            <div class="col-md-6 col-lg-3">
+                                <div class="form-group">
+                                    <label class="form-label">Purpose of Travel</label>
+                                    <input type="text" 
+                                           class="form-control" 
+                                           name="purpose" 
+                                           value="<?php echo htmlspecialchars(getFieldValue($record, 'purpose')); ?>">
+                                </div>
+                            </div>
+                            <?php endif; ?>
+
+                            <?php if ($travelling_on_exists): ?>
+                            <div class="col-md-6 col-lg-3">
+                                <div class="form-group">
+                                    <label class="form-label">Travelling On</label>
+                                    <input type="text" 
+                                           class="form-control" 
+                                           name="travelling_on" 
+                                           value="<?php echo htmlspecialchars(getFieldValue($record, 'travelling_on')); ?>">
+                                </div>
+                            </div>
+                            <?php endif; ?>
+
+                            <?php if ($port_of_entry_exists): ?>
+                            <div class="col-md-6 col-lg-3">
+                                <div class="form-group">
+                                    <label class="form-label">Port of Entry</label>
+                                    <input type="text" 
+                                           class="form-control" 
+                                           name="port_of_entry" 
+                                           value="<?php echo htmlspecialchars(getFieldValue($record, 'port_of_entry')); ?>">
+                                </div>
+                            </div>
+                            <?php endif; ?>
+
+                            <?php if ($date_of_arrival_exists): ?>
+                            <div class="col-md-6 col-lg-3">
+                                <div class="form-group">
+                                    <label class="form-label">Date of Arrival</label>
+                                    <input type="date" 
+                                           class="form-control" 
+                                           name="date_of_arrival" 
+                                           value="<?php echo htmlspecialchars(getFieldValue($record, 'date_of_arrival')); ?>">
+                                </div>
+                            </div>
+                            <?php endif; ?>
+
+                            <?php if ($valid_from_exists): ?>
+                            <div class="col-md-6 col-lg-3">
+                                <div class="form-group">
+                                    <label class="form-label">Valid From</label>
+                                    <input type="date" 
+                                           class="form-control" 
+                                           name="valid_from" 
+                                           value="<?php echo htmlspecialchars(getFieldValue($record, 'valid_from')); ?>">
+                                </div>
+                            </div>
+                            <?php endif; ?>
+
+                            <?php if ($valid_until_exists): ?>
+                            <div class="col-md-6 col-lg-3">
+                                <div class="form-group">
+                                    <label class="form-label">Valid Until</label>
+                                    <input type="date" 
+                                           class="form-control" 
+                                           name="valid_until" 
+                                           value="<?php echo htmlspecialchars(getFieldValue($record, 'valid_until')); ?>">
+                                </div>
+                            </div>
+                            <?php endif; ?>
+
+                            <?php if ($remarks_exists): ?>
+                            <div class="col-12">
+                                <div class="form-group">
                                     <label class="form-label">Remarks</label>
                                     <textarea class="form-control" 
                                               name="remarks" 
                                               rows="3"><?php echo htmlspecialchars(getFieldValue($record, 'remarks')); ?></textarea>
                                 </div>
-                                <?php endif; ?>
                             </div>
+                            <?php endif; ?>
                         </div>
-                        
-                        <!-- Action Buttons -->
-                        <div class="btn-group">
-                            <button type="submit" name="update_record" class="btn-save">
-                                <i class="fa fa-save"></i> Save Changes
-                            </button>
-                            <button type="button" class="btn-cancel" onclick="window.location.href='re-entry-visa'">
-                                <i class="fa fa-times"></i> Cancel
-                            </button>
-                            <a href="viewrecord?id=<?php echo urlencode($visa_number); ?>" class="btn-back">
-                                <i class="fa fa-eye"></i> View Record
-                            </a>
-                        </div>
-                    </form>
-                </div>
+                    </div>
+                    
+                    <!-- Action Buttons -->
+                    <div style="display: flex; gap: 15px; margin-top: 30px; justify-content: flex-end; width: 100%; flex-wrap: wrap;">
+                        <button type="submit" name="update_record" class="btn btn-action btn-green">
+                            <i class="fa fa-save"></i> Save Changes
+                        </button>
+                        <button type="button" class="btn btn-back" onclick="window.location.href='re-entry-visa'">
+                            <i class="fa fa-times"></i> Cancel
+                        </button>
+                        <a href="viewrecord?id=<?php echo urlencode($visa_number); ?>" class="btn btn-action btn-gold text-dark" style="text-decoration: none;">
+                            <i class="fa fa-eye"></i> View Record
+                        </a>
+                    </div>
+                </form>
             </div>
             <?php elseif (!$error_message): ?>
                 <!-- No Record Found -->
