@@ -337,10 +337,7 @@ if (isset($_GET['id'])) {
     
     <div class="print-area">
         <div class="visa-container">
-            <!-- Visa Number - WILL BE HIDDEN WHEN PRINTING -->
-            <div class="visa-text visa-number">
-                <?php echo $profile; ?>
-            </div>
+
             
             <!-- Category (DIPLOMAT) -->
             <div class="visa-text category">
@@ -464,14 +461,17 @@ if (isset($_GET['id'])) {
                 overflow: hidden !important;
             `;
             
-            // Hide visa number during printing
+            // Hide visa number during printing (if it exists)
             const visaNumberElement = document.querySelector('.visa-number');
-            const originalVisaNumberStyle = visaNumberElement.style.cssText;
-            visaNumberElement.style.cssText = `
-                display: none !important;
-                visibility: hidden !important;
-                opacity: 0 !important;
-            `;
+            let originalVisaNumberStyle = '';
+            if (visaNumberElement) {
+                originalVisaNumberStyle = visaNumberElement.style.cssText;
+                visaNumberElement.style.cssText = `
+                    display: none !important;
+                    visibility: hidden !important;
+                    opacity: 0 !important;
+                `;
+            }
             
             // Force single page by setting page breaks
             document.body.style.pageBreakInside = 'avoid';
@@ -487,7 +487,9 @@ if (isset($_GET['id'])) {
                     document.body.style.cssText = originalBodyStyle;
                     printArea.style.cssText = originalPrintAreaStyle;
                     visaContainer.style.cssText = originalVisaContainerStyle;
-                    visaNumberElement.style.cssText = originalVisaNumberStyle;
+                    if (visaNumberElement) {
+                        visaNumberElement.style.cssText = originalVisaNumberStyle;
+                    }
                 }, 500);
             }, 100);
         }
