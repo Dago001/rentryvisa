@@ -18,8 +18,8 @@ while ($true) {
         $status = (git status --porcelain 2>&1) | Out-String
         $hasChanges = -not [string]::IsNullOrWhiteSpace($status.Trim())
 
-        # Check if local commits need to be pushed
-        $ahead = (git log @{u}..HEAD --oneline 2>&1) | Out-String
+        # Check if local commits need to be pushed to remote
+        $ahead = (git log "@{u}..HEAD" --oneline 2>&1) | Out-String
         $needsPush = -not [string]::IsNullOrWhiteSpace($ahead.Trim()) -and -not ($ahead -match "fatal:|error:")
 
         if ($hasChanges) {
@@ -33,11 +33,11 @@ while ($true) {
         if ($needsPush) {
             $timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
             Write-Host "[$timestamp] Pushing to GitHub (origin/main)..." -ForegroundColor Cyan
-            $pushResult = git push origin main 2>&1
+            $pushResult = (git push origin main 2>&1) | Out-String
             if ($LASTEXITCODE -eq 0) {
                 Write-Host "[$timestamp] Successfully pushed to GitHub!" -ForegroundColor Green
             } else {
-                Write-Host "[$timestamp] Push paused (Remote not ready or offline): $pushResult" -ForegroundColor DarkYellow
+                Write-Host "[$timestamp] Push status: $pushResult" -ForegroundColor DarkYellow
             }
         }
     }
