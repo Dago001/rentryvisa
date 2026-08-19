@@ -11,6 +11,10 @@ if (!isset($_SESSION['user_id'])) {
 }
 
 $userRole = $_SESSION['role'] ?? 'DataEntry';
+if ($userRole === 'ViewOnly') {
+    header("Location: index");
+    exit();
+}
 $username = $_SESSION['username'] ?? 'User';
 $fullName = $_SESSION['full_name'] ?? $username;
 
@@ -240,9 +244,14 @@ $current_page = basename($_SERVER['PHP_SELF']);
 
         .form-row {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-            gap: 15px;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 20px;
             margin-bottom: 15px;
+        }
+        @media (max-width: 768px) {
+            .form-row {
+                grid-template-columns: 1fr;
+            }
         }
 
         .form-group {
@@ -510,6 +519,44 @@ $current_page = basename($_SERVER['PHP_SELF']);
         
 
         
+        /* Application Type Tabs */
+        .application-tabs {
+            display: flex;
+            gap: 12px;
+            margin-bottom: 25px;
+            border-bottom: 2px solid #e1e5e9;
+            padding-bottom: 15px;
+        }
+        
+        .app-tab {
+            background: #f8f9fa;
+            border: 1.5px solid #e1e5e9;
+            padding: 10px 24px;
+            font-size: 0.95rem;
+            font-weight: 600;
+            color: var(--dark);
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            outline: none;
+        }
+        
+        .app-tab:hover {
+            background: #eaeaea;
+            border-color: var(--primary);
+            color: var(--primary);
+        }
+        
+        .app-tab.active {
+            background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
+            color: white;
+            border-color: var(--primary);
+            box-shadow: 0 4px 12px rgba(26, 92, 46, 0.2);
+        }
+
         /* Reduced Motion */
         @media (prefers-reduced-motion: reduce) {
             * {
@@ -610,16 +657,30 @@ $current_page = basename($_SERVER['PHP_SELF']);
                 
                 <form action="process_visa" method="POST" enctype="multipart/form-data" id="visaForm">
                     <input type="hidden" name="csrf_token" value="<?php echo $_SESSION['csrf_token']; ?>">
+                    
+                    <!-- Application Type Tabs -->
+                    <div class="application-tabs">
+                        <button type="button" class="app-tab active" id="tab-fresh" onclick="switchTab('fresh')">
+                            <i class="fa fa-file-o"></i> Fresh Application
+                        </button>
+                        <button type="button" class="app-tab" id="tab-renewal" onclick="switchTab('renewal')">
+                            <i class="fa fa-refresh"></i> Renewal Application
+                        </button>
+                    </div>
+                    <div id="tab-indicator-sign" style="text-align: center; margin: 15px 0 25px 0; padding: 12px; border-radius: 8px; font-weight: bold; background: #f0fdf4; color: #15803d; border: 1px solid #bbf7d0; transition: all 0.3s ease; box-shadow: 0 2px 4px rgba(0,0,0,0.02); display: flex; align-items: center; justify-content: center; gap: 8px;">
+                        <i class="fa fa-check-circle"></i> FRESH APPLICATION MODE ACTIVE
+                    </div>
+                    <input type="hidden" name="application_type" id="application_type" value="fresh">
                     <!-- Personal Information Section -->
                     <div class="section">
                         <h2 class="section-title">
                             <i class="fa fa-user"></i> Personal & Passport Information
-                        </h2>               
+                        </h2>
                         <div class="form-row">
-                            <div class="form-group">
-                                <label for="visa_number">Visa Number</label>
-                                <input type="text" id="visa-number" name="visa_number" required 
-                                       oninput="validateAlphaNumeric(this)" placeholder="e.g., R 1267693">
+                            <div class="form-group" id="old-visa-group" style="display: none;">
+                                <label for="old_visa_number">Old Re-Entry Visa Number</label>
+                                <input type="text" id="old-visa-number" name="old_visa_number" oninput="validateAlphaNumeric(this)" placeholder="e.g. R 123456">
+                                <div id="old-visa-status" style="margin-top: 5px; font-size: 0.82rem; font-weight: 600;"></div>
                             </div>
                             <div class="form-group">
                                 <label for="passport_number">Passport Number</label>
@@ -627,9 +688,18 @@ $current_page = basename($_SERVER['PHP_SELF']);
                                        oninput="validatePassportNo(this)" placeholder="enter passport number">
                                 <div id="passport-status" style="margin-top: 5px; font-size: 0.85rem; font-weight: 600;"></div>
                             </div>
-                        </div>
-                        
-                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="passport_date_of_issue">Passport Date of Issue</label>
+                                <input type="date" id="passport-date-of-issue" name="passport_date_of_issue" required>
+                            </div>
+                            <div class="form-group">
+                                <label for="passport_date_of_expiry">Passport Date of Expiry</label>
+                                <input type="date" id="passport-date-of-expiry" name="passport_date_of_expiry" required>
+                            </div>
+                            <div class="form-group">
+                                <label for="visa_type">Visa Type</label>
+                                <input type="text" id="visa-type" name="visa_type" required oninput="validateText(this)" placeholder="e.g. TOURIST">
+                            </div>
                             <div class="form-group">
                                 <label for="surname">Surname</label>
                                 <input type="text" id="surname" name="surname" required
@@ -640,9 +710,6 @@ $current_page = basename($_SERVER['PHP_SELF']);
                                 <input type="text" id="given-name" name="given_name" required
                                        oninput="validateText(this)" placeholder="enter given names" style="text-transform: uppercase;">
                             </div>
-                        </div>
-                        
-                        <div class="form-row">
                             <div class="form-group">
                                 <label for="nationality">Nationality</label>
                                 <select id="nationality" name="nationality" required>
@@ -844,76 +911,105 @@ $current_page = basename($_SERVER['PHP_SELF']);
                                 </select>
                             </div>
                             <div class="form-group">
-                                <label for="place_of_issue">Place of Issue</label>
-                                <input type="text" id="place-of-issue" name="place_of_issue" required
-                                       value="ABUJA HQTRS" oninput="validateText(this)" placeholder="enter place of issue">
+                                <label for="mfa_letter">Letter of Introduction from MFA</label>
+                                <select id="mfa-letter" name="mfa_letter" required>
+                                    <option value="">Select Option</option>
+                                    <option value="YES">YES</option>
+                                    <option value="NO">NO</option>
+                                </select>
                             </div>
-                        </div>
-                        
-                        <div class="form-row">
                             <div class="form-group">
-                                <label for="date_of_issue">Date of Issue</label>
-                                <input type="date" id="date-of-issue" name="date_of_issue" required>
+                                <label for="gender">Gender</label>
+                                <select id="gender" name="gender" required>
+                                    <option value="">Select Gender</option>
+                                    <option value="MALE">MALE</option>
+                                    <option value="FEMALE">FEMALE</option>
+                                </select>
                             </div>
-
                             <div class="form-group">
-                                <label for="embassy">Embassy</label>
-                                <input type="text" id="embassy" name="embassy" required oninput="validateText(this)" placeholder="Enter Embassy Name" style="text-transform: uppercase;">
+                                <label for="number_of_dependencies">Number of Dependencies</label>
+                                <input type="number" id="number-of-dependencies" name="number_of_dependencies" required min="0" step="1" value="0">
+                            </div>
+                            <div class="form-group">
+                                <label for="covering_letter">Covering Letter</label>
+                                <select id="covering-letter" name="covering_letter" required>
+                                    <option value="">Select Option</option>
+                                    <option value="EMBASSY">Embassy</option>
+                                    <option value="HIGH COMMISSION">High Commission</option>
+                                    <option value="NIT/ORG">NIT/ORG</option>
+                                    <option value="GO">GO</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label for="entry_stamp_date">Entry Stamp Date</label>
+                                <input type="date" id="entry-stamp-date" name="entry_stamp_date" required>
+                            </div>
+                            <div class="form-group">
+                                <label for="contract_duration">Contract Duration</label>
+                                <input type="text" id="contract-duration" name="contract_duration" required placeholder="e.g. 2 YEARS" style="text-transform: uppercase;">
                             </div>
                         </div>
                     </div>
 
-                    <!-- Visa Details Section -->
-                    <div class="section">
-                        <h2 class="section-title">
-                            <i class="fa fa-file-text-o"></i> Visa Details
-                        </h2>
-                        <div class="form-row">
-                            <div class="form-group">
-                                <label for="authority">Authority</label>
-                                <input type="text" id="authority" name="authority" required
-                                       value="ABJ/HQ/DIP/" placeholder="ABJ/HQ/DIP/...">
-                                <div id="authority-status" style="margin-top: 5px; font-size: 0.82rem;"></div>
-                            </div>
-
-                            <div class="form-group">
-                                <label for="fees">Fees/Tax</label>
-                                <select id="fees" name="fees" required>
-                                    <option value="Gratis">Gratis</option>
-                                </select>
-                            </div>
-                        </div>
-                        
-                        <div class="form-row">
-                            <div class="form-group">
-                                <label for="journey">Journey Type</label>
-                                <select id="journey" name="journey" required>
-                                    <option value="">Select Journey Type</option>
-                                    <option value="single">Single</option>
-                                    <option value="multiple">Multiple</option>
-                                </select>
-                            </div>
-                           
-                            <div class="form-group">
-                                <label for="category">Category</label>
-                                <select id="category" name="category" required>
-                                    <option value="NONE">NONE</option>
-                                    <option value="DIPLOMAT">DIPLOMAT</option>
-                                    <option value="INT/ORG">INT/ORG</option>
-                                </select>
-                            </div>
-                        </div>
-
-                        <div class="form-row">
-                            <div class="form-group">
-                                <label for="within">Within (Validity Period)</label>
-                                <input type="date" id="within" name="within" required>
-                            </div>
-                            <div class="form-group">
-                                <!-- empty placeholder to reduce the date input width to half -->
-                            </div>
-                        </div>
-                    </div>
+                      <!-- Re-Entry Visa Details Section -->
+                       <div class="section">
+                           <h2 class="section-title">
+                               <i class="fa fa-file-text-o"></i> Re-Entry Visa Details
+                           </h2>
+                           <div class="form-row">
+                               <div class="form-group">
+                                   <label for="visa_number">Re-Entry Visa Number</label>
+                                   <input type="text" id="visa-number" name="visa_number" required 
+                                          oninput="validateAlphaNumeric(this)" placeholder="e.g., R 1267693">
+                               </div>
+                               <div class="form-group">
+                                    <label for="embassy">Embassy/High Commission</label>
+                                    <input type="text" id="embassy" name="embassy" required maxlength="10" oninput="validateText(this)" placeholder="Enter Embassy Name" style="text-transform: uppercase;">
+                                </div>
+                               <div class="form-group">
+                                   <label for="place_of_issue">Place of Issue</label>
+                                   <input type="text" id="place-of-issue" name="place_of_issue" required
+                                          value="ABUJA HQTRS" oninput="validateText(this)" placeholder="enter place of issue">
+                               </div>
+                               <div class="form-group">
+                                   <label for="date_of_issue">Date of Issue</label>
+                                   <input type="date" id="date-of-issue" name="date_of_issue" required>
+                               </div>
+                               <div class="form-group">
+                                   <label for="authority">Authority</label>
+                                   <input type="text" id="authority" name="authority" required
+                                          value="ABJ/HQ/DIP/" placeholder="ABJ/HQ/DIP/...">
+                                   <div id="authority-status" style="margin-top: 5px; font-size: 0.82rem;"></div>
+                               </div>
+                               <div class="form-group">
+                                   <label for="fees">Fees/Tax</label>
+                                   <select id="fees" name="fees" required>
+                                       <option value="Gratis">Gratis</option>
+                                   </select>
+                               </div>
+                               <div class="form-group">
+                                   <label for="journey">Journey Type</label>
+                                   <select id="journey" name="journey" required>
+                                       <option value="">Select Journey Type</option>
+                                       <option value="single">Single</option>
+                                       <option value="multiple">Multiple</option>
+                                   </select>
+                               </div>
+                               <div class="form-group">
+                                   <label for="category">Category</label>
+                                   <select id="category" name="category" required>
+                                       <option value="NONE">NONE</option>
+                                       <option value="DIPLOMAT">DIPLOMAT</option>
+                                       <option value="INT/ORG">INT/ORG</option>
+                                       <option value="GO">GO</option>
+                                   </select>
+                               </div>
+                               <div class="form-group">
+                                   <label for="within">Within (Validity Period)</label>
+                                   <input type="date" id="within" name="within" required>
+                               </div>
+                           </div>
+                       </div>
                     
                     <button type="submit" class="btn-submit">
                         <i class="fa fa-paper-plane"></i> Submit Application
@@ -924,6 +1020,77 @@ $current_page = basename($_SERVER['PHP_SELF']);
     </div>
 
     <script>
+        // Switch between application tabs
+        function switchTab(type) {
+            document.getElementById('application_type').value = type;
+            
+            const tabFresh = document.getElementById('tab-fresh');
+            const tabRenewal = document.getElementById('tab-renewal');
+            const oldVisaGroup = document.getElementById('old-visa-group');
+            const oldVisaInput = document.getElementById('old-visa-number');
+            const indicator = document.getElementById('tab-indicator-sign');
+            
+            if (type === 'fresh') {
+                tabFresh.classList.add('active');
+                tabRenewal.classList.remove('active');
+                if (oldVisaGroup) oldVisaGroup.style.display = 'none';
+                if (oldVisaInput) {
+                    oldVisaInput.removeAttribute('required');
+                    oldVisaInput.value = '';
+                    const statusEl = document.getElementById('old-visa-status');
+                    if (statusEl) statusEl.innerHTML = '';
+                    oldVisaInput.classList.remove('is-invalid');
+                }
+                if (indicator) {
+                    indicator.style.background = '#f0fdf4';
+                    indicator.style.color = '#15803d';
+                    indicator.style.borderColor = '#bbf7d0';
+                    indicator.innerHTML = '<i class="fa fa-check-circle"></i> FRESH APPLICATION MODE ACTIVE';
+                }
+                if (passportExists) {
+                    passportValid = false;
+                    passportStatus.innerHTML = '<span style="color: #d9534f;"><i class="fa fa-exclamation-circle"></i> This Passport Number already exists in the system! Please use Renewal Application.</span>';
+                    passportInput.style.borderColor = '#d9534f';
+                    passportInput.style.backgroundColor = '#fdf2f2';
+                } else {
+                    makeFieldsStatic(false);
+                }
+                if (authorityExists) {
+                    authorityValid = false;
+                    const authVal = authorityInputGlobal ? authorityInputGlobal.value : '';
+                    authorityStatus.innerHTML = `<span style="color: #d9534f;"><i class="fa fa-exclamation-circle"></i> Authority number ${authVal} already exists in the system! Please use Renewal Application.</span>`;
+                    authorityInputGlobal.style.borderColor = '#d9534f';
+                    authorityInputGlobal.style.backgroundColor = '#fdf2f2';
+                }
+            } else {
+                tabFresh.classList.remove('active');
+                tabRenewal.classList.add('active');
+                if (oldVisaGroup) oldVisaGroup.style.display = 'block';
+                if (oldVisaInput) {
+                    oldVisaInput.setAttribute('required', 'required');
+                }
+                if (indicator) {
+                    indicator.style.background = '#fffbeb';
+                    indicator.style.color = '#b45309';
+                    indicator.style.borderColor = '#fde68a';
+                    indicator.innerHTML = '<i class="fa fa-refresh"></i> RENEWAL APPLICATION MODE ACTIVE';
+                }
+                if (passportExists) {
+                    passportValid = true;
+                    passportStatus.innerHTML = `<span style="color: #15803d;"><i class="fa fa-check-circle"></i> Record found & auto-populated!</span>`;
+                    passportInput.style.borderColor = '#27ae60';
+                    passportInput.style.backgroundColor = '#f2fdf5';
+                }
+                if (authorityExists) {
+                    authorityValid = true;
+                    const authVal = authorityInputGlobal ? authorityInputGlobal.value : '';
+                    authorityStatus.innerHTML = '<span style="color: #27ae60;"><i class="fa fa-check-circle"></i> Authority number exists (valid for renewal)</span>';
+                    authorityInputGlobal.style.borderColor = '#27ae60';
+                    authorityInputGlobal.style.backgroundColor = '#f2fdf5';
+                }
+            }
+        }
+
         // Function to validate text fields (alphabetic, spaces, hyphens, apostrophes, periods, and convert to uppercase)
         function validateText(input) {
             // Remove non-alphabetic, non-space, non-hyphen, non-apostrophe, non-period characters
@@ -990,49 +1157,203 @@ $current_page = basename($_SERVER['PHP_SELF']);
             return isValid;
         }
 
-        // Passport number duplication real-time checker
+        // Passport number duplication checker
         const passportInput = document.getElementById('passport-number');
         const passportStatus = document.getElementById('passport-status');
         const submitBtn = document.querySelector('.btn-submit');
         let passportValid = true;
+        let passportExists = false;
 
-        passportInput.addEventListener('blur', function() {
-            const passport = this.value.trim();
+        // Function to lock/unlock select fields
+        function lockSelect(selectEl) {
+            if (!selectEl) return;
+            selectEl.style.pointerEvents = 'none';
+            selectEl.style.backgroundColor = '#e9ecef';
+            selectEl.tabIndex = -1;
+            selectEl.dataset.locked = "true";
+        }
+        
+        function unlockSelect(selectEl) {
+            if (!selectEl) return;
+            selectEl.style.pointerEvents = '';
+            selectEl.style.backgroundColor = '';
+            selectEl.removeAttribute('tabindex');
+            delete selectEl.dataset.locked;
+        }
+
+        // Prevent select interaction when locked
+        document.addEventListener('keydown', function(e) {
+            if (e.target && e.target.dataset && e.target.dataset.locked === "true") {
+                e.preventDefault();
+            }
+        });
+
+        function makeFieldsStatic(isStatic) {
+            const nationalitySelect = document.getElementById('nationality');
+            const authorityInput = document.getElementById('authority');
+            const feesSelect = document.getElementById('fees');
+            const genderSelect = document.getElementById('gender');
+            
+            const surnameInput = document.getElementById('surname');
+            const givenNameInput = document.getElementById('given-name');
+            const passportIssueInput = document.getElementById('passport-date-of-issue');
+            const passportExpiryInput = document.getElementById('passport-date-of-expiry');
+            
+            const selectsToLock = [nationalitySelect, feesSelect, genderSelect];
+            const inputsToLock = [authorityInput, surnameInput, givenNameInput, passportIssueInput, passportExpiryInput];
+            
+            if (isStatic) {
+                selectsToLock.forEach(selectEl => lockSelect(selectEl));
+                inputsToLock.forEach(inputEl => {
+                    if (inputEl) {
+                        inputEl.readOnly = true;
+                        inputEl.style.backgroundColor = '#e9ecef';
+                        inputEl.style.cursor = 'not-allowed';
+                    }
+                });
+            } else {
+                selectsToLock.forEach(selectEl => unlockSelect(selectEl));
+                inputsToLock.forEach(inputEl => {
+                    if (inputEl) {
+                        inputEl.readOnly = false;
+                        inputEl.style.backgroundColor = '';
+                        inputEl.style.cursor = '';
+                    }
+                });
+            }
+        }
+
+        function setSelectValueCaseInsensitive(selectEl, value) {
+            if (!selectEl) return;
+            const cleanVal = (value || '').trim().toUpperCase();
+            for (let i = 0; i < selectEl.options.length; i++) {
+                if (selectEl.options[i].value.toUpperCase() === cleanVal) {
+                    selectEl.selectedIndex = i;
+                    return;
+                }
+            }
+            selectEl.value = value;
+        }
+
+        function populateForm(d) {
+            // Populate inputs
+            if (document.getElementById('surname')) document.getElementById('surname').value = (d.surname || '').toUpperCase();
+            if (document.getElementById('given-name')) document.getElementById('given-name').value = (d.given_name || '').toUpperCase();
+            if (document.getElementById('passport-number')) document.getElementById('passport-number').value = d.passport_number || '';
+            if (document.getElementById('passport-date-of-issue')) document.getElementById('passport-date-of-issue').value = d.passport_date_of_issue || '';
+            if (document.getElementById('passport-date-of-expiry')) document.getElementById('passport-date-of-expiry').value = d.passport_date_of_expiry || '';
+            if (document.getElementById('visa-type')) document.getElementById('visa-type').value = (d.visa_type || '').toUpperCase();
+            
+            setSelectValueCaseInsensitive(document.getElementById('nationality'), d.nationality);
+            setSelectValueCaseInsensitive(document.getElementById('mfa-letter'), d.mfa_letter);
+            setSelectValueCaseInsensitive(document.getElementById('gender'), d.gender);
+            
+            if (document.getElementById('number-of-dependencies')) document.getElementById('number-of-dependencies').value = d.number_of_dependencies || 0;
+            
+            setSelectValueCaseInsensitive(document.getElementById('covering-letter'), d.covering_letter);
+            if (document.getElementById('entry-stamp-date')) document.getElementById('entry-stamp-date').value = d.entry_stamp_date || '';
+            if (document.getElementById('contract-duration')) document.getElementById('contract-duration').value = (d.contract_duration || '').toUpperCase();
+            
+            if (document.getElementById('embassy')) document.getElementById('embassy').value = (d.embassy || '').toUpperCase();
+            if (document.getElementById('place-of-issue')) document.getElementById('place-of-issue').value = (d.place_of_issue || '').toUpperCase();
+            if (document.getElementById('date-of-issue')) document.getElementById('date-of-issue').value = d.date_of_issue || '';
+            if (document.getElementById('authority')) document.getElementById('authority').value = d.authority || '';
+            
+            const feesSelect = document.getElementById('fees');
+            if (feesSelect) {
+                const feesVal = d.fees || 'Gratis';
+                let exists = false;
+                for (let i = 0; i < feesSelect.options.length; i++) {
+                    if (feesSelect.options[i].value.toUpperCase() === feesVal.toUpperCase()) {
+                        exists = true;
+                        feesSelect.selectedIndex = i;
+                        break;
+                    }
+                }
+                if (!exists) {
+                    const opt = document.createElement('option');
+                    opt.value = feesVal;
+                    opt.textContent = feesVal;
+                    feesSelect.appendChild(opt);
+                    feesSelect.value = feesVal;
+                }
+            }
+
+            if (document.getElementById('old-visa-number') && d.visa_number) {
+                document.getElementById('old-visa-number').value = d.visa_number;
+            }
+
+            makeFieldsStatic(true);
+        }
+
+        passportInput.addEventListener('change', function() {
+            const passport = this.value.trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
+            this.value = passport;
             if (!passport) {
                 passportStatus.innerHTML = '';
+                passportExists = false;
+                makeFieldsStatic(false);
                 return;
             }
 
             passportStatus.innerHTML = '<span style="color: #666;"><i class="fa fa-spinner fa-spin"></i> Checking...</span>';
             
-            fetch(`check_passport?passport=${encodeURIComponent(passport)}`)
+            fetch('check_passport', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: 'passport_number=' + encodeURIComponent(passport)
+            })
                 .then(response => response.json())
                 .then(data => {
+                    const currentTab = document.getElementById('application_type').value;
+                    passportExists = data.exists;
+                    
                     if (data.exists) {
-                        passportStatus.innerHTML = '<span style="color: #d9534f;"><i class="fa fa-exclamation-circle"></i> This Passport Number already exists in the system!</span>';
-                        passportInput.style.borderColor = '#d9534f';
-                        passportInput.style.backgroundColor = '#fdf2f2';
-                        passportValid = false;
-                    } else {
-                        passportStatus.innerHTML = '<span style="color: #2b7a43;"><i class="fa fa-check-circle"></i> Passport Number is valid</span>';
-                        passportInput.style.borderColor = '#2b7a43';
+                        if (currentTab === 'fresh') {
+                            alert("This Passport Number already exists in the system!");
+                            switchTab('renewal');
+                        }
+                        
+                        if (data.data) {
+                            populateForm(data.data);
+                        }
+                        
+                        passportStatus.innerHTML = `<span style="color: #15803d;"><i class="fa fa-check-circle"></i> Record found & auto-populated!</span>`;
+                        passportInput.style.borderColor = '#27ae60';
                         passportInput.style.backgroundColor = '#f2fdf5';
                         passportValid = true;
+                    } else {
+                        if (currentTab === 'renewal') {
+                            passportStatus.innerHTML = '<span style="color: #dc2626;"><i class="fa fa-times-circle"></i> No record found for this passport number</span>';
+                            passportInput.style.borderColor = '#d9534f';
+                            passportInput.style.backgroundColor = '#fdf2f2';
+                        } else {
+                            passportStatus.innerHTML = '<span style="color: #27ae60;"><i class="fa fa-check-circle"></i> Passport Number is valid</span>';
+                            passportInput.style.borderColor = '#27ae60';
+                            passportInput.style.backgroundColor = '#f2fdf5';
+                        }
+                        passportValid = true;
+                        makeFieldsStatic(false);
                     }
                     toggleSubmitButton();
                 })
                 .catch(error => {
                     console.error('Error checking passport:', error);
                     passportStatus.innerHTML = '';
+                    passportValid = true;
+                    passportExists = false;
+                    makeFieldsStatic(false);
+                    toggleSubmitButton();
                 });
         });
 
         passportInput.addEventListener('input', function() {
-            // Clear status message when user types again
             passportStatus.innerHTML = '';
             passportInput.style.borderColor = '';
             passportInput.style.backgroundColor = '';
             passportValid = true;
+            passportExists = false;
+            makeFieldsStatic(false);
             toggleSubmitButton();
         });
 
@@ -1040,6 +1361,7 @@ $current_page = basename($_SERVER['PHP_SELF']);
         const authorityInputGlobal = document.getElementById('authority');
         const authorityStatus = document.getElementById('authority-status');
         let authorityValid = true;
+        let authorityExists = false;
 
         authorityInputGlobal.addEventListener('blur', function() {
             const auth = this.value.trim();
@@ -1047,22 +1369,35 @@ $current_page = basename($_SERVER['PHP_SELF']);
             // Check if it is empty or just the prefix
             if (!auth || auth === 'ABJ/HQ/DIP/' || auth.length <= 11) {
                 authorityStatus.innerHTML = '';
+                authorityExists = false;
                 return;
             }
 
-            authorityStatus.innerHTML = '<span style="color: #666;"><i class="fa fa-spinner fa-spin"></i> Checking...</span>';
-            
-            fetch(`check_authority?authority=${encodeURIComponent(auth)}`)
+            fetch('check_authority', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: 'authority=' + encodeURIComponent(auth)
+            })
                 .then(response => response.json())
                 .then(data => {
+                    const currentTab = document.getElementById('application_type').value;
+                    authorityExists = data.exists;
+                    
                     if (data.exists) {
-                        authorityStatus.innerHTML = `<span style="color: #d9534f;"><i class="fa fa-exclamation-circle"></i> Authority number ${data.authority} already exists in the system!</span>`;
-                        authorityInputGlobal.style.borderColor = '#d9534f';
-                        authorityInputGlobal.style.backgroundColor = '#fdf2f2';
-                        authorityValid = false;
+                        if (currentTab === 'fresh') {
+                            authorityStatus.innerHTML = `<span style="color: #d9534f;"><i class="fa fa-exclamation-circle"></i> Authority number ${data.authority} already exists in the system!</span>`;
+                            authorityInputGlobal.style.borderColor = '#d9534f';
+                            authorityInputGlobal.style.backgroundColor = '#fdf2f2';
+                            authorityValid = false;
+                        } else {
+                            authorityStatus.innerHTML = '<span style="color: #27ae60;"><i class="fa fa-check-circle"></i> Authority number exists (valid for renewal)</span>';
+                            authorityInputGlobal.style.borderColor = '#27ae60';
+                            authorityInputGlobal.style.backgroundColor = '#f2fdf5';
+                            authorityValid = true;
+                        }
                     } else {
-                        authorityStatus.innerHTML = '<span style="color: #2b7a43;"><i class="fa fa-check-circle"></i> Authority number is valid</span>';
-                        authorityInputGlobal.style.borderColor = '#2b7a43';
+                        authorityStatus.innerHTML = '<span style="color: #27ae60;"><i class="fa fa-check-circle"></i> Authority number is valid</span>';
+                        authorityInputGlobal.style.borderColor = '#27ae60';
                         authorityInputGlobal.style.backgroundColor = '#f2fdf5';
                         authorityValid = true;
                     }
@@ -1071,15 +1406,18 @@ $current_page = basename($_SERVER['PHP_SELF']);
                 .catch(error => {
                     console.error('Error checking authority:', error);
                     authorityStatus.innerHTML = '';
+                    authorityValid = true;
+                    authorityExists = false;
+                    toggleSubmitButton();
                 });
         });
 
         authorityInputGlobal.addEventListener('input', function() {
-            // Clear status message when user types again
             authorityStatus.innerHTML = '';
             authorityInputGlobal.style.borderColor = '';
             authorityInputGlobal.style.backgroundColor = '';
             authorityValid = true;
+            authorityExists = false;
             toggleSubmitButton();
         });
 
@@ -1096,6 +1434,7 @@ $current_page = basename($_SERVER['PHP_SELF']);
         }
 
         // Form submission handler
+        let isVisaChecked = false;
         document.getElementById('visaForm').addEventListener('submit', function(e) {
             if (!validateForm() || !passportValid || !authorityValid) {
                 e.preventDefault();
@@ -1106,7 +1445,60 @@ $current_page = basename($_SERVER['PHP_SELF']);
                     errMsg = 'This Authority Number already exists in the system!';
                 }
                 alert(errMsg);
+                return;
             }
+            
+            // Validate Passport dates
+            const passportIssueDate = document.getElementById('passport-date-of-issue').value;
+            const passportExpiryDate = document.getElementById('passport-date-of-expiry').value;
+            const todayStr = new Date().toISOString().split('T')[0];
+
+            if (passportIssueDate > todayStr) {
+                alert("Passport Date of Issue cannot be in the future!");
+                e.preventDefault();
+                return;
+            }
+            if (passportExpiryDate <= passportIssueDate) {
+                alert("Passport Date of Expiry must be after Passport Date of Issue!");
+                e.preventDefault();
+                return;
+            }
+            
+            if (isVisaChecked) {
+                return;
+            }
+            
+            e.preventDefault();
+            
+            const visaInput = document.getElementById('visa-number');
+            const visaNo = visaInput.value.trim();
+            if (!visaNo) return;
+            
+            const submitBtnEl = document.querySelector('.btn-submit');
+            if (submitBtnEl) submitBtnEl.disabled = true;
+            
+            fetch('check_visa', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: 'visa_number=' + encodeURIComponent(visaNo)
+            })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.exists) {
+                        alert("Visa number already exists in the system! Please edit the Visa Number.");
+                        visaInput.focus();
+                        visaInput.style.borderColor = '#d9534f';
+                        visaInput.style.backgroundColor = '#fdf2f2';
+                        if (submitBtnEl) submitBtnEl.disabled = false;
+                    } else {
+                        isVisaChecked = true;
+                        document.getElementById('visaForm').submit();
+                    }
+                })
+                .catch(error => {
+                    console.error('Error checking visa:', error);
+                    if (submitBtnEl) submitBtnEl.disabled = false;
+                });
         });
 
         // Real-time validation for all fields
@@ -1199,6 +1591,69 @@ $current_page = basename($_SERVER['PHP_SELF']);
             }
         });
 
+        // Autocomplete old visa details
+        let oldVisaDebounceTimer;
+        const oldVisaInput = document.getElementById('old-visa-number');
+        
+        if (oldVisaInput) {
+            oldVisaInput.addEventListener('input', function() {
+                clearTimeout(oldVisaDebounceTimer);
+                const visaNo = this.value.trim();
+                
+                if (visaNo.length < 3) {
+                    const statusEl = document.getElementById('old-visa-status');
+                    if (statusEl) statusEl.innerHTML = '';
+                    return;
+                }
+                
+                oldVisaDebounceTimer = setTimeout(() => {
+                    fetchVisaDetails(visaNo);
+                }, 500);
+            });
+        }
+
+        function fetchVisaDetails(visaNo) {
+            const statusEl = document.getElementById('old-visa-status');
+            if (statusEl) {
+                statusEl.style.color = '#d97706';
+                statusEl.innerHTML = '<i class="fa fa-spinner fa-spin"></i> Searching database...';
+            }
+            
+            fetch('get_visa_details', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: 'visa_number=' + encodeURIComponent(visaNo)
+            })
+                .then(response => response.json())
+                .then(result => {
+                    if (result.success && result.data) {
+                        populateForm(result.data);
+                        
+                        passportValid = true;
+                        passportExists = true;
+
+                        if (statusEl) {
+                            statusEl.style.color = '#15803d';
+                            statusEl.innerHTML = '<i class="fa fa-check-circle"></i> Record found & auto-populated!';
+                        }
+                    } else {
+                        if (statusEl) {
+                            statusEl.style.color = '#dc2626';
+                            statusEl.innerHTML = '<i class="fa fa-times-circle"></i> No record found for this visa number';
+                        }
+                        makeFieldsStatic(false);
+                    }
+                })
+                .catch(error => {
+                    console.error('Fetch visa details error:', error);
+                    if (statusEl) {
+                        statusEl.style.color = '#dc2626';
+                        statusEl.innerHTML = '<i class="fa fa-exclamation-triangle"></i> Error fetching record details';
+                    }
+                    makeFieldsStatic(false);
+                });
+        }
+
         // Sidebar functionality - MATCHING INDEX.PHP
         function updateDateTime() {
             const now = new Date();
@@ -1221,88 +1676,7 @@ $current_page = basename($_SERVER['PHP_SELF']);
         document.addEventListener('DOMContentLoaded', function() {
             updateDateTime();
             setInterval(updateDateTime, 1000);
-
-            // Passport number existence check
-            const passportInput = document.getElementById('passport-number');
-            if (passportInput) {
-                passportInput.addEventListener('change', function() {
-                    const passportNo = this.value.trim();
-                    if (!passportNo) return;
-
-                    // Enforce strict alphanumeric format
-                    this.value = passportNo.replace(/[^A-Z0-9]/g, '');
-
-                    // Make AJAX request to check_passport.php
-                    fetch('check_passport.php?passport_number=' + encodeURIComponent(this.value))
-                        .then(response => response.json())
-                        .then(data => {
-                            if (data.exists) {
-                                const message = "This Passport Number (" + this.value + ") already exists in the system for:\n" + 
-                                                data.surname + " " + data.given_name + 
-                                                "\n\nDo you want to proceed and tie this record to this person?";
-                                if (confirm(message)) {
-                                    // Populate surname and given name
-                                    const surnameInput = document.getElementById('surname');
-                                    const givenNameInput = document.getElementById('given-name');
-                                    
-                                    if (surnameInput) {
-                                        surnameInput.value = data.surname;
-                                        surnameInput.readOnly = true;
-                                        surnameInput.style.backgroundColor = '#e9ecef';
-                                        surnameInput.style.cursor = 'not-allowed';
-                                    }
-                                    if (givenNameInput) {
-                                        givenNameInput.value = data.given_name;
-                                        givenNameInput.readOnly = true;
-                                        givenNameInput.style.backgroundColor = '#e9ecef';
-                                        givenNameInput.style.cursor = 'not-allowed';
-                                    }
-                                } else {
-                                    // Clear passport number field
-                                    this.value = '';
-                                    
-                                    // Reset names
-                                    const surnameInput = document.getElementById('surname');
-                                    const givenNameInput = document.getElementById('given-name');
-                                    
-                                    if (surnameInput && surnameInput.readOnly) {
-                                        surnameInput.value = '';
-                                        surnameInput.readOnly = false;
-                                        surnameInput.style.backgroundColor = '';
-                                        surnameInput.style.cursor = '';
-                                    }
-                                    if (givenNameInput && givenNameInput.readOnly) {
-                                        givenNameInput.value = '';
-                                        givenNameInput.readOnly = false;
-                                        givenNameInput.style.backgroundColor = '';
-                                        givenNameInput.style.cursor = '';
-                                    }
-                                    this.focus();
-                                }
-                            } else {
-                                // Passport does not exist. Re-enable names if they were readonly
-                                const surnameInput = document.getElementById('surname');
-                                const givenNameInput = document.getElementById('given-name');
-                                if (surnameInput && surnameInput.readOnly) {
-                                    surnameInput.readOnly = false;
-                                    surnameInput.style.backgroundColor = '';
-                                    surnameInput.style.cursor = '';
-                                }
-                                if (givenNameInput && givenNameInput.readOnly) {
-                                    givenNameInput.readOnly = false;
-                                    givenNameInput.style.backgroundColor = '';
-                                    givenNameInput.style.cursor = '';
-                                }
-                            }
-                        })
-                        .catch(error => {
-                            console.error('Error checking passport number:', error);
-                        });
-                });
-            }
         });
-        
-        // Logout is handled globally by sidebar.js/php
     </script>
     <?php 
     if (file_exists('footer.php')) {

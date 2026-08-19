@@ -11,7 +11,7 @@ if (!$conn) {
     exit();
 }
 
-$authority = $_GET['authority'] ?? '';
+$authority = $_REQUEST['authority'] ?? '';
 $authority = strtoupper(trim($authority));
 
 if (empty($authority)) {
@@ -19,7 +19,7 @@ if (empty($authority)) {
     exit();
 }
 
-$exclude_visa = $_GET['exclude_visa'] ?? '';
+$exclude_visa = $_REQUEST['exclude_visa'] ?? '';
 
 // Search for any existing application with this authority number
 if (!empty($exclude_visa)) {

@@ -13,6 +13,7 @@ if (!$conn) {
 // Initialize variables
 $visa_number = $passport_number = $surname = $given_name = $nationality = $place_of_issue = '';
 $date_of_issue = $embassy = $authority = $within = $journey = $fees = $application_date = $status = $category = '';
+$application_type = $number_of_dependencies = $visa_type = $gender = $mfa_letter = $covering_letter = $entry_stamp = $entry_stamp_date = $contract_duration = $old_visa_number = '';
 
 // Check if ID parameter is provided
 if(isset($_GET['id'])) {
@@ -35,7 +36,10 @@ if(isset($_GET['id'])) {
     $optionalColumns = [
         'nationality', 'place_of_issue', 'date_of_issue', 'embassy', 'authority',
         'within', 'validity_date', 'expiry_date', 'journey', 'purpose', 'travel_purpose',
-        'fees', 'application_date', 'created_at', 'status', 'created_by', 'category'
+        'fees', 'application_date', 'created_at', 'status', 'created_by', 'category',
+        'application_type', 'number_of_dependencies', 'visa_type', 'gender', 'mfa_letter',
+        'covering_letter', 'entry_stamp', 'entry_stamp_date', 'contract_duration', 'old_visa_number',
+        'passport_date_of_issue', 'passport_date_of_expiry'
     ];
     
     foreach($optionalColumns as $col) {
@@ -69,6 +73,19 @@ if(isset($_GET['id'])) {
         $embassy = strtoupper($foundk['embassy'] ?? 'N/A');
         $authority = strtoupper($foundk['authority'] ?? 'N/A');
         $category = strtoupper($foundk['category'] ?? 'NONE');
+        
+        $application_type = htmlspecialchars($foundk['application_type'] ?? 'fresh');
+        $number_of_dependencies = intval($foundk['number_of_dependencies'] ?? 0);
+        $visa_type = strtoupper($foundk['visa_type'] ?? 'N/A');
+        $gender = strtoupper($foundk['gender'] ?? 'N/A');
+        $mfa_letter = strtoupper($foundk['mfa_letter'] ?? 'N/A');
+        $covering_letter = strtoupper($foundk['covering_letter'] ?? 'N/A');
+        $entry_stamp = strtoupper($foundk['entry_stamp'] ?? 'N/A');
+        $entry_stamp_date = formatNISDate($foundk['entry_stamp_date'] ?? '');
+        $contract_duration = strtoupper($foundk['contract_duration'] ?? 'N/A');
+        $old_visa_number = strtoupper($foundk['old_visa_number'] ?? 'N/A');
+        $passport_date_of_issue = in_array('passport_date_of_issue', $columns) ? formatNISDate($foundk['passport_date_of_issue'] ?? '') : 'N/A';
+        $passport_date_of_expiry = in_array('passport_date_of_expiry', $columns) ? formatNISDate($foundk['passport_date_of_expiry'] ?? '') : 'N/A';
         
         // Check for within/validity period
         if (isset($foundk['within'])) {
@@ -348,6 +365,18 @@ if(isset($_GET['id'])) {
             color: var(--secondary);
         }
         
+        .form-row {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 20px;
+            margin-bottom: 15px;
+        }
+        @media (max-width: 768px) {
+            .form-row {
+                grid-template-columns: 1fr;
+            }
+        }
+        
         .form-group {
             margin-bottom: 15px;
         }
@@ -617,9 +646,11 @@ if(isset($_GET['id'])) {
         <div class="page-content container-fluid">
             <!-- Actions Header -->
             <div class="action-header" style="display: flex; justify-content: flex-end; gap: 15px; margin-bottom: 20px; width: 100%;">
+                <?php if ($_SESSION['role'] !== 'ViewOnly'): ?>
                 <a href="card?id=<?php echo urlencode($visa_number); ?>" class="btn btn-action btn-gold text-dark">
                     <i class="fa fa-id-card"></i>Print Vignette
                 </a>
+                <?php endif; ?>
                 <button class="btn btn-action btn-green" onclick="window.print()">
                     <i class="fa fa-print"></i>Print Details
                 </button>
@@ -631,7 +662,7 @@ if(isset($_GET['id'])) {
                 <div class="form-header flex-column flex-md-row gap-3">
                     <div>
                         <h2 class="visa-application-title">
-                            <i class="fa fa-passport me-2"></i>Visa Application Details
+                            <i class="fa fa-globe me-2"></i>Re-Entry Visa Application Details
                         </h2>
                     </div>
                     <div class="text-md-end d-flex flex-column align-items-md-end gap-2">
@@ -640,102 +671,200 @@ if(isset($_GET['id'])) {
                             <?php echo htmlspecialchars($status); ?>
                         </span>
                         <span class="small text-muted font-monospace fw-bold">
-                            Visa No: <?php echo htmlspecialchars($visa_number); ?>
+                            Re-Entry Visa No: <?php echo htmlspecialchars($visa_number); ?>
                         </span>
                     </div>
                 </div>
 
-                <!-- Section: Personal Information -->
+                <!-- Section: Personal & Passport Information -->
                 <div class="section">
-                    <h4 class="section-title"><i class="fa fa-user me-2"></i>Personal Profile</h4>
-                    <div class="row g-3">
-                        <div class="col-md-6 col-lg-3">
-                            <div class="form-group">
-                                <label>Surname</label>
-                                <div class="detail-value-field"><?php echo htmlspecialchars($surname); ?></div>
-                            </div>
+                    <h2 class="section-title"><i class="fa fa-user"></i> Personal & Passport Information</h2>
+                    
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Passport Number</label>
+                            <div class="detail-value-field font-monospace fw-bold"><?php echo htmlspecialchars($passport_number); ?></div>
                         </div>
-                        <div class="col-md-6 col-lg-3">
-                            <div class="form-group">
-                                <label>Given Name</label>
-                                <div class="detail-value-field"><?php echo htmlspecialchars($given_name); ?></div>
-                            </div>
+                        <?php if (in_array('visa_type', $columns)): ?>
+                        <div class="form-group">
+                            <label>Visa Type</label>
+                            <div class="detail-value-field"><?php echo htmlspecialchars($visa_type); ?></div>
                         </div>
-                        <div class="col-md-6 col-lg-3">
-                            <div class="form-group">
-                                <label>Nationality</label>
-                                <div class="detail-value-field"><?php echo htmlspecialchars($nationality); ?></div>
-                            </div>
+                        <?php else: ?>
+                        <div class="form-group"></div>
+                        <?php endif; ?>
+                    </div>
+
+                    <div class="form-row">
+                        <?php if (in_array('passport_date_of_issue', $columns)): ?>
+                        <div class="form-group">
+                            <label>Passport Date of Issue</label>
+                            <div class="detail-value-field"><?php echo htmlspecialchars($passport_date_of_issue); ?></div>
                         </div>
-                        <div class="col-md-6 col-lg-3">
-                            <div class="form-group">
-                                <label>Passport Number</label>
-                                <div class="detail-value-field font-monospace fw-bold"><?php echo htmlspecialchars($passport_number); ?></div>
-                            </div>
+                        <?php else: ?>
+                        <div class="form-group"></div>
+                        <?php endif; ?>
+
+                        <?php if (in_array('passport_date_of_expiry', $columns)): ?>
+                        <div class="form-group">
+                            <label>Passport Date of Expiry</label>
+                            <div class="detail-value-field"><?php echo htmlspecialchars($passport_date_of_expiry); ?></div>
+                        </div>
+                        <?php else: ?>
+                        <div class="form-group"></div>
+                        <?php endif; ?>
+                    </div>
+                    
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Surname</label>
+                            <div class="detail-value-field" style="text-transform: uppercase;"><?php echo htmlspecialchars($surname); ?></div>
+                        </div>
+                        <div class="form-group">
+                            <label>Given Names</label>
+                            <div class="detail-value-field" style="text-transform: uppercase;"><?php echo htmlspecialchars($given_name); ?></div>
                         </div>
                     </div>
+                    
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Nationality</label>
+                            <div class="detail-value-field"><?php echo htmlspecialchars($nationality); ?></div>
+                        </div>
+                        <?php if (in_array('gender', $columns)): ?>
+                        <div class="form-group">
+                            <label>Gender</label>
+                            <div class="detail-value-field"><?php echo htmlspecialchars($gender); ?></div>
+                        </div>
+                        <?php else: ?>
+                        <div class="form-group"></div>
+                        <?php endif; ?>
+                    </div>
+                    
+                    <div class="form-row">
+                        <?php if (in_array('application_type', $columns)): ?>
+                        <div class="form-group">
+                            <label>Application Type</label>
+                            <div class="detail-value-field"><?php echo ($application_type === 'renewal') ? 'RENEWAL APPLICATION' : 'FRESH APPLICATION'; ?></div>
+                        </div>
+                        <?php else: ?>
+                        <div class="form-group"></div>
+                        <?php endif; ?>
+                        
+                        <?php if ($application_type === 'renewal' && in_array('old_visa_number', $columns)): ?>
+                        <div class="form-group">
+                            <label>Old Re-Entry Visa Number</label>
+                            <div class="detail-value-field font-monospace fw-bold"><?php echo htmlspecialchars($old_visa_number); ?></div>
+                        </div>
+                        <?php else: ?>
+                        <div class="form-group"></div>
+                        <?php endif; ?>
+                    </div>
+
+                    <div class="form-row">
+                        <?php if (in_array('number_of_dependencies', $columns)): ?>
+                        <div class="form-group">
+                            <label>Number of Dependencies</label>
+                            <div class="detail-value-field"><?php echo htmlspecialchars($number_of_dependencies); ?></div>
+                        </div>
+                        <?php else: ?>
+                        <div class="form-group"></div>
+                        <?php endif; ?>
+                        
+                        <?php if (in_array('contract_duration', $columns)): ?>
+                        <div class="form-group">
+                            <label>Contract Duration</label>
+                            <div class="detail-value-field" style="text-transform: uppercase;"><?php echo htmlspecialchars($contract_duration); ?></div>
+                        </div>
+                        <?php else: ?>
+                        <div class="form-group"></div>
+                        <?php endif; ?>
+                    </div>
+
+                    <div class="form-row">
+                        <?php if (in_array('mfa_letter', $columns)): ?>
+                        <div class="form-group">
+                            <label>MFA Letter of Introduction</label>
+                            <div class="detail-value-field"><?php echo htmlspecialchars($mfa_letter); ?></div>
+                        </div>
+                        <?php else: ?>
+                        <div class="form-group"></div>
+                        <?php endif; ?>
+                        
+                        <?php if (in_array('covering_letter', $columns)): ?>
+                        <div class="form-group">
+                            <label>Covering Letter</label>
+                            <div class="detail-value-field"><?php echo htmlspecialchars($covering_letter); ?></div>
+                        </div>
+                        <?php else: ?>
+                        <div class="form-group"></div>
+                        <?php endif; ?>
+                    </div>
+
+                    <?php if (in_array('entry_stamp_date', $columns)): ?>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Entry Stamp Date</label>
+                            <div class="detail-value-field"><?php echo htmlspecialchars($entry_stamp_date); ?></div>
+                        </div>
+                        <div class="form-group"></div>
+                    </div>
+                    <?php endif; ?>
                 </div>
 
-                <!-- Section: Visa Issuance Details -->
+                <!-- Section: Re-Entry Visa Details -->
                 <div class="section">
-                    <h4 class="section-title"><i class="fa fa-file-signature me-2"></i>Visa Specifications</h4>
-                    <div class="row g-3">
-                        <div class="col-md-6 col-lg-3">
-                            <div class="form-group">
-                                <label>Place of Issue</label>
-                                <div class="detail-value-field"><?php echo htmlspecialchars($place_of_issue); ?></div>
-                            </div>
+                    <h2 class="section-title"><i class="fa fa-file-text-o"></i> Re-Entry Visa Details</h2>
+                    
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Re-Entry Visa Number</label>
+                            <div class="detail-value-field font-monospace fw-bold"><?php echo htmlspecialchars($visa_number); ?></div>
                         </div>
-                        <div class="col-md-6 col-lg-3">
-                            <div class="form-group">
-                                <label>Date of Issue</label>
-                                <div class="detail-value-field"><?php echo htmlspecialchars($date_of_issue); ?></div>
-                            </div>
+                        <div class="form-group"></div>
+                    </div>
+                    
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Embassy/High Commission</label>
+                            <div class="detail-value-field" style="text-transform: uppercase;"><?php echo htmlspecialchars($embassy); ?></div>
                         </div>
-                        <div class="col-md-6 col-lg-3">
-                            <div class="form-group">
-                                <label>Embassy / Mission</label>
-                                <div class="detail-value-field"><?php echo htmlspecialchars($embassy); ?></div>
-                            </div>
-                        </div>
-                        <div class="col-md-6 col-lg-3">
-                            <div class="form-group">
-                                <label>Authority</label>
-                                <div class="detail-value-field"><?php echo htmlspecialchars($authority); ?></div>
-                            </div>
+                        <div class="form-group">
+                            <label>Place of Issue</label>
+                            <div class="detail-value-field" style="text-transform: uppercase;"><?php echo htmlspecialchars($place_of_issue); ?></div>
                         </div>
                     </div>
-                </div>
-
-                <!-- Section: Travel & Validation -->
-                <div class="section">
-                    <h4 class="section-title"><i class="fa fa-plane-departure me-2"></i>Travel & Validity Parameters</h4>
-                    <div class="row g-3">
-                        <div class="col-md-6 col-lg-3">
-                            <div class="form-group">
-                                <label>Validity Period (Within)</label>
-                                <div class="detail-value-field"><?php echo htmlspecialchars($within); ?></div>
-                            </div>
+                    
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Date of Issue</label>
+                            <div class="detail-value-field"><?php echo htmlspecialchars($date_of_issue); ?></div>
                         </div>
-                        <div class="col-md-6 col-lg-3">
-                            <div class="form-group">
-                                <label>Allowed Journeys</label>
-                                <div class="detail-value-field"><?php echo htmlspecialchars($journey); ?></div>
-                            </div>
+                        <div class="form-group">
+                            <label>Authority</label>
+                            <div class="detail-value-field"><?php echo htmlspecialchars($authority); ?></div>
                         </div>
-                        <div class="col-md-6 col-lg-3">
-                            <div class="form-group">
-                                <label>Category</label>
-                                <div class="detail-value-field"><?php echo htmlspecialchars($category); ?></div>
-                            </div>
+                    </div>
+                    
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Fees/Tax</label>
+                            <div class="detail-value-field fw-bold text-success" style="background-color: #f0fdf4; border-color: #bbf7d0;"><?php echo htmlspecialchars($fees); ?></div>
                         </div>
-                        <div class="col-md-6 col-lg-3">
-                            <div class="form-group">
-                                <label>Processing Fees</label>
-                                <div class="detail-value-field fw-bold text-success" style="background-color: #f0fdf4; border-color: #bbf7d0;">
-                                    <?php echo htmlspecialchars($fees); ?>
-                                </div>
-                            </div>
+                        <div class="form-group">
+                            <label>Journey Type</label>
+                            <div class="detail-value-field" style="text-transform: uppercase;"><?php echo htmlspecialchars($journey); ?></div>
+                        </div>
+                    </div>
+                    
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Category</label>
+                            <div class="detail-value-field" style="text-transform: uppercase;"><?php echo htmlspecialchars($category); ?></div>
+                        </div>
+                        <div class="form-group">
+                            <label>Validity Period (Within)</label>
+                            <div class="detail-value-field"><?php echo htmlspecialchars($within); ?></div>
                         </div>
                     </div>
                 </div>

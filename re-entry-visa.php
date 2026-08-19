@@ -33,7 +33,7 @@ if ($checkColumns) {
 }
 
 // Build query based on available columns using table alias to support join
-$sqluse = "SELECT v.visa_number, v.passport_number, v.surname, v.given_name, ";
+$sqluse = "SELECT v.visa_number, v.passport_number, v.surname, v.given_name, v.application_type, ";
 if (in_array('within', $columns)) {
     $sqluse .= "v.within, ";
 } elseif (in_array('validity_date', $columns)) {
@@ -61,16 +61,18 @@ $sqluse .= "v.created_by, u.fname, u.lname
 if ($userRole === 'DataEntry') {
     $sqluse .= " WHERE v.created_by = '" . mysqli_real_escape_string($conn, $username) . "'";
 }
+$sqluse .= " ORDER BY v.application_date DESC, v.id DESC";
 $retrieve = mysqli_query($conn, $sqluse);
 
 if (!$retrieve) {
     // If complex query fails, try basic query
-    $sqluse = "SELECT v.visa_number, v.passport_number, v.surname, v.given_name, v.created_by, u.fname, u.lname 
+    $sqluse = "SELECT v.visa_number, v.passport_number, v.surname, v.given_name, v.application_type, v.created_by, u.fname, u.lname 
                FROM visa_applications v 
                LEFT JOIN users u ON v.created_by = u.service_no";
     if ($userRole === 'DataEntry') {
         $sqluse .= " WHERE v.created_by = '" . mysqli_real_escape_string($conn, $username) . "'";
     }
+    $sqluse .= " ORDER BY v.id DESC";
     $retrieve = mysqli_query($conn, $sqluse);
 }
 
@@ -751,6 +753,70 @@ $numb = $retrieve ? mysqli_num_rows($retrieve) : 0;
             color: #7c6e60 !important;
             opacity: 1 !important;
         }
+        
+        /* Professional Filter Styles */
+        .filter-section {
+            background: #f0e8dc; /* Light brown background */
+            border: none;
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 25px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.02);
+        }
+        .filter-header {
+            font-size: 0.95rem;
+            font-weight: 700;
+            color: var(--dark);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .filter-label {
+            font-size: 0.78rem;
+            font-weight: 700;
+            color: var(--gray);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 8px;
+            display: block;
+        }
+        .filter-select {
+            height: 42px;
+            font-size: 0.88rem;
+            border: 1.5px solid #e1e5e9;
+            border-radius: 8px;
+            background-color: #ffffff;
+            color: var(--dark);
+            padding: 8px 12px;
+            transition: all 0.3s ease;
+        }
+        .filter-select:focus {
+            border-color: var(--primary);
+            background-color: #ffffff;
+            box-shadow: 0 0 0 3px rgba(26, 92, 46, 0.1);
+            outline: none;
+        }
+        .btn-reset {
+            height: 42px;
+            font-size: 0.88rem;
+            font-weight: 600;
+            border: 1.5px solid #e1e5e9;
+            background: #ffffff;
+            color: var(--dark);
+            border-radius: 8px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            transition: all 0.3s ease;
+        }
+        .btn-reset:hover {
+            background: #f8f9fa;
+            border-color: var(--gray);
+            color: var(--primary);
+        }
 </style>
 </head>
 <body>
@@ -830,7 +896,7 @@ $numb = $retrieve ? mysqli_num_rows($retrieve) : 0;
                         <!-- Search Bar -->
                         <div class="search-section">
                             <div class="search-box">
-                                <input type="text" id="searchInput" class="form-control" placeholder="Search by name, visa number, or passport number...">
+                                <input type="text" id="searchInput" class="form-control" placeholder="Search by name, re-entry visa no., or passport number...">
                                 <i class="fa fa-search"></i>
                             </div>
                             <button id="clearSearch" class="btn btn-outline-secondary">
@@ -839,23 +905,58 @@ $numb = $retrieve ? mysqli_num_rows($retrieve) : 0;
                         </div>
                     </div>
                     
+                    <!-- Professional Filter Controls -->
+                    <div class="filter-section">
+                        <div class="filter-header mb-3">
+                            <i class="fa fa-sliders"></i> Filter Records
+                        </div>
+                        <div class="row g-3 align-items-end">
+                            <div class="col-md-4 col-sm-12">
+                                <label for="filterAppType" class="filter-label">
+                                    <i class="fa fa-file-text-o me-1"></i> Application Type
+                                </label>
+                                <select id="filterAppType" class="form-select filter-select w-100">
+                                    <option value="">All Types (Fresh & Renewal)</option>
+                                    <option value="fresh">Fresh</option>
+                                    <option value="renewal">Renewal</option>
+                                </select>
+                            </div>
+                            <div class="col-md-4 col-sm-12">
+                                <label for="filterProcessedBy" class="filter-label">
+                                    <i class="fa fa-user-o me-1"></i> Processed By
+                                </label>
+                                <select id="filterProcessedBy" class="form-select filter-select w-100">
+                                    <option value="">All Officers</option>
+                                </select>
+                            </div>
+                            <div class="col-md-4 col-sm-12">
+                                <label class="filter-label d-none d-md-block">&nbsp;</label>
+                                <button id="resetFilters" class="btn btn-reset w-100">
+                                    <i class="fa fa-refresh"></i> Reset Filters
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    
                     <div class="table-responsive">
                         <table id="applicationsTable" class="table table-striped table-bordered">
                             <thead>
                                 <tr>
-                                    <th>Visa No.</th>
+                                    <th>S/No</th>
+                                    <th>Re-Entry Visa No.</th>
                                     <th>Full Name</th>
                                     <th>Passport Number</th>
+                                    <th>Type of Application</th>
                                     <th>Journey</th>
                                     <th>Within (Validity Period)</th> 
                                     <th>Processed By</th>
                                     <th>Action</th>
                                 </tr>
                             </thead>
-                           <!-- In the table body section, update the button cell: -->
 <tbody>
     <?php
     if($numb > 0 && $retrieve) {
+        $sno = 1;
         while ($ret = mysqli_fetch_assoc($retrieve)) {
             // Escape output for security
             $visa_number = htmlspecialchars($ret['visa_number']);
@@ -866,9 +967,20 @@ $numb = $retrieve ? mysqli_num_rows($retrieve) : 0;
             $within = isset($ret['within']) ? formatNISDate($ret['within']) : 'N/A';
             ?>
             <tr>
+                <td><?php echo $sno++; ?></td>
                 <td><?php echo $visa_number; ?></td>
                 <td><?php echo strtoupper($surname . ' ' . $given_name); ?></td>
                 <td><?php echo $passport_number; ?></td>
+                <td>
+                    <?php 
+                        $app_type = strtolower($ret['application_type'] ?? 'fresh');
+                        if ($app_type === 'renewal') {
+                            echo '<span style="font-size: 0.85rem; font-weight: 600;">RENEWAL</span>';
+                        } else {
+                            echo '<span style="font-size: 0.85rem; font-weight: 600;">FRESH</span>';
+                        }
+                    ?>
+                </td>
                 <td><?php echo $journey; ?></td>
                 <td><?php echo $within; ?></td>
                 <td>
@@ -886,6 +998,7 @@ $numb = $retrieve ? mysqli_num_rows($retrieve) : 0;
                             onclick="viewRecord('<?php echo $visa_number; ?>')">
                             <i class="fa fa-eye"></i> View
                         </button>
+                        <?php if ($userRole !== 'ViewOnly'): ?>
                         <button class="btn btn-edit" type="button" 
                             onclick="editRecord('<?php echo $visa_number; ?>')">
                             <i class="fa fa-edit"></i> Edit
@@ -893,6 +1006,7 @@ $numb = $retrieve ? mysqli_num_rows($retrieve) : 0;
                         <button class="btn btn-global-search" type="button" onclick="location.href='globalsearch'">
                             <i class="fa fa-search-plus"></i> Global Search
                         </button>
+                        <?php endif; ?>
                  </div>
                 </td>
             </tr>
@@ -900,7 +1014,7 @@ $numb = $retrieve ? mysqli_num_rows($retrieve) : 0;
         }
         mysqli_free_result($retrieve);
     } else {
-        echo "<tr><td colspan='7' class='text-center'>No records found</td></tr>";
+        echo "<tr><td colspan='9' class='text-center'>No records found</td></tr>";
     }
     
     // Close database connection
@@ -962,54 +1076,99 @@ $numb = $retrieve ? mysqli_num_rows($retrieve) : 0;
         updateDateTime();
         setInterval(updateDateTime, 1000);
         
-        // Search functionality
-        function initSearch() {
+        // Search and Filter functionality
+        function initSearchAndFilters() {
             const searchInput = document.getElementById('searchInput');
             const clearSearch = document.getElementById('clearSearch');
             const table = document.getElementById('applicationsTable');
+            const filterAppType = document.getElementById('filterAppType');
+            const filterProcessedBy = document.getElementById('filterProcessedBy');
+            const resetFilters = document.getElementById('resetFilters');
             
-            if (!searchInput || !table) return;
-            
+            if (!table) return;
             const tbody = table.getElementsByTagName('tbody')[0];
             if (!tbody) return;
-            
             const noResults = document.getElementById('noResults');
+            const tableRows = tbody.getElementsByTagName('tr');
+
+            // Dynamically populate "Processed By" dropdown from table rows
+            const officersSet = new Set();
+            for (let i = 0; i < tableRows.length; i++) {
+                const cells = tableRows[i].getElementsByTagName('td');
+                if (cells.length >= 8) {
+                    const officerText = cells[7].textContent.trim();
+                    if (officerText && officerText !== 'N/A' && officerText !== 'No records found') {
+                        officersSet.add(officerText);
+                    }
+                }
+            }
             
-            // Search function
-            searchInput.addEventListener('input', function() {
-                const searchTerm = this.value.toLowerCase().trim();
+            if (filterProcessedBy) {
+                filterProcessedBy.innerHTML = '<option value="">All Officers</option>';
+                const sortedOfficers = Array.from(officersSet).sort();
+                sortedOfficers.forEach(officer => {
+                    const opt = document.createElement('option');
+                    opt.value = officer;
+                    opt.textContent = officer;
+                    filterProcessedBy.appendChild(opt);
+                });
+            }
+
+            function applyFilters() {
+                const searchTerm = searchInput ? searchInput.value.toLowerCase().trim() : '';
                 const searchWords = searchTerm.split(/\s+/).filter(word => word.length > 0);
-                const tableRows = tbody.getElementsByTagName('tr');
-                let hasResults = false;
                 
-                // Loop through all table rows
+                const selectedAppType = filterAppType ? filterAppType.value.toLowerCase() : '';
+                const selectedOfficer = filterProcessedBy ? filterProcessedBy.value.toLowerCase() : '';
+                
+                let hasResults = false;
+                let totalRowsCount = 0;
+                
                 for (let i = 0; i < tableRows.length; i++) {
                     const row = tableRows[i];
                     const cells = row.getElementsByTagName('td');
                     
                     // Safe guard: ignore row if it's a message row (like "No records found")
-                    if (cells.length < 3) {
+                    if (cells.length < 8) {
                         continue;
                     }
+                    totalRowsCount++;
                     
-                    let rowMatches = true;
+                    let matchesSearch = true;
+                    let matchesAppType = true;
+                    let matchesOfficer = true;
                     
-                    const visaNo = cells[0] ? cells[0].textContent.toLowerCase() : '';
-                    const fullName = cells[1] ? cells[1].textContent.toLowerCase() : '';
-                    const passportNo = cells[2] ? cells[2].textContent.toLowerCase() : '';
-                    
+                    // 1. Search Text Match
+                    const visaNo = cells[1] ? cells[1].textContent.toLowerCase() : '';
+                    const fullName = cells[2] ? cells[2].textContent.toLowerCase() : '';
+                    const passportNo = cells[3] ? cells[3].textContent.toLowerCase() : '';
                     const combinedRowText = `${visaNo} ${fullName} ${passportNo}`;
                     
-                    // All words of the search query must match somewhere in the row text
                     for (let j = 0; j < searchWords.length; j++) {
                         if (!combinedRowText.includes(searchWords[j])) {
-                            rowMatches = false;
+                            matchesSearch = false;
                             break;
                         }
                     }
                     
-                    // Show or hide the row based on search match
-                    if (rowMatches || searchWords.length === 0) {
+                    // 2. Application Type Match
+                    if (selectedAppType) {
+                        const appTypeCell = cells[4] ? cells[4].textContent.toLowerCase() : '';
+                        if (!appTypeCell.includes(selectedAppType)) {
+                            matchesAppType = false;
+                        }
+                    }
+                    
+                    // 3. Officer Match
+                    if (selectedOfficer) {
+                        const officerCell = cells[7] ? cells[7].textContent.toLowerCase().trim() : '';
+                        if (officerCell !== selectedOfficer) {
+                            matchesOfficer = false;
+                        }
+                    }
+                    
+                    // Show or hide row
+                    if (matchesSearch && matchesAppType && matchesOfficer) {
                         row.style.display = '';
                         hasResults = true;
                     } else {
@@ -1019,7 +1178,7 @@ $numb = $retrieve ? mysqli_num_rows($retrieve) : 0;
                 
                 // Show/hide no results message
                 if (noResults) {
-                    if (hasResults || searchTerm === '') {
+                    if (hasResults || totalRowsCount === 0) {
                         noResults.style.display = 'none';
                         table.style.display = '';
                     } else {
@@ -1027,22 +1186,43 @@ $numb = $retrieve ? mysqli_num_rows($retrieve) : 0;
                         table.style.display = 'none';
                     }
                 }
-            });
+            }
+
+            // Bind events
+            if (searchInput) {
+                searchInput.addEventListener('input', applyFilters);
+            }
+            if (filterAppType) {
+                filterAppType.addEventListener('change', applyFilters);
+            }
+            if (filterProcessedBy) {
+                filterProcessedBy.addEventListener('change', applyFilters);
+            }
             
-            // Clear search function
+            // Clear Search
             if (clearSearch) {
                 clearSearch.addEventListener('click', function() {
                     searchInput.value = '';
-                    searchInput.dispatchEvent(new Event('input'));
+                    applyFilters();
                     searchInput.focus();
+                });
+            }
+            
+            // Reset Filters
+            if (resetFilters) {
+                resetFilters.addEventListener('click', function() {
+                    if (searchInput) searchInput.value = '';
+                    if (filterAppType) filterAppType.value = '';
+                    if (filterProcessedBy) filterProcessedBy.value = '';
+                    applyFilters();
                 });
             }
         }
 
         if (document.readyState === 'loading') {
-            document.addEventListener('DOMContentLoaded', initSearch);
+            document.addEventListener('DOMContentLoaded', initSearchAndFilters);
         } else {
-            initSearch();
+            initSearchAndFilters();
         }
     </script>
 </body>

@@ -1,4 +1,5 @@
 <?php 
+ob_start();
 error_reporting(E_ALL);
 ini_set('display_errors', 1);
 require_once('security.php');
@@ -48,7 +49,18 @@ if (mysqli_num_rows($table_check) == 0) {
     }
 }
 
-
+$success_msg = null;
+if (isset($_SESSION['success_msg'])) {
+    $success_msg = $_SESSION['success_msg'];
+    unset($_SESSION['success_msg']);
+} elseif (isset($_GET['success'])) {
+    $success_msg = "User created successfully!";
+}
+$error_msg = null;
+if (isset($_SESSION['error_msg'])) {
+    $error_msg = $_SESSION['error_msg'];
+    unset($_SESSION['error_msg']);
+}
 
 $username = $_SESSION['username'];
 $role = $_SESSION['role'];
@@ -125,48 +137,84 @@ if (isset($_POST['reset_password'])) {
 }
 
 // Handle user creation form submission
-if (isset($_POST['regUser'])) {
+if (isset($_POST['regUser']) || isset($_POST['serviceNo'])) {
     if (!isset($_POST['csrf_token']) || $_POST['csrf_token'] !== $_SESSION['csrf_token']) {
         $error_msg = "Security validation failed. Please refresh the page.";
     } else {
-        $serviceNo = mysqli_real_escape_string($conn, $_POST['serviceNo']);
-        $userRole = mysqli_real_escape_string($conn, $_POST['userRole']);
+        $serviceNo = trim($_POST['serviceNo'] ?? '');
+        $userRole = trim($_POST['userRole'] ?? '');
+        $fname = trim($_POST['fname'] ?? '');
+        $lname = trim($_POST['lname'] ?? '');
+        $email = trim($_POST['email'] ?? '');
+        $password_raw = $_POST['password'] ?? '';
         
-        if ($currentUserRole === 'Supervisor' && $userRole === 'Admin') {
+        if (empty($serviceNo)) {
+            $error_msg = "Error: Service Number is required.";
+        } elseif (empty($userRole)) {
+            $error_msg = "Error: User Role is required.";
+        } elseif ($currentUserRole === 'Supervisor' && $userRole === 'Admin') {
             $error_msg = "Error: Supervisors are not authorized to create Admin users.";
+        } elseif (empty($fname)) {
+            $error_msg = "Error: First Name is required.";
+        } elseif (empty($lname)) {
+            $error_msg = "Error: Last Name is required.";
+        } elseif (empty($email)) {
+            $error_msg = "Error: Email is required.";
+        } elseif (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+            $error_msg = "Error: Invalid email format.";
+        } elseif (empty($password_raw)) {
+            $error_msg = "Error: Password is required.";
+        } elseif (strlen($password_raw) < 6) {
+            $error_msg = "Error: Password must be at least 6 characters long.";
         } else {
-            $fname = mysqli_real_escape_string($conn, $_POST['fname']);
-            $lname = mysqli_real_escape_string($conn, $_POST['lname']);
-            $email = mysqli_real_escape_string($conn, $_POST['email']);
-            $password = password_hash($_POST['password'], PASSWORD_DEFAULT);
+            $serviceNo = mysqli_real_escape_string($conn, $serviceNo);
+            $userRole = mysqli_real_escape_string($conn, $userRole);
+            $fname = mysqli_real_escape_string($conn, $fname);
+            $lname = mysqli_real_escape_string($conn, $lname);
+            $email = mysqli_real_escape_string($conn, $email);
+            $password = password_hash($password_raw, PASSWORD_DEFAULT);
             
             $photo = '';
-            if (isset($_FILES['photo']) && $_FILES['photo']['error'] === 0) {
-                $allowed = ['jpg', 'jpeg', 'png'];
-                $filename = $_FILES['photo']['name'];
-                $filetmp = $_FILES['photo']['tmp_name'];
-                $fileSize = $_FILES['photo']['size'];
-                $ext = strtolower(pathinfo($filename, PATHINFO_EXTENSION));
-                
-                if (in_array($ext, $allowed)) {
-                    if ($fileSize <= 2097152) {
-                        $newFilename = uniqid() . '.' . $ext;
-                        $uploadPath = 'uploads/' . $newFilename;
-                        
-                        if (!is_dir('uploads')) {
-                            mkdir('uploads', 0755, true);
-                        }
-                        
-                        if (move_uploaded_file($filetmp, $uploadPath)) {
-                            $photo = $uploadPath;
+            // Passport photo upload is optional. Check if a photo is provided.
+            if (isset($_FILES['photo']) && $_FILES['photo']['error'] !== UPLOAD_ERR_NO_FILE) {
+                if ($_FILES['photo']['error'] === UPLOAD_ERR_OK) {
+                    $allowed = ['jpg', 'jpeg', 'png'];
+                    $filename = $_FILES['photo']['name'];
+                    $filetmp = $_FILES['photo']['tmp_name'];
+                    $fileSize = $_FILES['photo']['size'];
+                    $ext = strtolower(pathinfo($filename, PATHINFO_EXTENSION));
+                    
+                    if (in_array($ext, $allowed)) {
+                        if ($fileSize <= 2097152) {
+                            $newFilename = uniqid() . '.' . $ext;
+                            $uploadPath = 'uploads/' . $newFilename;
+                            
+                            if (!is_dir('uploads')) {
+                                mkdir('uploads', 0755, true);
+                            }
+                            
+                            if (move_uploaded_file($filetmp, $uploadPath)) {
+                                $photo = $uploadPath;
+                            } else {
+                                $error_msg = "Failed to upload file.";
+                            }
                         } else {
-                            $error_msg = "Failed to upload file.";
+                            $error_msg = "File size must be less than 2MB.";
                         }
                     } else {
-                        $error_msg = "File size must be less than 2MB.";
+                        $error_msg = "Only JPG, JPEG, and PNG files are allowed.";
                     }
                 } else {
-                    $error_msg = "Only JPG, JPEG, and PNG files are allowed.";
+                    $upload_errors = [
+                        UPLOAD_ERR_INI_SIZE   => "The uploaded file exceeds the upload_max_filesize directive in php.ini.",
+                        UPLOAD_ERR_FORM_SIZE  => "The uploaded file exceeds the MAX_FILE_SIZE directive that was specified in the HTML form.",
+                        UPLOAD_ERR_PARTIAL    => "The uploaded file was only partially uploaded.",
+                        UPLOAD_ERR_NO_TMP_DIR => "Missing a temporary folder.",
+                        UPLOAD_ERR_CANT_WRITE => "Failed to write file to disk.",
+                        UPLOAD_ERR_EXTENSION  => "A PHP extension stopped the file upload."
+                    ];
+                    $error_code = $_FILES['photo']['error'];
+                    $error_msg = isset($upload_errors[$error_code]) ? $upload_errors[$error_code] : "Unknown upload error occurred.";
                 }
             }
             
@@ -186,8 +234,10 @@ if (isset($_POST['regUser'])) {
                             VALUES ('$serviceNo', '$userRole', '$fname', '$lname', '$email', '$password', '$photo')";
                     
                     if (mysqli_query($conn, $sql)) {
-                        $success_msg = "User created successfully!";
-                        $_POST = array();
+                        $_SESSION['success_msg'] = "User created successfully!";
+                        session_write_close();
+                        header("Location: createuser?success=1");
+                        exit();
                     } else {
                         $error_msg = "Error: " . mysqli_error($conn);
                     }
@@ -468,6 +518,8 @@ $total_users = mysqli_num_rows($users_result);
         }
         
         .form-control, .form-select {
+            display: block;
+            width: 100%;
             border-radius: 8px;
             border: 2px solid #e1e5e9;
             padding: 10px 15px;
@@ -514,23 +566,29 @@ $total_users = mysqli_num_rows($users_result);
             box-shadow: 0 4px 12px rgba(243, 156, 18, 0.3);
         }
         
-        /* Alert Styles */
-        .alert {
-            border-radius: 12px;
-            border: none;
+        /* Alert/Status Message Styles matching new-record.php */
+        .status-message {
             padding: 15px 20px;
             margin-bottom: 20px;
-            box-shadow: 0 3px 10px rgba(0, 0, 0, 0.08);
+            border-radius: 8px;
+            font-weight: 500;
+            font-size: 0.95rem;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            box-shadow: 0 3px 10px rgba(0, 0, 0, 0.05);
         }
-        
-        .alert-success {
-            background: linear-gradient(135deg, #d4edda, #c3e6cb);
-            color: #155724;
+
+        .status-success {
+            background-color: rgba(39, 174, 96, 0.1);
+            color: #27ae60;
+            border: 1px solid #27ae60;
         }
-        
-        .alert-danger {
-            background: linear-gradient(135deg, #f8d7da, #f5c6cb);
-            color: #721c24;
+
+        .status-error {
+            background-color: rgba(220, 53, 69, 0.1);
+            color: #dc3545;
+            border: 1px solid #dc3545;
         }
         
         /* Table Styles */
@@ -658,6 +716,11 @@ $total_users = mysqli_num_rows($users_result);
             color: #388e3c;
         }
         
+        .badge-viewonly {
+            background: #eceff1;
+            color: #455a64;
+        }
+        
         .badge-active {
             background: linear-gradient(135deg, #d4edda, #c3e6cb);
             color: #155724;
@@ -676,26 +739,28 @@ $total_users = mysqli_num_rows($users_result);
         
         /* Role Cards */
         .role-item {
-            margin-bottom: 15px;
-            padding-bottom: 15px;
-            border-bottom: 1px solid #e1e5e9;
+            margin-bottom: 12px;
+            padding: 12px 16px;
+            border-radius: 8px;
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            transition: all 0.3s ease;
         }
-        
-        .role-item:last-child {
-            margin-bottom: 0;
-            padding-bottom: 0;
-            border-bottom: none;
+        .role-item:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
         }
+
         
         .role-title {
-            font-weight: 600;
+            font-weight: 700;
             margin-bottom: 4px;
             font-size: 0.95rem;
         }
         
         .role-description {
             font-size: 0.85rem;
-            color: var(--gray);
+            color: #64748b;
         }
         
         /* Footer Styles */
@@ -923,24 +988,22 @@ $total_users = mysqli_num_rows($users_result);
             
             <!-- Display success/error messages -->
             <?php if (isset($success_msg)): ?>
-                <div class="alert alert-success alert-dismissible fade show" role="alert">
+                <div class="status-message status-success">
                     <i class="fa fa-check-circle"></i> <?php echo $success_msg; ?>
-                    <button type="button" class="btn-close" onclick="this.parentElement.style.display='none'">&times;</button>
                 </div>
             <?php endif; ?>
             
             <?php if (isset($error_msg)): ?>
-                <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                <div class="status-message status-error">
                     <i class="fa fa-exclamation-circle"></i> <?php echo $error_msg; ?>
-                    <button type="button" class="btn-close" onclick="this.parentElement.style.display='none'">&times;</button>
                 </div>
             <?php endif; ?>
 
             <!-- Main Content Grid -->
-            <div class="row">
-                <div class="col-lg-8 col-md-7">
+            <div class="row g-4 align-items-stretch">
+                <div class="col-lg-8 col-md-7 d-flex">
                     <!-- User Creation Form -->
-                    <div class="card">
+                    <div class="card w-100 mb-0">
                         <div class="card-header">
                             <h4><i class="fa fa-user-plus" style="color: var(--secondary);"></i> Create New User</h4>
                         </div>
@@ -957,13 +1020,14 @@ $total_users = mysqli_num_rows($users_result);
                                         <label for="userRole" class="form-label">User Role</label>
                                         <select name="userRole" class="form-select" id="userRole" required>
                                             <option value="">--Select User Role--</option>
-                                            <?php if ($currentUserRole === 'Admin'): ?>
+                                            <!-- <?php if ($currentUserRole === 'Admin'): ?>
                                                 <option value="Admin" <?php echo (isset($_POST['userRole']) && $_POST['userRole'] == 'Admin') ? 'selected' : ''; ?>>Administrator</option>
-                                            <?php endif; ?>
+                                            <?php endif; ?> -->
                                             <?php if ($currentUserRole === 'Admin' || $currentUserRole === 'Supervisor'): ?>
-                                                <option value="Supervisor" <?php echo (isset($_POST['userRole']) && $_POST['userRole'] == 'Supervisor') ? 'selected' : ''; ?>>Supervisor</option>
+                                                <option value="Supervisor" <?php echo (isset($_POST['userRole']) && $_POST['userRole'] == 'Supervisor') ? 'selected' : ''; ?>>Administrator</option>
                                             <?php endif; ?>
                                             <option value="DataEntry" <?php echo (isset($_POST['userRole']) && $_POST['userRole'] == 'DataEntry') ? 'selected' : ''; ?>>Data Entry</option>
+                                            <option value="ViewOnly" <?php echo (isset($_POST['userRole']) && $_POST['userRole'] == 'ViewOnly') ? 'selected' : ''; ?>>View only</option>
                                         </select>
                                     </div>
                                 </div>
@@ -1009,28 +1073,31 @@ $total_users = mysqli_num_rows($users_result);
                             </form>
                         </div>
                     </div>
-
                 </div> <!-- End of col-lg-8 col-md-7 -->
                 
                 <!-- Sidebar Cards -->
-                <div class="col-lg-4 col-md-5">
+                <div class="col-lg-4 col-md-5 d-flex">
                     <!-- User Roles Card -->
-                    <div class="card">
+                    <div class="card w-100 mb-0">
                         <div class="card-header">
                             <h4><i class="fa fa-key" style="color: var(--warning);"></i> User Roles</h4>
                         </div>
                         <div class="card-body">
-                            <div class="role-item">
+                            <!-- <div class="role-item role-admin">
                                 <div class="role-title text-primary">Administrator</div>
                                 <div class="role-description">Full system access with user management capabilities</div>
-                            </div>
-                            <div class="role-item">
-                                <div class="role-title text-info">Supervisor</div>
+                            </div> -->
+                            <div class="role-item role-Administrator">
+                                <div class="role-title text-info">Administrator</div>
                                 <div class="role-description">Can create, edit, print and view reports</div>
                             </div>
-                            <div class="role-item">
+                            <div class="role-item role-dataentry">
                                 <div class="role-title text-success">Data Entry</div>
                                 <div class="role-description">Can create, edit and print visa applications</div>
+                            </div>
+                            <div class="role-item role-viewonly">
+                                <div class="role-title text-secondary">View only</div>
+                                <div class="role-description">Can view comprehensive reports and the dashboard only</div>
                             </div>
                         </div>
                     </div>
@@ -1050,7 +1117,8 @@ $total_users = mysqli_num_rows($users_result);
                                     <table class="table table-hover align-middle mb-0" style="font-size: 0.9rem; width: 100%;">
                                         <thead class="table-light">
                                             <tr>
-                                                <th style="padding-left: 20px;">User Profile</th>
+                                                <th style="padding-left: 20px; width: 60px;">S/No</th>
+                                                <th>User Profile</th>
                                                 <th>Email</th>
                                                 <th>Role</th>
                                                 <th>Status</th>
@@ -1061,13 +1129,15 @@ $total_users = mysqli_num_rows($users_result);
                                         <tbody>
                                             <?php 
                                             mysqli_data_seek($users_result, 0);
+                                            $u_sno = 1;
                                             while ($user = mysqli_fetch_assoc($users_result)): 
                                                 $role_class = 'badge-' . strtolower($user['role']);
                                                 if ($role_class == 'badge-dat') $role_class = 'badge-dataentry';
                                                 if ($role_class == 'badge-adm') $role_class = 'badge-admin';
                                             ?>
                                             <tr>
-                                                <td style="padding-left: 20px;">
+                                                <td style="padding-left: 20px; font-weight: 600; color: var(--gray);"><?php echo $u_sno++; ?></td>
+                                                <td>
                                                     <div class="profile-cell">
                                                         <div class="avatar-container">
                                                             <?php 

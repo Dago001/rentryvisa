@@ -3,6 +3,12 @@ error_reporting(E_ALL);
 ini_set('display_errors', 1);
 require_once('security.php');
 
+$userRole = $_SESSION['role'] ?? 'DataEntry';
+if ($userRole === 'ViewOnly') {
+    header("Location: index");
+    exit();
+}
+
 include("db/db.php");
 
 // Check database connection
@@ -79,8 +85,8 @@ if (isset($_GET['id'])) {
         
         .print-area {
             /* Standard visa sticker size in mm converted to pixels (1mm = 3.78px approx) */
-            width: 500px;  /* 184mm * 3.78 ≈ 696px */
-            height: 400px; /* 260mm * 3.78 ≈ 983px */
+            width: 696px;  /* 184mm * 3.78 ≈ 696px */
+            height: 983px; /* 260mm * 3.78 ≈ 983px */
             position: relative;
             transform-origin: 0 0;
             background-color: transparent;
@@ -120,8 +126,8 @@ if (isset($_GET['id'])) {
         
         .category {
             top: 40.8%;
-            left: 17.6%;
-            font-size: 16px;
+            left: 8%;
+            font-size: 25px;
             writing-mode: vertical-rl;
             text-orientation: mixed;
             height: 23.1%;
@@ -133,8 +139,8 @@ if (isset($_GET['id'])) {
         
         .unicef-tag {
             top: 40.8%;
-            left: 80.5%;
-            font-size: 16px;
+            left: 89%;
+            font-size: 25px;
             writing-mode: vertical-rl;
             text-orientation: mixed;
             height: 23.1%;
@@ -147,7 +153,7 @@ if (isset($_GET['id'])) {
         .full-name {
             top: 38.9%;
             left: 34.5%;
-            font-size: 16px;
+            font-size: 25px;
             width: 56.8%;
             text-transform: uppercase;
             max-height: 4.6%;
@@ -156,55 +162,55 @@ if (isset($_GET['id'])) {
         .passport-number {
             top: 45.4%;
             left: 34.5%;
-            font-size: 16px;
+            font-size: 25px;
             width: 37.9%;
         }
         
         .authority {
             top: 45.5%;
             left: 56.4%;
-            font-size: 16px;
+            font-size: 25px;
             width: 34.1%;
         }
         
         .place-of-issue {
             top: 53%;
             left: 32.6%;
-            font-size: 16px;
+            font-size: 25px;
             width: 37.9%;
         }
         
         .fees {
             top: 53.3%;
             left: 67.8%;
-            font-size: 16px;
+            font-size: 25px;
             width: 34.1%;
         }
         
         .journey {
             top: 58.9%;
             left: 43.9%;
-            font-size: 16px;
+            font-size: 25px;
             width: 60%;
         }
         
         .valid-until {
             top: 67%;
             left: 30.7%;
-            font-size: 16px;
+            font-size: 25px;
             width: 37.9%;
         }
         
         .date-of-issue {
-            top: 74.5%;
-            left: 52.6%;
-            font-size: 16px;
+            top: 80%;
+            left: 67%;
+            font-size: 25px;
             width: 34.1%;
         }
         
         @media print {
             @page {
-                size: auto; /* Allows switching layout orientation in print dialog */
+                size: 260mm 184mm; /* Force 16K landscape size (260x184mm) */
                 margin: 0 !important;
                 padding: 0 !important;
             }

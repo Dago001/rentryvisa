@@ -121,6 +121,30 @@ if (in_array('remarks', $columns)) {
     $insertFields['remarks'] = $remarks;
 }
 
+$newOptionalFields = [
+    'application_type' => 'application_type',
+    'number_of_dependencies' => 'number_of_dependencies',
+    'visa_type' => 'visa_type',
+    'gender' => 'gender',
+    'mfa_letter' => 'mfa_letter',
+    'covering_letter' => 'covering_letter',
+    'entry_stamp' => 'entry_stamp',
+    'entry_stamp_date' => 'entry_stamp_date',
+    'contract_duration' => 'contract_duration',
+    'old_visa_number' => 'old_visa_number',
+    'passport_date_of_issue' => 'passport_date_of_issue',
+    'passport_date_of_expiry' => 'passport_date_of_expiry'
+];
+foreach ($newOptionalFields as $post_key => $col_name) {
+    if (in_array($col_name, $columns) && isset($_POST[$post_key]) && $_POST[$post_key] !== '') {
+        if ($col_name === 'number_of_dependencies') {
+            $insertFields[$col_name] = intval($_POST[$post_key]);
+        } else {
+            $insertFields[$col_name] = strtoupper(mysqli_real_escape_string($conn, trim($_POST[$post_key])));
+        }
+    }
+}
+
 $fields_str = implode(', ', array_keys($insertFields));
 $vals = [];
 foreach ($insertFields as $val) {

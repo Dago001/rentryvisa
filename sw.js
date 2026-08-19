@@ -1,4 +1,4 @@
-const CACHE_NAME = 'nisrev-ultra-cache-v2';
+const CACHE_NAME = 'nisrev-ultra-cache-v3';
 const ASSETS_TO_CACHE = [
     './',
     './index',
@@ -71,6 +71,11 @@ self.addEventListener('fetch', event => {
 
     const requestUrl = event.request.url;
 
+    // Bypass service worker for dynamic API calls (containing .php or query parameters)
+    if (requestUrl.includes('.php') || requestUrl.includes('?')) {
+        return;
+    }
+
     // 1. Cache-First Strategy for static assets (CSS, JS, Fonts, Images)
     if (isStaticAsset(requestUrl)) {
         event.respondWith(
@@ -92,31 +97,29 @@ self.addEventListener('fetch', event => {
         return;
     }
 
-    // 2. Stale-While-Revalidate Strategy for HTML page layouts
+    // 2. Network-First Strategy for HTML page layouts
     event.respondWith(
-        caches.match(event.request).then(cachedResponse => {
-            const fetchPromise = fetch(event.request)
-                .then(networkResponse => {
-                    if (networkResponse && networkResponse.status === 200) {
-                        const responseClone = networkResponse.clone();
-                        caches.open(CACHE_NAME).then(cache => {
-                            cache.put(event.request, responseClone);
-                        });
+        fetch(event.request)
+            .then(networkResponse => {
+                if (networkResponse && networkResponse.status === 200) {
+                    const responseClone = networkResponse.clone();
+                    caches.open(CACHE_NAME).then(cache => {
+                        cache.put(event.request, responseClone);
+                    });
+                }
+                return networkResponse;
+            })
+            .catch(() => {
+                // Fallback to cache if network fails (e.g. offline)
+                return caches.match(event.request).then(cachedResponse => {
+                    if (cachedResponse) {
+                        return cachedResponse;
                     }
-                    return networkResponse;
-                })
-                .catch(() => {
-                    // Fallback to cache if network fails
-                    return cachedResponse;
+                    // Ultimate fallback to index (login form) if all fail
+                    if (event.request.headers.get('accept') && event.request.headers.get('accept').includes('text/html')) {
+                        return caches.match('./index');
+                    }
                 });
-
-            // Return cached response instantly if available, otherwise wait for network fetch
-            return cachedResponse || fetchPromise;
-        }).catch(() => {
-            // Ultimate fallback to index (login form) if all fail
-            if (event.request.headers.get('accept').includes('text/html')) {
-                return caches.match('./index');
-            }
-        })
+            })
     );
 });
