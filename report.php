@@ -9,9 +9,9 @@ if (!isset($_SESSION['username'])) {
     exit();
 }
 
-// Verify role is Admin or Supervisor
+// Verify role is Admin, Supervisor, or ViewOnly
 $userRole = $_SESSION['role'] ?? 'DataEntry';
-if ($userRole !== 'Admin' && $userRole !== 'Supervisor') {
+if ($userRole !== 'Admin' && $userRole !== 'Supervisor' && $userRole !== 'ViewOnly') {
     header("Location: user_dashboard");
     exit();
 }
@@ -23,12 +23,22 @@ $start_date = $_GET['start_date'] ?? date('Y-m-01'); // Default to start of curr
 $end_date = $_GET['end_date'] ?? date('Y-m-t'); // Default to end of current month
 $report_type = $_GET['report_type'] ?? 'monthly';
 
+// Static stats that are not affected by filter
+$static_total = 0;
+$static_active = 0;
+$static_fresh = 0;
+$static_renewal = 0;
+
+$filtered_fresh_count = 0;
+$filtered_renewal_count = 0;
+
 // Initialize data arrays
 $status_data = ['active' => 0, 'pending' => 0];
 $monthly_data = [];
 $user_stats = [];
-$top_applications = [];
+$gender_stats = [];
 $audit_logs = [];
+$filtered_applications = [];
 
 try {
     // First, ensure the visa_applications table exists
@@ -37,6 +47,46 @@ try {
         // Table doesn't exist, initialize empty data
         $overall_stats = ['total' => 0, 'approved' => 0, 'pending' => 0, 'rejected' => 0];
     } else {
+        // Fetch static counts
+        $q_total = mysqli_query($conn, "SELECT COUNT(*) as count FROM visa_applications");
+        if ($q_total && $row = mysqli_fetch_assoc($q_total)) {
+            $static_total = (int)$row['count'];
+        }
+        $q_current_month = mysqli_query($conn, "SELECT COUNT(*) as count FROM visa_applications WHERE MONTH(application_date) = MONTH(CURRENT_DATE()) AND YEAR(application_date) = YEAR(CURRENT_DATE())");
+        $static_current_month = 0;
+        if ($q_current_month && $row = mysqli_fetch_assoc($q_current_month)) {
+            $static_current_month = (int)$row['count'];
+        }
+        $q_fresh = mysqli_query($conn, "SELECT COUNT(*) as count FROM visa_applications WHERE application_type = 'fresh'");
+        if ($q_fresh && $row = mysqli_fetch_assoc($q_fresh)) {
+            $static_fresh = (int)$row['count'];
+        }
+        $q_renewal = mysqli_query($conn, "SELECT COUNT(*) as count FROM visa_applications WHERE application_type = 'renewal'");
+        if ($q_renewal && $row = mysqli_fetch_assoc($q_renewal)) {
+            $static_renewal = (int)$row['count'];
+        }
+
+        // Fetch filtered applications list
+        $filter_query = "SELECT visa_number, passport_number, surname, given_name, application_type, application_date 
+                         FROM visa_applications 
+                         WHERE application_date BETWEEN ? AND ? 
+                         ORDER BY application_date DESC";
+        if ($stmt_filter = mysqli_prepare($conn, $filter_query)) {
+            $sd = $start_date . ' 00:00:00';
+            $ed = $end_date . ' 23:59:59';
+            mysqli_stmt_bind_param($stmt_filter, "ss", $sd, $ed);
+            mysqli_stmt_execute($stmt_filter);
+            $filter_result = mysqli_stmt_get_result($stmt_filter);
+            while ($row = mysqli_fetch_assoc($filter_result)) {
+                $filtered_applications[] = $row;
+                if (strtolower($row['application_type'] ?? 'fresh') === 'renewal') {
+                    $filtered_renewal_count++;
+                } else {
+                    $filtered_fresh_count++;
+                }
+            }
+            mysqli_stmt_close($stmt_filter);
+        }
         // Status distribution data - using the actual statuses from process_visa.php
         $status_query = "SELECT status, COUNT(*) as count FROM visa_applications 
                         WHERE application_date BETWEEN ? AND ? 
@@ -56,12 +106,11 @@ try {
             $status_data[$row['status']] = $row['count'];
         }
 
-        // Monthly application data for the current year - using application_date field
+        // Monthly application data (unaffected by filters)
         $monthly_query = "SELECT 
                             MONTH(application_date) as month, 
                             COUNT(*) as count 
                           FROM visa_applications 
-                          WHERE YEAR(application_date) = YEAR(CURRENT_DATE())
                           GROUP BY MONTH(application_date) 
                           ORDER BY month";
         $monthly_result = mysqli_query($conn, $monthly_query);
@@ -95,22 +144,39 @@ try {
             $user_stats[] = $row;
         }
 
-        // Top applications by nationality
-        $top_query = "SELECT 
-                        nationality as country,
-                        COUNT(*) as count 
-                      FROM visa_applications 
-                      WHERE application_date BETWEEN ? AND ?
-                      GROUP BY nationality 
-                      ORDER BY count DESC 
-                      LIMIT 8";
-        $stmt = mysqli_prepare($conn, $top_query);
-        mysqli_stmt_bind_param($stmt, "ss", $start_date, $end_date);
+        // Applications by gender
+        $gender_field = 'gender';
+        $cols_query = mysqli_query($conn, "SHOW COLUMNS FROM visa_applications");
+        if ($cols_query) {
+            $db_cols = [];
+            while ($c = mysqli_fetch_assoc($cols_query)) {
+                $db_cols[] = $c['Field'];
+            }
+            if (in_array('gender', $db_cols) && in_array('sex', $db_cols)) {
+                $gender_field = "COALESCE(NULLIF(TRIM(gender), ''), NULLIF(TRIM(sex), ''))";
+            } elseif (in_array('sex', $db_cols)) {
+                $gender_field = 'sex';
+            }
+        }
+
+        $gender_query = "SELECT 
+                            CASE 
+                                WHEN UPPER(TRIM($gender_field)) IN ('M', 'MALE') THEN 'Male'
+                                WHEN UPPER(TRIM($gender_field)) IN ('F', 'FEMALE') THEN 'Female'
+                            END as gender,
+                            COUNT(*) as count 
+                          FROM visa_applications 
+                          WHERE $gender_field IS NOT NULL 
+                            AND TRIM($gender_field) != ''
+                            AND UPPER(TRIM($gender_field)) IN ('M', 'MALE', 'F', 'FEMALE')
+                          GROUP BY gender 
+                          ORDER BY count DESC";
+        $stmt = mysqli_prepare($conn, $gender_query);
         mysqli_stmt_execute($stmt);
-        $top_result = mysqli_stmt_get_result($stmt);
+        $gender_result = mysqli_stmt_get_result($stmt);
         
-        while ($row = mysqli_fetch_assoc($top_result)) {
-            $top_applications[] = $row;
+        while ($row = mysqli_fetch_assoc($gender_result)) {
+            $gender_stats[] = $row;
         }
 
         // Overall statistics - adjusted for actual statuses
@@ -137,7 +203,7 @@ try {
                             FROM activity_log 
                             WHERE created_at BETWEEN ? AND ? 
                             ORDER BY id DESC 
-                            LIMIT 50";
+                            LIMIT 200";
             if ($stmt_audit = mysqli_prepare($conn, $audit_query)) {
                 mysqli_stmt_bind_param($stmt_audit, "ss", $start_date_ts, $end_date_ts);
                 mysqli_stmt_execute($stmt_audit);
@@ -752,6 +818,199 @@ try {
                 transform: none;
             }
         }
+
+        /* Custom Stats Boxes for Filtered Results */
+        .filtered-stats-container {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            padding: 15px;
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 12px;
+        }
+        .filtered-stat-box {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 12px 18px;
+            border-radius: 8px;
+            background: white;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.02);
+            border: none !important;
+        }
+        .filtered-stat-box.fresh-box {
+            border-left: none !important;
+        }
+        .filtered-stat-box.renewal-box {
+            border-left: none !important;
+        }
+        .filtered-stat-box.total-box {
+            border-left: none !important;
+        }
+        .stat-icon-wrapper {
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.1rem;
+        }
+        .fresh-box .stat-icon-wrapper { background: #f0fdf4; color: #16a34a; }
+        .renewal-box .stat-icon-wrapper { background: #fffbeb; color: #d97706; }
+        .total-box .stat-icon-wrapper { background: #eff6ff; color: #3b82f6; }
+        
+        .stat-details {
+            display: flex;
+            flex-direction: column;
+        }
+        .stat-val {
+            font-size: 1.25rem;
+            font-weight: 700;
+            color: #1e293b;
+            line-height: 1.2;
+        }
+        .stat-lbl {
+            font-size: 0.75rem;
+            font-weight: 600;
+            color: #64748b;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        /* Filter Button Custom Styling */
+        .btn-filter-green {
+            background: linear-gradient(135deg, #16a34a, #15803d) !important;
+            border: none !important;
+            color: white !important;
+            font-weight: 600 !important;
+            transition: all 0.3s ease !important;
+        }
+        .btn-filter-green:hover {
+            background: linear-gradient(135deg, #15803d, #166534) !important;
+            box-shadow: 0 4px 12px rgba(22, 163, 74, 0.3) !important;
+            transform: translateY(-1px);
+        }
+
+        /* Audit Table Styles */
+        .audit-table thead th {
+            background-color: #f8fafc !important;
+            color: #475569 !important;
+            font-size: 0.8rem !important;
+            font-weight: 700 !important;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            border-bottom: 2px solid #e2e8f0 !important;
+            padding: 14px 16px !important;
+        }
+        .audit-table tbody td {
+            padding: 14px 16px !important;
+            border-bottom: 1px solid #f1f5f9 !important;
+            font-size: 0.875rem !important;
+            color: #334155;
+        }
+        .audit-table tbody tr:hover {
+            background-color: #f8fafc !important;
+        }
+        .audit-timestamp {
+            color: #64748b;
+            font-size: 0.8rem;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+        .audit-badge {
+            display: inline-flex;
+            align-items: center;
+            padding: 4px 8px;
+            border-radius: 6px;
+            font-size: 0.75rem;
+            font-weight: 700;
+            letter-spacing: 0.03em;
+            text-transform: uppercase;
+        }
+        .audit-badge.badge-create {
+            background: #dcfce7 !important;
+            color: #166534 !important;
+            border: 1px solid #bbf7d0 !important;
+        }
+        .audit-badge.badge-update {
+            background: #dbeafe !important;
+            color: #1e40af !important;
+            border: 1px solid #bfdbfe !important;
+        }
+        .audit-badge.badge-delete {
+            background: #fee2e2 !important;
+            color: #991b1b !important;
+            border: 1px solid #fecaca !important;
+        }
+        .audit-badge.badge-login {
+            background: #fef3c7 !important;
+            color: #92400e !important;
+            border: 1px solid #fde68a !important;
+        }
+        .audit-badge.badge-other {
+            background: #f1f5f9 !important;
+            color: #475569 !important;
+            border: 1px solid #e2e8f0 !important;
+        }
+        .audit-ip {
+            background: #f1f5f9;
+            color: #64748b;
+            font-family: monospace;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 0.8rem;
+            border: 1px solid #e2e8f0;
+            display: inline-block;
+        }
+        .btn-minimize {
+            background: #f1f5f9 !important;
+            border: 1px solid #cbd5e1 !important;
+            color: #475569 !important;
+            font-weight: 600 !important;
+            font-size: 0.8rem !important;
+            padding: 5px 12px !important;
+            border-radius: 6px !important;
+            transition: all 0.2s ease !important;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+        
+        /* Audit trail filters */
+        .audit-filter-section {
+            background-color: #f8f9fa;
+            border: 1px solid #e2dcd0;
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 20px;
+        }
+        .audit-filter-section .form-control, .audit-filter-section .form-select {
+            border: 1.5px solid #e2dcd0;
+            border-radius: 6px;
+            height: 38px;
+            font-size: 0.88rem;
+        }
+        .audit-filter-section .form-control:focus, .audit-filter-section .form-select:focus {
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(26, 92, 46, 0.1);
+        }
+        .audit-filter-section .btn-secondary {
+            background-color: #ffffff;
+            border: 1.5px solid #e2dcd0;
+            color: var(--dark);
+            height: 38px;
+            font-weight: 600;
+            border-radius: 6px;
+            transition: all 0.3s;
+        }
+        .audit-filter-section .btn-secondary:hover {
+            background-color: #f5f5f5;
+            color: var(--primary);
+            border-color: var(--gray);
+        }
     </style>
 </head>
 <body>
@@ -820,12 +1079,36 @@ try {
 
         <!-- Report Content -->
         <div class="page-content">
-            <!-- Report Header with Filters -->
-            <div class="report-header">
+            <!-- Statistics Overview (Moved Up & Static Figures) -->
+            <div class="stats-grid" style="margin-bottom: 25px;">
+                <div class="stat-card">
+                    <i class="fa fa-list-alt text-info" style="font-size: 1.8rem; margin-bottom: 10px; color: var(--info);"></i>
+                    <div class="stat-number" style="color: var(--info);"><?php echo number_format($static_total); ?></div>
+                    <div class="stat-label">Total Applications</div>
+                </div>
+                <div class="stat-card">
+                    <i class="fa fa-file-o text-success" style="font-size: 1.8rem; margin-bottom: 10px; color: #16a34a;"></i>
+                    <div class="stat-number" style="color: #16a34a;"><?php echo number_format($static_fresh); ?></div>
+                    <div class="stat-label">Total Fresh Applications</div>
+                </div>
+                <div class="stat-card">
+                    <i class="fa fa-refresh text-warning" style="font-size: 1.8rem; margin-bottom: 10px; color: #d97706;"></i>
+                    <div class="stat-number" style="color: #d97706;"><?php echo number_format($static_renewal); ?></div>
+                    <div class="stat-label">Total Renewal Applications</div>
+                </div>
+                <div class="stat-card">
+                    <i class="fa fa-calendar text-primary" style="font-size: 1.8rem; margin-bottom: 10px; color: var(--primary);"></i>
+                    <div class="stat-number" style="color: var(--primary);"><?php echo number_format($static_current_month); ?></div>
+                    <div class="stat-label">Applications This Month</div>
+                </div>
+            </div>
+
+            <!-- Report Header with Filters (Moved Below Stats Grid) -->
+            <div class="report-header" style="margin-bottom: 25px;">
                 <div class="row align-items-center">
                     <div class="col-lg-6 col-md-12 mb-3 mb-lg-0">
-                        <h4>Visa Application Analytics</h4>
-                        <p class="mb-0">Comprehensive reports and statistics</p>
+                        <h4>Filter Applications Report</h4>
+                        <p class="mb-0">Select dates to filter applications by month</p>
                     </div>
                     <div class="col-lg-6 col-md-12">
                         <form method="GET" class="filter-form">
@@ -846,7 +1129,7 @@ try {
                                     </select>
                                 </div>
                                 <div class="col-12 col-sm">
-                                    <button type="submit" class="btn btn-primary btn-block">
+                                    <button type="submit" class="btn btn-filter-green btn-block">
                                         <i class="fa fa-filter"></i> Filter
                                     </button>
                                 </div>
@@ -856,27 +1139,99 @@ try {
                 </div>
             </div>
 
-            <!-- Statistics Overview -->
-            <div class="stats-grid">
-                <div class="stat-card total">
-                    <i class="fa fa-passport text-info"></i>
-                    <div class="stat-number"><?php echo $overall_stats['total'] ?? 0; ?></div>
-                    <div class="stat-label">Total Applications</div>
-                </div>
-                <div class="stat-card approved">
-                    <i class="fa fa-check-circle text-success"></i>
-                    <div class="stat-number"><?php echo $overall_stats['approved'] ?? 0; ?></div>
-                    <div class="stat-label">Active</div>
-                </div>
-                <div class="stat-card pending">
-                    <i class="fa fa-clock-o text-warning"></i>
-                    <div class="stat-number"><?php echo $overall_stats['pending'] ?? 0; ?></div>
-                    <div class="stat-label">Pending</div>
-                </div>
-                <div class="stat-card rejected">
-                    <i class="fa fa-times-circle text-danger"></i>
-                    <div class="stat-number"><?php echo $overall_stats['rejected'] ?? 0; ?></div>
-                    <div class="stat-label">Rejected</div>
+            <!-- Filtered Application Records Section (Placed Under Filters) -->
+            <div class="row mb-4">
+                <div class="col-12">
+                    <div class="data-card">
+                        <h5 class="d-flex align-items-center mb-3 flex-wrap gap-2">
+                            <span><i class="fa fa-list-alt me-2" style="color: var(--primary);"></i> Filtered Application Records (<?php echo htmlspecialchars($start_date); ?> to <?php echo htmlspecialchars($end_date); ?>)</span>
+                            <div class="ms-md-auto d-flex gap-2 align-items-center flex-wrap">
+                                <button type="button" class="btn btn-sm btn-warning text-white" onclick="printTable('filteredTableContainer')" title="Print Table">
+                                    <i class="fa fa-print"></i> Print Table
+                                </button>
+                                <button type="button" class="btn btn-minimize" onclick="toggleFilterTable()" id="toggleTableBtn">
+                                    <i class="fa fa-minus"></i> Minimize
+                                </button>
+                            </div>
+                        </h5>
+                        <div id="filteredTableContainer">
+                            <div class="table-responsive" style="max-height: 400px; overflow-y: auto;">
+                                <table id="filteredTable" class="table table-hover table-striped">
+                                    <thead style="position: sticky; top: 0; background: white; z-index: 1;">
+                                        <tr>
+                                            <th>S/No</th>
+                                            <th>Application Date</th>
+                                            <th>Re-Entry Visa Number</th>
+                                            <th>Applicant Name</th>
+                                            <th>Passport Number</th>
+                                            <th>Type of Application</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <?php if (!empty($filtered_applications)): ?>
+                                            <?php 
+                                            $f_sno = 1;
+                                            foreach ($filtered_applications as $f_app): 
+                                            ?>
+                                                <tr>
+                                                    <td><?php echo $f_sno++; ?></td>
+                                                    <td class="text-nowrap small">
+                                                        <?php echo date('M j, Y g:i A', strtotime($f_app['application_date'])); ?>
+                                                    </td>
+                                                    <td class="font-monospace fw-bold">
+                                                        <?php echo htmlspecialchars($f_app['visa_number']); ?>
+                                                    </td>
+                                                    <td>
+                                                        <?php echo htmlspecialchars(strtoupper($f_app['surname'] . ' ' . $f_app['given_name'])); ?>
+                                                    </td>
+                                                    <td>
+                                                        <code><?php echo htmlspecialchars($f_app['passport_number']); ?></code>
+                                                    </td>
+                                                    <td>
+                                                         <?php 
+                                                             $f_type = strtolower($f_app['application_type'] ?? 'fresh');
+                                                             if ($f_type === 'renewal') {
+                                                                 echo '<span style="font-size: 0.85rem; font-weight: 600;">RENEWAL</span>';
+                                                             } else {
+                                                                 echo '<span style="font-size: 0.85rem; font-weight: 600;">FRESH</span>';
+                                                             }
+                                                         ?>
+                                                     </td>
+                                                </tr>
+                                            <?php endforeach; ?>
+                                        <?php else: ?>
+                                            <tr>
+                                                <td colspan="6" class="text-center text-muted">No records found for the selected period.</td>
+                                            </tr>
+                                        <?php endif; ?>
+                                    </tbody>
+                                </table>
+                            </div>
+                            <div class="filtered-stats-container mt-4 mb-2">
+                                <div class="filtered-stat-box fresh-box">
+                                    <div class="stat-icon-wrapper"><i class="fa fa-file-text"></i></div>
+                                    <div class="stat-details">
+                                        <span class="stat-val"><?php echo $filtered_fresh_count; ?></span>
+                                        <span class="stat-lbl">Filtered Fresh</span>
+                                    </div>
+                                </div>
+                                <div class="filtered-stat-box renewal-box">
+                                    <div class="stat-icon-wrapper"><i class="fa fa-refresh"></i></div>
+                                    <div class="stat-details">
+                                        <span class="stat-val"><?php echo $filtered_renewal_count; ?></span>
+                                        <span class="stat-lbl">Filtered Renewal</span>
+                                    </div>
+                                </div>
+                                <div class="filtered-stat-box total-box">
+                                    <div class="stat-icon-wrapper"><i class="fa fa-list"></i></div>
+                                    <div class="stat-details">
+                                        <span class="stat-val"><?php echo count($filtered_applications); ?></span>
+                                        <span class="stat-lbl">Total Filtered</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
 
@@ -884,7 +1239,7 @@ try {
             <div class="charts-grid">
                 <!-- Status Distribution Pie Chart -->
                 <div class="chart-card">
-                    <h5><i class="fa fa-pie-chart" style="color: var(--primary);"></i> Application Status Distribution</h5>
+                    <h5><i class="fa fa-pie-chart" style="color: var(--primary);"></i> Application Status Distribution (Fresh vs Renewal)</h5>
                     <div class="chart-container">
                         <canvas id="statusChart"></canvas>
                     </div>
@@ -898,111 +1253,52 @@ try {
                     </div>
                 </div>
 
-                <!-- User Performance Bar Chart -->
+                <!-- Gender Distribution Bar Chart -->
                 <div class="chart-card">
-                    <h5><i class="fa fa-users" style="color: var(--info);"></i> Top Performers (Users)</h5>
+                    <h5><i class="fa fa-venus-mars" style="color: var(--warning);"></i> Applications by Gender</h5>
                     <div class="chart-container">
-                        <canvas id="userChart"></canvas>
-                    </div>
-                </div>
-
-                <!-- Country Distribution Bar Chart -->
-                <div class="chart-card">
-                    <h5><i class="fa fa-globe" style="color: var(--warning);"></i> Applications by Country</h5>
-                    <div class="chart-container">
-                        <canvas id="countryChart"></canvas>
+                        <canvas id="genderChart"></canvas>
                     </div>
                 </div>
             </div>
 
-            <!-- Detailed Data Tables -->
-            <div class="row">
-                <!-- User Statistics Table -->
-                <div class="col-lg-6 col-md-12 mb-3 mb-lg-0">
-                    <div class="data-card">
-                        <h5><i class="fa fa-user-secret" style="color: var(--primary);"></i> User Performance</h5>
-                        <div class="table-responsive">
-                            <table class="table table-hover">
-                                <thead>
-                                    <tr>
-                                        <th>User</th>
-                                        <th>Total Apps</th>
-                                        <th>Active</th>
-                                        <th>Success Rate</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    <?php if (!empty($user_stats)): ?>
-                                        <?php foreach ($user_stats as $user): ?>
-                                            <tr>
-                                                <td><?php echo htmlspecialchars($user['username']); ?></td>
-                                                <td><?php echo $user['applications']; ?></td>
-                                                <td><?php echo $user['approved']; ?></td>
-                                                <td>
-                                                    <?php 
-                                                        $rate = $user['applications'] > 0 ? ($user['approved'] / $user['applications']) * 100 : 0;
-                                                        echo number_format($rate, 1) . '%';
-                                                    ?>
-                                                </td>
-                                            </tr>
-                                        <?php endforeach; ?>
-                                    <?php else: ?>
-                                        <tr>
-                                            <td colspan="4" class="text-center">No user data available</td>
-                                        </tr>
-                                    <?php endif; ?>
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                </div>
 
-                <!-- Country Statistics Table -->
-                <div class="col-lg-6 col-md-12">
-                    <div class="data-card">
-                        <h5><i class="fa fa-flag" style="color: var(--secondary);"></i> Applications by Country</h5>
-                        <div class="table-responsive">
-                            <table class="table table-hover">
-                                <thead>
-                                    <tr>
-                                        <th>Country</th>
-                                        <th>Applications</th>
-                                        <th>Percentage</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    <?php if (!empty($top_applications)): ?>
-                                        <?php 
-                                        $total_country = array_sum(array_column($top_applications, 'count'));
-                                        foreach ($top_applications as $country): 
-                                            $percentage = $total_country > 0 ? ($country['count'] / $total_country) * 100 : 0;
-                                        ?>
-                                            <tr>
-                                                <td><?php echo htmlspecialchars($country['country']); ?></td>
-                                                <td><?php echo $country['count']; ?></td>
-                                                <td><?php echo number_format($percentage, 1); ?>%</td>
-                                            </tr>
-                                        <?php endforeach; ?>
-                                    <?php else: ?>
-                                        <tr>
-                                            <td colspan="3" class="text-center">No country data available</td>
-                                        </tr>
-                                    <?php endif; ?>
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-            </div>
 
             <!-- System Audit Trail Section -->
             <div class="row mt-4">
                 <div class="col-12">
                     <div class="data-card">
                         <h5><i class="fa fa-history" style="color: var(--primary);"></i> System Audit Trail</h5>
+                        
+                        <!-- Interactive Audit Trail Filters -->
+                        <div class="audit-filter-section">
+                            <div class="row g-2 align-items-center">
+                                <div class="col-md-4">
+                                    <input type="text" id="auditSearchInput" class="form-control" placeholder="Search description...">
+                                </div>
+                                <div class="col-md-3">
+                                    <select id="auditFilterOperator" class="form-select">
+                                        <option value="">All Operators</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-3">
+                                    <select id="auditFilterAction" class="form-select">
+                                        <option value="">All Actions</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-2">
+                                    <button id="resetAuditFilters" class="btn btn-secondary w-100">
+                                        <i class="fa fa-refresh"></i> Reset
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                        
                         <div class="table-responsive" style="max-height: 400px; overflow-y: auto;">
-                            <table class="table table-hover table-striped">
+                            <table class="table table-hover table-striped audit-table">
                                 <thead style="position: sticky; top: 0; background: white; z-index: 1;">
                                     <tr>
+                                        <th>S/No</th>
                                         <th>Timestamp</th>
                                         <th>Operator</th>
                                         <th>Action</th>
@@ -1012,10 +1308,16 @@ try {
                                 </thead>
                                 <tbody>
                                     <?php if (!empty($audit_logs)): ?>
-                                        <?php foreach ($audit_logs as $log): ?>
+                                        <?php 
+                                        $a_sno = 1;
+                                        foreach ($audit_logs as $log): 
+                                        ?>
                                             <tr>
-                                                <td class="text-nowrap small">
-                                                    <?php echo htmlspecialchars($log['created_at']); ?>
+                                                <td><?php echo $a_sno++; ?></td>
+                                                <td>
+                                                    <div class="audit-timestamp">
+                                                        <i class="fa fa-clock-o"></i> <?php echo htmlspecialchars($log['created_at']); ?>
+                                                    </div>
                                                 </td>
                                                 <td class="font-monospace fw-bold">
                                                     <?php echo htmlspecialchars($log['user_id']); ?>
@@ -1023,32 +1325,32 @@ try {
                                                 <td>
                                                     <?php 
                                                         $action = strtoupper($log['action']);
-                                                        $badge_class = 'bg-secondary text-white';
+                                                        $badge_class = 'badge-other';
                                                         if (strpos($action, 'CREATE') !== false) {
-                                                            $badge_class = 'bg-success text-white';
+                                                            $badge_class = 'badge-create';
                                                         } elseif (strpos($action, 'UPDATE') !== false || strpos($action, 'EDIT') !== false) {
-                                                            $badge_class = 'bg-primary text-white';
+                                                            $badge_class = 'badge-update';
                                                         } elseif (strpos($action, 'DELETE') !== false || strpos($action, 'REMOVE') !== false) {
-                                                            $badge_class = 'bg-danger text-white';
+                                                            $badge_class = 'badge-delete';
                                                         } elseif (strpos($action, 'LOGIN') !== false) {
-                                                            $badge_class = 'bg-warning text-dark';
+                                                            $badge_class = 'badge-login';
                                                         }
                                                     ?>
-                                                    <span class="badge <?php echo $badge_class; ?>" style="font-size: 0.75rem;">
+                                                    <span class="audit-badge <?php echo $badge_class; ?>">
                                                         <?php echo htmlspecialchars($action); ?>
                                                     </span>
                                                 </td>
                                                 <td>
                                                     <?php echo htmlspecialchars($log['description']); ?>
                                                 </td>
-                                                <td class="font-monospace small">
-                                                    <?php echo htmlspecialchars($log['ip_address'] ?? 'N/A'); ?>
+                                                <td>
+                                                    <span class="audit-ip"><?php echo htmlspecialchars($log['ip_address'] ?? 'N/A'); ?></span>
                                                 </td>
                                             </tr>
                                         <?php endforeach; ?>
                                     <?php else: ?>
                                         <tr>
-                                            <td colspan="5" class="text-center text-muted">No audit trail logs recorded for this period.</td>
+                                            <td colspan="6" class="text-center text-muted">No audit trail logs recorded for this period.</td>
                                         </tr>
                                     <?php endif; ?>
                                 </tbody>
@@ -1058,16 +1360,12 @@ try {
                 </div>
             </div>
 
+
+
             <!-- Export Section -->
             <div class="export-section">
                 <h5><i class="fa fa-download" style="color: var(--primary);"></i> Export Reports</h5>
                 <div class="btn-group flex-wrap">
-                    <button class="btn btn-success btn-export" onclick="exportPDF()">
-                        <i class="fa fa-file-pdf-o"></i> Export as PDF
-                    </button>
-                    <button class="btn btn-info btn-export" onclick="exportExcel()">
-                        <i class="fa fa-file-excel-o"></i> Export as Excel
-                    </button>
                     <button class="btn btn-warning btn-export" onclick="printReport()">
                         <i class="fa fa-print"></i> Print Report
                     </button>
@@ -1082,11 +1380,11 @@ try {
         const statusChart = new Chart(statusCtx, {
             type: 'pie',
             data: {
-                labels: ['Active', 'Pending'],
+                labels: ['Fresh Applications', 'Renewal Applications'],
                 datasets: [{
                     data: [
-                        <?php echo $status_data['active'] ?? 0; ?>,
-                        <?php echo $status_data['pending'] ?? 0; ?>
+                        <?php echo $static_fresh; ?>,
+                        <?php echo $static_renewal; ?>
                     ],
                     backgroundColor: ['#27ae60', '#f39c12'],
                     borderWidth: 2,
@@ -1134,72 +1432,174 @@ try {
             }
         });
 
-        // User Performance Bar Chart
-        const userCtx = document.getElementById('userChart').getContext('2d');
-        const userChart = new Chart(userCtx, {
-            type: 'bar',
+        // Gender Distribution Pie Chart
+        const genderCtx = document.getElementById('genderChart').getContext('2d');
+        const genderChart = new Chart(genderCtx, {
+            type: 'pie',
             data: {
-                labels: <?php echo !empty($user_stats) ? json_encode(array_column($user_stats, 'username')) : json_encode([]); ?>,
+                labels: <?php echo !empty($gender_stats) ? json_encode(array_column($gender_stats, 'gender')) : json_encode([]); ?>,
                 datasets: [{
                     label: 'Applications',
-                    data: <?php echo !empty($user_stats) ? json_encode(array_column($user_stats, 'applications')) : json_encode([]); ?>,
-                    backgroundColor: '#3498db',
-                    borderColor: '#2e7d46',
-                    borderWidth: 1
+                    data: <?php echo !empty($gender_stats) ? json_encode(array_column($gender_stats, 'count')) : json_encode([]); ?>,
+                    backgroundColor: [
+                        '#3498db', '#f43f5e', '#64748b'
+                    ],
+                    borderColor: '#ffffff',
+                    borderWidth: 1.5
                 }]
             },
             options: {
                 responsive: true,
-                maintainAspectRatio: false,
-                scales: {
-                    y: {
-                        beginAtZero: true
-                    }
-                }
+                maintainAspectRatio: false
             }
         });
 
-        // Country Distribution Bar Chart
-        const countryCtx = document.getElementById('countryChart').getContext('2d');
-        const countryChart = new Chart(countryCtx, {
-            type: 'bar',
-            data: {
-                labels: <?php echo !empty($top_applications) ? json_encode(array_column($top_applications, 'country')) : json_encode([]); ?>,
-                datasets: [{
-                    label: 'Applications',
-                    data: <?php echo !empty($top_applications) ? json_encode(array_column($top_applications, 'count')) : json_encode([]); ?>,
-                    backgroundColor: '#f39c12',
-                    borderColor: '#e67e22',
-                    borderWidth: 1
-                }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                scales: {
-                    y: {
-                        beginAtZero: true
-                    }
-                }
+        function toggleFilterTable() {
+            const container = document.getElementById('filteredTableContainer');
+            const btn = document.getElementById('toggleTableBtn');
+            if (container.style.display === 'none') {
+                container.style.display = 'block';
+                btn.innerHTML = '<i class="fa fa-minus"></i> Minimize';
+            } else {
+                container.style.display = 'none';
+                btn.innerHTML = '<i class="fa fa-plus"></i> Maximize';
             }
-        });
-
-        // Export Functions
-        function exportPDF() {
-            alert('PDF export functionality would be implemented here');
-            // In a real application, this would generate a PDF report
-        }
-
-        function exportExcel() {
-            alert('Excel export functionality would be implemented here');
-            // In a real application, this would generate an Excel report
         }
 
         function printReport() {
             window.print();
         }
+
+        function printTable(tableContainerId) {
+            const container = document.getElementById(tableContainerId);
+            if (!container) {
+                alert('No table container found to print');
+                return;
+            }
+            const tableContent = container.innerHTML;
+            
+            const printWindow = window.open('', '', 'height=600,width=800');
+            printWindow.document.write('<html><head><title>Print Filtered Application Records</title>');
+            printWindow.document.write('<link href="vendors/bootstrap/dist/css/bootstrap.min.css" rel="stylesheet">');
+            printWindow.document.write('<style>');
+            printWindow.document.write('body{padding:30px; font-family:sans-serif; color:#333;}');
+            printWindow.document.write('table{width:100%; border-collapse:collapse; margin-top:20px;}');
+            printWindow.document.write('th,td{border:1px solid #e2e8f0; padding:12px; text-align:left; font-size:14px;}');
+            printWindow.document.write('th{background-color:#f8fafc; color:#475569; font-weight:bold; text-transform:uppercase; font-size:12px; letter-spacing:0.05em;}');
+            printWindow.document.write('.text-nowrap{white-space:nowrap;} .small{font-size:12px;}');
+            printWindow.document.write('h2{color:#1a5c2e; margin-bottom:5px;} h5{color:#64748b; margin-top:0; font-weight:normal;}');
+            printWindow.document.write('.table-responsive { overflow: visible !important; max-height: none !important; }');
+            printWindow.document.write('</style></head><body>');
+            printWindow.document.write('<h2>Filtered Application Records</h2>');
+            printWindow.document.write('<h5>Report Period: <?php echo htmlspecialchars($start_date); ?> to <?php echo htmlspecialchars($end_date); ?></h5>');
+            printWindow.document.write(tableContent);
+            printWindow.document.write('</body></html>');
+            printWindow.document.close();
+            
+            printWindow.focus();
+            setTimeout(function() {
+                printWindow.print();
+                printWindow.close();
+            }, 500);
+        }
         
 
+        
+        // System Audit Trail filter logic
+        document.addEventListener('DOMContentLoaded', function() {
+            const table = document.querySelector('.audit-table');
+            if (!table) return;
+            const tbody = table.querySelector('tbody');
+            if (!tbody) return;
+            const rows = tbody.querySelectorAll('tr');
+
+            const searchInput = document.getElementById('auditSearchInput');
+            const filterOperator = document.getElementById('auditFilterOperator');
+            const filterAction = document.getElementById('auditFilterAction');
+            const resetBtn = document.getElementById('resetAuditFilters');
+
+            // Dynamically populate Operator and Action options
+            const operators = new Set();
+            const actions = new Set();
+
+            rows.forEach(row => {
+                const cells = row.querySelectorAll('td');
+                if (cells.length >= 6) {
+                    const operatorText = cells[2].textContent.trim();
+                    const actionBadge = cells[3].querySelector('.audit-badge');
+                    const actionText = actionBadge ? actionBadge.textContent.trim() : cells[3].textContent.trim();
+
+                    if (operatorText) operators.add(operatorText);
+                    if (actionText) actions.add(actionText);
+                }
+            });
+
+            if (filterOperator) {
+                Array.from(operators).sort().forEach(op => {
+                    const opt = document.createElement('option');
+                    opt.value = op;
+                    opt.textContent = op;
+                    filterOperator.appendChild(opt);
+                });
+            }
+
+            if (filterAction) {
+                Array.from(actions).sort().forEach(act => {
+                    const opt = document.createElement('option');
+                    opt.value = act;
+                    opt.textContent = act;
+                    filterAction.appendChild(opt);
+                });
+            }
+
+            function applyAuditFilters() {
+                const searchVal = searchInput ? searchInput.value.toLowerCase().trim() : '';
+                const operatorVal = filterOperator ? filterOperator.value.toLowerCase() : '';
+                const actionVal = filterAction ? filterAction.value.toLowerCase() : '';
+
+                rows.forEach(row => {
+                    const cells = row.querySelectorAll('td');
+                    if (cells.length < 6) return;
+
+                    const operatorText = cells[2].textContent.toLowerCase().trim();
+                    const actionBadge = cells[3].querySelector('.audit-badge');
+                    const actionText = (actionBadge ? actionBadge.textContent : cells[3].textContent).toLowerCase().trim();
+                    const descriptionText = cells[4].textContent.toLowerCase().trim();
+
+                    let matchSearch = true;
+                    let matchOperator = true;
+                    let matchAction = true;
+
+                    if (searchVal && !descriptionText.includes(searchVal)) {
+                        matchSearch = false;
+                    }
+                    if (operatorVal && operatorText !== operatorVal) {
+                        matchOperator = false;
+                    }
+                    if (actionVal && actionText !== actionVal) {
+                        matchAction = false;
+                    }
+
+                    if (matchSearch && matchOperator && matchAction) {
+                        row.style.display = '';
+                    } else {
+                        row.style.display = 'none';
+                    }
+                });
+            }
+
+            if (searchInput) searchInput.addEventListener('input', applyAuditFilters);
+            if (filterOperator) filterOperator.addEventListener('change', applyAuditFilters);
+            if (filterAction) filterAction.addEventListener('change', applyAuditFilters);
+            if (resetBtn) {
+                resetBtn.addEventListener('click', function() {
+                    if (searchInput) searchInput.value = '';
+                    if (filterOperator) filterOperator.value = '';
+                    if (filterAction) filterAction.value = '';
+                    applyAuditFilters();
+                });
+            }
+        });
     </script>
     <?php 
     if (file_exists('footer.php')) {

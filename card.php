@@ -3,6 +3,19 @@ error_reporting(E_ALL);
 ini_set('display_errors', 1);
 require_once('security.php');
 
+// Check if user is logged in
+if (!isset($_SESSION['user_id']) && !isset($_SESSION['username'])) {
+    header("Location: index");
+    exit();
+}
+
+// Block ViewOnly role from accessing printing card
+$userRole = $_SESSION['role'] ?? 'DataEntry';
+if ($userRole === 'ViewOnly' || strcasecmp($userRole, 'viewonly') === 0 || strcasecmp($userRole, 'view only') === 0) {
+    header("Location: index");
+    exit();
+}
+
 include("db/db.php");
 
 // Check database connection
@@ -74,13 +87,13 @@ if (isset($_GET['id'])) {
             justify-content: center;
             align-items: center;
             min-height: 100vh;
-            font-family: 'Courier New', Courier, monospace;
+            font-family: 'Lato', sans-serif;
         }
         
         .print-area {
             /* Standard visa sticker size in mm converted to pixels (1mm = 3.78px approx) */
-            width: 500px;  /* 184mm * 3.78 ≈ 696px */
-            height: 400px; /* 260mm * 3.78 ≈ 983px */
+            width: 696px;  /* 184mm * 3.78 ≈ 696px */
+            height: 983px; /* 260mm * 3.78 ≈ 983px */
             position: relative;
             transform-origin: 0 0;
             background-color: transparent;
@@ -101,7 +114,7 @@ if (isset($_GET['id'])) {
         
         .visa-text {
             position: absolute;
-            font-weight: bold;
+            /*font-weight: bold;*/
             color: #000;
             overflow: hidden;
             text-overflow: ellipsis;
@@ -113,15 +126,15 @@ if (isset($_GET['id'])) {
         .visa-number {
             top: 3.8%;
             left: 70.9%;
-            font-size: 16px;
+            font-size: 14px;
             letter-spacing: 1.5px;
             width: 40%;
         }
         
         .category {
-            top: 40.8%;
-            left: 17.6%;
-            font-size: 16px;
+            top: 50%;
+            left: 9.5%;
+            font-size: 22px;
             writing-mode: vertical-rl;
             text-orientation: mixed;
             height: 23.1%;
@@ -132,9 +145,9 @@ if (isset($_GET['id'])) {
         }
         
         .unicef-tag {
-            top: 40.8%;
-            left: 80.5%;
-            font-size: 16px;
+            top: 50%;
+            left: 90%;
+            font-size: 22px;
             writing-mode: vertical-rl;
             text-orientation: mixed;
             height: 23.1%;
@@ -145,66 +158,66 @@ if (isset($_GET['id'])) {
         }
         
         .full-name {
-            top: 38.9%;
-            left: 34.5%;
-            font-size: 16px;
+            top: 48%;
+            left: 27%;
+            font-size: 22px;
             width: 56.8%;
             text-transform: uppercase;
             max-height: 4.6%;
         }
         
         .passport-number {
-            top: 45.4%;
-            left: 34.5%;
-            font-size: 16px;
+            top: 55%;
+            left: 29%;
+            font-size: 22px;
             width: 37.9%;
         }
         
         .authority {
-            top: 45.5%;
-            left: 56.4%;
-            font-size: 16px;
+            top: 54%;
+            left: 64%;
+            font-size: 22px;
             width: 34.1%;
         }
         
         .place-of-issue {
-            top: 53%;
-            left: 32.6%;
-            font-size: 16px;
+            top: 62%;
+            left: 29%;
+            font-size: 22px;
             width: 37.9%;
         }
         
         .fees {
-            top: 53.3%;
-            left: 67.8%;
-            font-size: 16px;
+            top: 62.3%;
+            left: 76.8%;
+            font-size: 22px;
             width: 34.1%;
         }
         
         .journey {
-            top: 58.9%;
-            left: 43.9%;
-            font-size: 16px;
+            top: 68%;
+            left: 37%;
+            font-size: 22px;
             width: 60%;
         }
         
         .valid-until {
-            top: 67%;
-            left: 30.7%;
-            font-size: 16px;
+            top: 76%;
+            left: 20%;
+            font-size: 22px;
             width: 37.9%;
         }
         
         .date-of-issue {
-            top: 74.5%;
-            left: 52.6%;
-            font-size: 16px;
+            top: 82%;
+            left: 65%;
+            font-size: 22px;
             width: 34.1%;
         }
         
         @media print {
             @page {
-                size: auto; /* Allows switching layout orientation in print dialog */
+                size: 260mm 184mm; /* Force 16K landscape size (260x184mm) */
                 margin: 0 !important;
                 padding: 0 !important;
             }
@@ -404,10 +417,10 @@ if (isset($_GET['id'])) {
                 <?php echo $fees; ?>
             </div>
             
-            <!-- Journey -->
-            <div class="visa-text journey">
-                <?php echo !empty($journey) ? ($journey . '&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;TO NIGERIA') : ''; ?>
-            </div>
+           <!-- Journey -->
+<div class="visa-text journey">
+    <?php echo !empty($journey) ? ($journey . '<span style="display: inline-block; margin-left: 155px;">TO NIGERIA</span>') : ''; ?>
+</div>
             
             <!-- Valid Until -->
             <div class="visa-text valid-until">

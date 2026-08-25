@@ -29,9 +29,9 @@ if (isset($_SESSION['user_id'])) {
     // Redirect based on user role
     $role = $_SESSION['role'] ?? 'DataEntry';
     
-    // Admin and Supervisor go to admin dashboard
-    if ($role === 'Admin' || $role === 'Supervisor') {
-        showDashboard(); // Admin/Supervisor dashboard
+    // Admin, Supervisor, and ViewOnly go to general admin dashboard
+    if ($role === 'Admin' || $role === 'Supervisor' || $role === 'ViewOnly' || strcasecmp($role, 'viewonly') === 0 || strcasecmp($role, 'view only') === 0) {
+        showDashboard(); // General Dashboard for Admin, Supervisor, and ViewOnly
     } else {
         // Regular DataEntry users go to user dashboard
         header("Location: user_dashboard");
@@ -94,7 +94,8 @@ function showLoginForm() {
                     session_regenerate_id(true);
 
                     // Redirect based on role
-                    if ($_SESSION['role'] === 'Admin' || $_SESSION['role'] === 'Supervisor') {
+                    $finalRole = $_SESSION['role'] ?? 'DataEntry';
+                    if ($finalRole === 'Admin' || $finalRole === 'Supervisor' || $finalRole === 'ViewOnly' || strcasecmp($finalRole, 'viewonly') === 0 || strcasecmp($finalRole, 'view only') === 0) {
                         header("Location: index");
                     } else {
                         header("Location: user_dashboard");
@@ -305,6 +306,26 @@ function showLoginForm() {
                 flex-shrink: 0;
                 font-size: 0.85rem;
             }
+
+            .alert-success {
+                background: linear-gradient(135deg, #15803d, #16a34a);
+                color: white;
+                border: none;
+                border-radius: 7px;
+                padding: 7px 10px;
+                margin-bottom: 10px;
+                font-size: 0.78rem;
+                box-shadow: 0 3px 8px rgba(22, 163, 74, 0.15);
+                display: flex;
+                align-items: flex-start;
+                gap: 5px;
+            }
+            
+            .alert-success i {
+                margin-top: 0;
+                flex-shrink: 0;
+                font-size: 0.85rem;
+            }
             
             .form-group {
                 margin-bottom: 10px;
@@ -468,6 +489,14 @@ function showLoginForm() {
                 </div>
                 
                 <div class="login-body">
+                    <?php if (isset($_SESSION['message'])): ?>
+                        <div class="alert alert-<?php echo $_SESSION['message']['type'] === 'success' ? 'success' : 'danger'; ?>">
+                            <i class="fa fa-<?php echo $_SESSION['message']['type'] === 'success' ? 'check-circle' : 'exclamation-triangle'; ?>"></i> 
+                            <span><?php echo htmlspecialchars($_SESSION['message']['text']); ?></span>
+                        </div>
+                        <?php unset($_SESSION['message']); ?>
+                    <?php endif; ?>
+
                     <?php if (!empty($error_message)): ?>
                         <div class="alert alert-danger">
                             <i class="fa fa-exclamation-triangle"></i> 
@@ -615,6 +644,8 @@ function showDashboard() {
     global $conn;
     
     $numb = 0;
+    $total_fresh = 0;
+    $total_renewal = 0;
     $stats = [
         'monthly_visas' => 0,
         'pending_visas' => 0,
@@ -635,6 +666,23 @@ function showDashboard() {
             if ($retrieve && mysqli_num_rows($retrieve) > 0) {
                 $total_result = mysqli_fetch_assoc($retrieve);
                 $numb = $total_result['total'] ?? 0;
+            }
+            
+            // Count fresh and renewal applications
+            $check_fresh = mysqli_query($conn, "SELECT COUNT(*) as total FROM visa_applications WHERE application_type = 'fresh'");
+            if ($check_fresh && $row = mysqli_fetch_assoc($check_fresh)) {
+                $total_fresh = (int)$row['total'];
+            }
+            $check_renewal = mysqli_query($conn, "SELECT COUNT(*) as total FROM visa_applications WHERE application_type = 'renewal'");
+            if ($check_renewal && $row = mysqli_fetch_assoc($check_renewal)) {
+                $total_renewal = (int)$row['total'];
+            }
+            
+            // Count daily total applications
+            $check_daily = mysqli_query($conn, "SELECT COUNT(*) as total FROM visa_applications WHERE DATE(application_date) = CURDATE()");
+            $daily_total = 0;
+            if ($check_daily && $row = mysqli_fetch_assoc($check_daily)) {
+                $daily_total = (int)$row['total'];
             }
             
             $query = "SELECT COUNT(*) as monthly_visas FROM visa_applications 
@@ -662,7 +710,7 @@ function showDashboard() {
             }
             
             $query3 = "SELECT v.visa_number, v.surname, v.given_name, v.passport_number, v.application_date, v.created_by,
-                              u.fname, u.lname
+                              v.application_type, u.fname, u.lname
                        FROM visa_applications v
                        LEFT JOIN users u ON v.created_by = u.service_no
                        ORDER BY v.application_date DESC 
@@ -684,21 +732,21 @@ function showDashboard() {
                 }
             }
 
-            // Query monthly distribution for the last 6 months
-            $monthly_labels = [];
-            $monthly_counts = [];
-            $month_query = "SELECT 
-                                DATE_FORMAT(application_date, '%b %Y') as month, 
-                                COUNT(*) as count 
-                            FROM visa_applications 
-                            WHERE application_date >= DATE_SUB(CURDATE(), INTERVAL 6 MONTH)
-                            GROUP BY YEAR(application_date), MONTH(application_date)
-                            ORDER BY YEAR(application_date) ASC, MONTH(application_date) ASC";
-            $month_result = mysqli_query($conn, $month_query);
-            if ($month_result && mysqli_num_rows($month_result) > 0) {
-                while ($row = mysqli_fetch_assoc($month_result)) {
-                    $monthly_labels[] = strtoupper($row['month']);
-                    $monthly_counts[] = (int)$row['count'];
+            // Query daily distribution for the last Month (30 days)
+            $daily_labels = [];
+            $daily_counts = [];
+            $day_query = "SELECT 
+                              DATE_FORMAT(application_date, '%d %b') as day, 
+                              COUNT(*) as count 
+                          FROM visa_applications 
+                          WHERE application_date >= DATE_SUB(CURDATE(), INTERVAL 30 DAY)
+                          GROUP BY DATE(application_date)
+                          ORDER BY DATE(application_date) ASC";
+            $day_result = mysqli_query($conn, $day_query);
+            if ($day_result && mysqli_num_rows($day_result) > 0) {
+                while ($row = mysqli_fetch_assoc($day_result)) {
+                    $daily_labels[] = strtoupper($row['day']);
+                    $daily_counts[] = (int)$row['count'];
                 }
             }
 
@@ -998,9 +1046,19 @@ function showDashboard() {
             /* Statistics Grid */
             .stats-grid {
                 display: grid;
-                grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+                grid-template-columns: repeat(3, 1fr);
                 gap: 15px;
                 margin-bottom: 20px;
+            }
+            @media (max-width: 992px) {
+                .stats-grid {
+                    grid-template-columns: repeat(2, 1fr);
+                }
+            }
+            @media (max-width: 576px) {
+                .stats-grid {
+                    grid-template-columns: 1fr;
+                }
             }
             
             .stat-card {
@@ -1071,7 +1129,7 @@ function showDashboard() {
             }
             
             .view-all-btn {
-                background: linear-gradient(135deg, #1e293b, #334155);
+                background: linear-gradient(135deg, #1a5c2e, #113f1f);
                 color: white;
                 padding: 6px 15px;
                 border-radius: 6px;
@@ -1082,6 +1140,7 @@ function showDashboard() {
             }
             
             .view-all-btn:hover {
+                background: linear-gradient(135deg, #113f1f, #0d3017);
                 transform: translateY(-1px);
                 box-shadow: 0 4px 12px rgba(26, 92, 46, 0.3);
                 color: white;
@@ -1348,24 +1407,34 @@ function showDashboard() {
                 <!-- Statistics -->
                 <div class="stats-grid">
                     <div class="stat-card">
-                        <i class="fa fa-passport stat-icon" style="color: var(--primary);"></i>
+                        <i class="fa fa-globe stat-icon" style="color: var(--primary);"></i>
                         <div class="stat-number"><?php echo number_format($numb); ?></div>
                         <div class="stat-label">Total Re-Entry Visas</div>
                     </div>
-                    <div class="stat-card success">
-                        <i class="fa fa-calendar-check stat-icon" style="color: var(--secondary);"></i>
-                        <div class="stat-number"><?php echo number_format($stats['monthly_visas']); ?></div>
-                        <div class="stat-label">This Month</div>
+                    <div class="stat-card">
+                        <i class="fa fa-file-o stat-icon" style="color: #16a34a;"></i>
+                        <div class="stat-number"><?php echo number_format($total_fresh); ?></div>
+                        <div class="stat-label">Total Fresh Applications</div>
                     </div>
-                    <div class="stat-card warning">
-                        <i class="fa fa-clock-o stat-icon" style="color: var(--warning);"></i>
-                        <div class="stat-number"><?php echo number_format($stats['pending_visas']); ?></div>
-                        <div class="stat-label">Pending</div>
+                    <div class="stat-card">
+                        <i class="fa fa-refresh stat-icon" style="color: #d97706;"></i>
+                        <div class="stat-number"><?php echo number_format($total_renewal); ?></div>
+                        <div class="stat-label">Total Renewal Applications</div>
                     </div>
-                    <div class="stat-card info">
+                    <div class="stat-card">
+                        <i class="fa fa-calendar-plus-o stat-icon" style="color: #3b82f6;"></i>
+                        <div class="stat-number"><?php echo number_format($daily_total); ?></div>
+                        <div class="stat-label">Daily Total Applications</div>
+                    </div>
+                    <div class="stat-card">
                         <i class="fa fa-line-chart stat-icon" style="color: var(--info);"></i>
                         <div class="stat-number"><?php echo number_format($stats['recent_visas']); ?></div>
                         <div class="stat-label">Last 7 Days</div>
+                    </div>
+                    <div class="stat-card">
+                        <i class="fa fa-calendar-check-o stat-icon" style="color: var(--secondary);"></i>
+                        <div class="stat-number"><?php echo number_format($stats['monthly_visas']); ?></div>
+                        <div class="stat-label">This Month</div>
                     </div>
                 </div>
 
@@ -1374,7 +1443,7 @@ function showDashboard() {
                     <div class="col-md-6 mb-3">
                         <div style="background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.05); border: 1px solid #e1e5e9; height: 100%;">
                             <h5 class="fw-bold mb-3" style="font-size: 1.1rem; color: #5c3c1e;">
-                                <i class="fa fa-pie-chart me-2" style="color: #5c3c1e;"></i>Visa Status Distribution
+                                <i class="fa fa-pie-chart me-2" style="color: #5c3c1e;"></i>Re-entry Visa Status Distribution
                             </h5>
                             <div style="position: relative; height: 250px; width: 100%;">
                                 <canvas id="statusChart"></canvas>
@@ -1384,7 +1453,7 @@ function showDashboard() {
                     <div class="col-md-6 mb-3">
                         <div style="background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.05); border: 1px solid #e1e5e9; height: 100%;">
                             <h5 class="fw-bold mb-3" style="font-size: 1.1rem; color: #5c3c1e;">
-                                <i class="fa fa-bar-chart me-2" style="color: #5c3c1e;"></i>Visa Issuance (Last 6 Months)
+                                <i class="fa fa-bar-chart me-2" style="color: #5c3c1e;"></i>Re-entry Visa Issuance (last Month)
                             </h5>
                             <div style="position: relative; height: 250px; width: 100%;">
                                 <canvas id="issuanceChart"></canvas>
@@ -1392,11 +1461,9 @@ function showDashboard() {
                         </div>
                     </div>
                 </div>
-
-
-                <div class="row mt-5" style="margin-top: 3rem !important;">
+                <div class="row mt-5" style="margin-top: 3rem !important;">
                     <!-- Recent Applications -->
-                    <div class="col-md-7 mb-4">
+                    <div class="col-md-12 mb-4">
                         <div class="recent-card" style="height: 100%; margin-top: 0;">
                             <div class="card-header">
                                 <h5 style="color: #5c3c1e;"><i class="fa fa-history" style="color: #5c3c1e;"></i> Recent Applications</h5>
@@ -1408,22 +1475,38 @@ function showDashboard() {
                                     <table class="table">
                                         <thead>
                                             <tr>
+                                                <th>S/No</th>
                                                 <th>Visa Number</th>
                                                 <th>Applicant Name</th>
                                                 <th>Passport Number</th>
+                                                <th>Type of Application</th>
                                                 <th>Date Applied</th>
                                                 <th>Processed By</th>
                                             </tr>
                                         </thead>
                                         <tbody>
-                                            <?php foreach ($recent_applications as $app): ?>
+                                            <?php 
+                                            $r_sno = 1;
+                                            foreach ($recent_applications as $app): 
+                                            ?>
                                                 <tr>
+                                                    <td><?php echo $r_sno++; ?></td>
                                                     <td><strong><?php echo htmlspecialchars($app['visa_number'] ?? 'N/A'); ?></strong></td>
                                                     <td><?php 
                                                         $name = ($app['surname'] ?? '') . ', ' . ($app['given_name'] ?? '');
                                                         echo htmlspecialchars(trim($name, ', ')); 
                                                     ?></td>
                                                     <td><code><?php echo htmlspecialchars($app['passport_number'] ?? 'N/A'); ?></code></td>
+                                                    <td>
+                                                        <?php 
+                                                            $app_type = strtolower($app['application_type'] ?? 'fresh');
+                                                            if ($app_type === 'renewal') {
+                                                                echo '<span style="font-size: 0.85rem; font-weight: 600;">RENEWAL</span>';
+                                                            } else {
+                                                                echo '<span style="font-size: 0.85rem; font-weight: 600;">FRESH</span>';
+                                                            }
+                                                        ?>
+                                                    </td>
                                                     <td>
                                                         <?php 
                                                             if (!empty($app['application_date'])) {
@@ -1459,67 +1542,6 @@ function showDashboard() {
                                     <h5>No Recent Applications</h5>
                                 </div>
                             <?php endif; ?>
-                        </div>
-                    </div>
-
-                    <!-- Expiration Alerts -->
-                    <div class="col-md-5 mb-4">
-                        <div class="recent-card" style="height: 100%; margin-top: 0; background: #fffdf5; border: 1px solid #ffeeba;">
-                            <div class="card-header">
-                                <h5 style="color: #856404; font-weight: 600;"><i class="fa fa-exclamation-triangle" style="color: #ea580c;"></i> Expiration Alerts</h5>
-                            </div>
-                            
-                            <!-- Expired Visas Section -->
-                            <div class="mb-4" style="padding: 0 10px;">
-                                <h6 style="color: #b91c1c; font-weight: bold; font-size: 0.9rem; border-bottom: 2px solid #fee2e2; padding-bottom: 6px; margin-bottom: 10px;" class="d-flex justify-content-between align-items-center">
-                                    <span>Already Expired</span>
-                                    <span class="badge bg-danger"><?php echo count($expired_visas); ?></span>
-                                </h6>
-                                <?php if (!empty($expired_visas)): ?>
-                                    <div style="max-height: 140px; overflow-y: auto;">
-                                        <ul class="list-unstyled mb-0" style="font-size: 0.85rem;">
-                                            <?php foreach ($expired_visas as $ev): ?>
-                                                <li class="py-2 border-bottom d-flex justify-content-between align-items-center">
-                                                    <div>
-                                                        <strong style="color: #0f172a;"><?php echo htmlspecialchars(strtoupper($ev['surname'] . ' ' . $ev['given_name'])); ?></strong>
-                                                        <div class="text-muted" style="font-size: 0.75rem;">Passport: <?php echo htmlspecialchars(strtoupper($ev['passport_number'])); ?></div>
-                                                    </div>
-                                                    <span class="text-danger font-weight-bold" style="font-size: 0.8rem;"><?php echo formatNISDate($ev['within']); ?></span>
-                                                </li>
-                                            <?php endforeach; ?>
-                                        </ul>
-                                    </div>
-                                <?php else: ?>
-                                    <p class="text-muted mb-0" style="font-size: 0.82rem; font-style: italic;">No expired visas found.</p>
-                                <?php endif; ?>
-                            </div>
-
-                            <!-- Expiring Soon Section -->
-                            <div style="padding: 0 10px;">
-                                <h6 style="color: #d97706; font-weight: bold; font-size: 0.9rem; border-bottom: 2px solid #fef3c7; padding-bottom: 6px; margin-bottom: 10px;" class="d-flex justify-content-between align-items-center">
-                                    <span>Expiring Soon (30 Days)</span>
-                                    <span class="badge bg-warning text-dark"><?php echo count($expiring_soon_visas); ?></span>
-                                </h6>
-                                <?php if (!empty($expiring_soon_visas)): ?>
-                                    <div style="max-height: 140px; overflow-y: auto;">
-                                        <ul class="list-unstyled mb-0" style="font-size: 0.85rem;">
-                                            <?php foreach ($expiring_soon_visas as $es): ?>
-                                                <li class="py-2 border-bottom d-flex justify-content-between align-items-center">
-                                                    <div>
-                                                        <strong style="color: #0f172a;"><?php echo htmlspecialchars(strtoupper($es['surname'] . ' ' . $es['given_name'])); ?></strong>
-                                                        <div class="text-muted" style="font-size: 0.75rem;">Passport: <?php echo htmlspecialchars(strtoupper($es['passport_number'])); ?></div>
-                                                    </div>
-                                                    <span class="text-warning font-weight-bold" style="font-size: 0.8rem;"><?php echo formatNISDate($es['within']); ?></span>
-                                                </li>
-                                            <?php endforeach; ?>
-                                        </ul>
-                                    </div>
-                                <?php else: ?>
-                                    <p class="text-muted mb-0" style="font-size: 0.82rem; font-style: italic;">No visas expiring soon.</p>
-                                <?php endif; ?>
-                            </div>
-                        </div>
-                    </div>
                 </div>
             </div>
         </div>
@@ -1549,14 +1571,13 @@ function showDashboard() {
                 new Chart(statusCtx, {
                     type: 'doughnut',
                     data: {
-                        labels: ['ACTIVE', 'PENDING', 'EXPIRED'],
+                        labels: ['FRESH APPLICATIONS', 'RENEWAL APPLICATIONS'],
                         datasets: [{
                             data: [
-                                <?php echo $status_data['ACTIVE']; ?>,
-                                <?php echo $status_data['PENDING']; ?>,
-                                <?php echo $status_data['EXPIRED']; ?>
+                                <?php echo $total_fresh; ?>,
+                                <?php echo $total_renewal; ?>
                             ],
-                            backgroundColor: ['#1a5c2e', '#2e7d46', '#86efac'],
+                            backgroundColor: ['#16a34a', '#d97706'],
                             borderWidth: 2,
                             borderColor: '#ffffff'
                         }]
@@ -1582,10 +1603,10 @@ function showDashboard() {
                 new Chart(issuanceCtx, {
                     type: 'bar',
                     data: {
-                        labels: <?php echo json_encode($monthly_labels); ?>,
+                        labels: <?php echo json_encode($daily_labels); ?>,
                         datasets: [{
                             label: 'Visas Issued',
-                            data: <?php echo json_encode($monthly_counts); ?>,
+                            data: <?php echo json_encode($daily_counts); ?>,
                             backgroundColor: 'rgba(26, 92, 46, 0.85)',
                             borderColor: '#1a5c2e',
                             borderWidth: 1.5,

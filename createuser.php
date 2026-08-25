@@ -1,4 +1,5 @@
 <?php 
+ob_start();
 error_reporting(E_ALL);
 ini_set('display_errors', 1);
 require_once('security.php');
@@ -11,7 +12,11 @@ if (!isset($_SESSION['username'])) {
 // Only Administrator and Supervisor roles can access User Management
 $currentUserRole = $_SESSION['role'] ?? 'DataEntry';
 if ($currentUserRole !== 'Admin' && $currentUserRole !== 'Supervisor') {
-    header("Location: user_dashboard");
+    if ($currentUserRole === 'ViewOnly' || strcasecmp($currentUserRole, 'viewonly') === 0 || strcasecmp($currentUserRole, 'view only') === 0) {
+        header("Location: index");
+    } else {
+        header("Location: user_dashboard");
+    }
     exit();
 }
 
@@ -48,7 +53,18 @@ if (mysqli_num_rows($table_check) == 0) {
     }
 }
 
-
+$success_msg = null;
+if (isset($_SESSION['success_msg'])) {
+    $success_msg = $_SESSION['success_msg'];
+    unset($_SESSION['success_msg']);
+} elseif (isset($_GET['success'])) {
+    $success_msg = "User created successfully!";
+}
+$error_msg = null;
+if (isset($_SESSION['error_msg'])) {
+    $error_msg = $_SESSION['error_msg'];
+    unset($_SESSION['error_msg']);
+}
 
 $username = $_SESSION['username'];
 $role = $_SESSION['role'];
@@ -124,49 +140,117 @@ if (isset($_POST['reset_password'])) {
     exit();
 }
 
+// Handle user role update
+if (isset($_POST['update_role'])) {
+    if (!isset($_POST['csrf_token']) || $_POST['csrf_token'] !== $_SESSION['csrf_token']) {
+        echo "Security validation failed. Please refresh the page.";
+        exit();
+    }
+    $user_id = intval($_POST['user_id']);
+    $new_role = trim($_POST['role'] ?? '');
+    
+    if (!in_array($new_role, ['Admin', 'Supervisor', 'DataEntry', 'ViewOnly'])) {
+        echo "Invalid user role selected.";
+        exit();
+    }
+    
+    if ($currentUserRole === 'Supervisor' && $new_role === 'Admin') {
+        echo "Supervisors are not authorized to assign Admin role.";
+        exit();
+    }
+    
+    $stmt = mysqli_prepare($conn, "UPDATE users SET role = ? WHERE id = ?");
+    mysqli_stmt_bind_param($stmt, "si", $new_role, $user_id);
+    if (mysqli_stmt_execute($stmt)) {
+        echo "User role updated successfully!";
+    } else {
+        echo "Error updating user role: " . mysqli_error($conn);
+    }
+    mysqli_stmt_close($stmt);
+    exit();
+}
+
 // Handle user creation form submission
-if (isset($_POST['regUser'])) {
+if (isset($_POST['regUser']) || isset($_POST['serviceNo'])) {
     if (!isset($_POST['csrf_token']) || $_POST['csrf_token'] !== $_SESSION['csrf_token']) {
         $error_msg = "Security validation failed. Please refresh the page.";
     } else {
-        $serviceNo = mysqli_real_escape_string($conn, $_POST['serviceNo']);
-        $userRole = mysqli_real_escape_string($conn, $_POST['userRole']);
+        $serviceNo = trim($_POST['serviceNo'] ?? '');
+        $userRole = trim($_POST['userRole'] ?? $_POST['role'] ?? '');
+        $fname = trim($_POST['fname'] ?? '');
+        $lname = trim($_POST['lname'] ?? '');
+        $email = trim($_POST['email'] ?? '');
+        $password_raw = $_POST['password'] ?? '';
         
-        if ($currentUserRole === 'Supervisor' && $userRole === 'Admin') {
+        if (empty($serviceNo)) {
+            $error_msg = "Error: Service Number is required.";
+        } elseif (empty($userRole)) {
+            $error_msg = "Error: User Role is required. Please select a valid role.";
+        } elseif (!in_array($userRole, ['Admin', 'Supervisor', 'DataEntry', 'ViewOnly'])) {
+            $error_msg = "Error: Invalid user role selected.";
+        } elseif ($currentUserRole === 'Supervisor' && $userRole === 'Admin') {
             $error_msg = "Error: Supervisors are not authorized to create Admin users.";
+        } elseif (empty($fname)) {
+            $error_msg = "Error: First Name is required.";
+        } elseif (empty($lname)) {
+            $error_msg = "Error: Last Name is required.";
+        } elseif (empty($email)) {
+            $error_msg = "Error: Email is required.";
+        } elseif (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+            $error_msg = "Error: Invalid email format.";
+        } elseif (empty($password_raw)) {
+            $error_msg = "Error: Password is required.";
+        } elseif (strlen($password_raw) < 6) {
+            $error_msg = "Error: Password must be at least 6 characters long.";
         } else {
-            $fname = mysqli_real_escape_string($conn, $_POST['fname']);
-            $lname = mysqli_real_escape_string($conn, $_POST['lname']);
-            $email = mysqli_real_escape_string($conn, $_POST['email']);
-            $password = password_hash($_POST['password'], PASSWORD_DEFAULT);
+            $serviceNo = mysqli_real_escape_string($conn, $serviceNo);
+            $userRole = mysqli_real_escape_string($conn, $userRole);
+            $fname = mysqli_real_escape_string($conn, $fname);
+            $lname = mysqli_real_escape_string($conn, $lname);
+            $email = mysqli_real_escape_string($conn, $email);
+            $password = password_hash($password_raw, PASSWORD_DEFAULT);
             
             $photo = '';
-            if (isset($_FILES['photo']) && $_FILES['photo']['error'] === 0) {
-                $allowed = ['jpg', 'jpeg', 'png'];
-                $filename = $_FILES['photo']['name'];
-                $filetmp = $_FILES['photo']['tmp_name'];
-                $fileSize = $_FILES['photo']['size'];
-                $ext = strtolower(pathinfo($filename, PATHINFO_EXTENSION));
-                
-                if (in_array($ext, $allowed)) {
-                    if ($fileSize <= 2097152) {
-                        $newFilename = uniqid() . '.' . $ext;
-                        $uploadPath = 'uploads/' . $newFilename;
-                        
-                        if (!is_dir('uploads')) {
-                            mkdir('uploads', 0755, true);
-                        }
-                        
-                        if (move_uploaded_file($filetmp, $uploadPath)) {
-                            $photo = $uploadPath;
+            // Passport photo upload is optional. Check if a photo is provided.
+            if (isset($_FILES['photo']) && $_FILES['photo']['error'] !== UPLOAD_ERR_NO_FILE) {
+                if ($_FILES['photo']['error'] === UPLOAD_ERR_OK) {
+                    $allowed = ['jpg', 'jpeg', 'png'];
+                    $filename = $_FILES['photo']['name'];
+                    $filetmp = $_FILES['photo']['tmp_name'];
+                    $fileSize = $_FILES['photo']['size'];
+                    $ext = strtolower(pathinfo($filename, PATHINFO_EXTENSION));
+                    
+                    if (in_array($ext, $allowed)) {
+                        if ($fileSize <= 2097152) {
+                            $newFilename = uniqid() . '.' . $ext;
+                            $uploadPath = 'uploads/' . $newFilename;
+                            
+                            if (!is_dir('uploads')) {
+                                mkdir('uploads', 0755, true);
+                            }
+                            
+                            if (move_uploaded_file($filetmp, $uploadPath)) {
+                                $photo = $uploadPath;
+                            } else {
+                                $error_msg = "Failed to upload file.";
+                            }
                         } else {
-                            $error_msg = "Failed to upload file.";
+                            $error_msg = "File size must be less than 2MB.";
                         }
                     } else {
-                        $error_msg = "File size must be less than 2MB.";
+                        $error_msg = "Only JPG, JPEG, and PNG files are allowed.";
                     }
                 } else {
-                    $error_msg = "Only JPG, JPEG, and PNG files are allowed.";
+                    $upload_errors = [
+                        UPLOAD_ERR_INI_SIZE   => "The uploaded file exceeds the upload_max_filesize directive in php.ini.",
+                        UPLOAD_ERR_FORM_SIZE  => "The uploaded file exceeds the MAX_FILE_SIZE directive that was specified in the HTML form.",
+                        UPLOAD_ERR_PARTIAL    => "The uploaded file was only partially uploaded.",
+                        UPLOAD_ERR_NO_TMP_DIR => "Missing a temporary folder.",
+                        UPLOAD_ERR_CANT_WRITE => "Failed to write file to disk.",
+                        UPLOAD_ERR_EXTENSION  => "A PHP extension stopped the file upload."
+                    ];
+                    $error_code = $_FILES['photo']['error'];
+                    $error_msg = isset($upload_errors[$error_code]) ? $upload_errors[$error_code] : "Unknown upload error occurred.";
                 }
             }
             
@@ -186,8 +270,10 @@ if (isset($_POST['regUser'])) {
                             VALUES ('$serviceNo', '$userRole', '$fname', '$lname', '$email', '$password', '$photo')";
                     
                     if (mysqli_query($conn, $sql)) {
-                        $success_msg = "User created successfully!";
-                        $_POST = array();
+                        $_SESSION['success_msg'] = "User created successfully!";
+                        session_write_close();
+                        header("Location: createuser?success=1");
+                        exit();
                     } else {
                         $error_msg = "Error: " . mysqli_error($conn);
                     }
@@ -468,6 +554,8 @@ $total_users = mysqli_num_rows($users_result);
         }
         
         .form-control, .form-select {
+            display: block;
+            width: 100%;
             border-radius: 8px;
             border: 2px solid #e1e5e9;
             padding: 10px 15px;
@@ -481,6 +569,40 @@ $total_users = mysqli_num_rows($users_result);
             outline: none;
         }
         
+        /* Password Toggle Wrapper & Button */
+        .password-field-wrapper {
+            position: relative;
+            display: flex;
+            align-items: center;
+        }
+        
+        .password-field-wrapper .form-control {
+            padding-right: 42px;
+            width: 100%;
+        }
+        
+        .password-field-wrapper .toggle-password-btn {
+            position: absolute;
+            right: 8px;
+            top: 50%;
+            transform: translateY(-50%);
+            background: transparent;
+            border: none;
+            color: #6c757d;
+            cursor: pointer;
+            padding: 8px 10px;
+            z-index: 4;
+            transition: color 0.2s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1rem;
+        }
+        
+        .password-field-wrapper .toggle-password-btn:hover {
+            color: var(--primary);
+        }
+
         /* Button Styles */
         .btn-success {
             background: linear-gradient(135deg, var(--secondary), #219a52);
@@ -514,23 +636,29 @@ $total_users = mysqli_num_rows($users_result);
             box-shadow: 0 4px 12px rgba(243, 156, 18, 0.3);
         }
         
-        /* Alert Styles */
-        .alert {
-            border-radius: 12px;
-            border: none;
+        /* Alert/Status Message Styles matching new-record.php */
+        .status-message {
             padding: 15px 20px;
             margin-bottom: 20px;
-            box-shadow: 0 3px 10px rgba(0, 0, 0, 0.08);
+            border-radius: 8px;
+            font-weight: 500;
+            font-size: 0.95rem;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            box-shadow: 0 3px 10px rgba(0, 0, 0, 0.05);
         }
-        
-        .alert-success {
-            background: linear-gradient(135deg, #d4edda, #c3e6cb);
-            color: #155724;
+
+        .status-success {
+            background-color: rgba(39, 174, 96, 0.1);
+            color: #27ae60;
+            border: 1px solid #27ae60;
         }
-        
-        .alert-danger {
-            background: linear-gradient(135deg, #f8d7da, #f5c6cb);
-            color: #721c24;
+
+        .status-error {
+            background-color: rgba(220, 53, 69, 0.1);
+            color: #dc3545;
+            border: 1px solid #dc3545;
         }
         
         /* Table Styles */
@@ -615,89 +743,564 @@ $total_users = mysqli_num_rows($users_result);
         
         .profile-name {
             font-weight: 600;
-            color: var(--dark);
+            color: #0f172a;
         }
         
-        .profile-service {
-            font-size: 0.75rem;
-            color: var(--gray);
-            font-family: monospace;
+        /* Users Table Clean Container & Table */
+        .users-table-container {
+            background: #ffffff;
+            border-radius: 12px;
+            border: 1px solid #e2e8f0;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.03);
+            overflow: hidden;
         }
 
-        .btn-action-user {
-            padding: 5px 12px;
+        .custom-users-table {
+            width: 100%;
+            margin-bottom: 0;
+            border-collapse: collapse;
+        }
+
+        .custom-users-table thead th {
+            background: #f8fafc;
+            color: #475569;
+            font-size: 0.72rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            padding: 12px 14px;
+            border-bottom: 2px solid #e2e8f0;
+            border-top: none;
+            white-space: nowrap;
+            vertical-align: middle;
+        }
+
+        .custom-users-table tbody td {
+            padding: 10px 14px;
+            vertical-align: middle;
+            border-bottom: 1px solid #f1f5f9;
+            font-size: 0.86rem;
+            color: #334155;
+        }
+
+        .custom-users-table tbody tr {
+            transition: background-color 0.15s ease;
+        }
+
+        .custom-users-table tbody tr:hover {
+            background-color: #f8fafc;
+        }
+
+        .custom-users-table tbody tr:last-child td {
+            border-bottom: none;
+        }
+
+        /* Service Number Badge */
+        .service-badge {
+            font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
             font-size: 0.8rem;
+            font-weight: 700;
+            background: #f1f5f9;
+            color: #1e293b;
+            padding: 3px 8px;
             border-radius: 6px;
-            font-weight: 500;
+            border: 1px solid #e2e8f0;
+            letter-spacing: 0.3px;
+            display: inline-block;
+            white-space: nowrap;
+        }
+
+        /* User Profile Info Cell */
+        .user-info-cell {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .avatar-circle {
+            width: 34px;
+            height: 34px;
+            border-radius: 50%;
+            overflow: hidden;
+            flex-shrink: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: linear-gradient(135deg, #1a5c2e, #2d8a4e);
+            box-shadow: 0 2px 4px rgba(26, 92, 46, 0.15);
+        }
+
+        .avatar-circle img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .avatar-initials-text {
+            color: #ffffff;
+            font-weight: 700;
+            font-size: 0.78rem;
+            letter-spacing: 0.5px;
+        }
+
+        .user-fullname {
+            font-weight: 600;
+            color: #0f172a;
+            font-size: 0.87rem;
+            white-space: nowrap;
+        }
+
+        .user-email-text {
+            color: #64748b;
+            font-size: 0.84rem;
+            display: inline-block;
+            white-space: nowrap;
+        }
+
+        .date-joined-text {
+            color: #64748b;
+            font-size: 0.82rem;
+            white-space: nowrap;
+        }
+
+        /* Role Badges */
+        .role-badge {
+            display: inline-block;
+            padding: 3px 9px;
+            border-radius: 5px;
+            font-size: 0.72rem;
+            font-weight: 700;
+            letter-spacing: 0.3px;
+            text-transform: uppercase;
+            white-space: nowrap;
+        }
+
+        .role-badge.badge-admin {
+            background: #eff6ff;
+            color: #1d4ed8;
+            border: 1px solid #bfdbfe;
+        }
+
+        .role-badge.badge-supervisor {
+            background: #faf5ff;
+            color: #7e22ce;
+            border: 1px solid #e9d5ff;
+        }
+
+        .role-badge.badge-dataentry {
+            background: #f0fdf4;
+            color: #15803d;
+            border: 1px solid #bbf7d0;
+        }
+
+        .role-badge.badge-viewonly {
+            background: #f1f5f9;
+            color: #475569;
+            border: 1px solid #cbd5e1;
+        }
+
+        .role-badge.badge-secondary {
+            background: #fffbeb;
+            color: #b45309;
+            border: 1px solid #fde68a;
+        }
+
+        /* Status Indicator Pill */
+        .status-indicator-badge {
             display: inline-flex;
             align-items: center;
-            gap: 6px;
-            transition: all 0.2s ease;
-        }
-        
-        /* Badge Styles */
-        .badge {
-            padding: 6px 12px;
-            border-radius: 20px;
-            font-weight: 500;
-            font-size: 0.75rem;
-        }
-        
-        .badge-admin {
-            background: #e3f2fd;
-            color: #1976d2;
-        }
-        
-        .badge-supervisor {
-            background: #f3e5f5;
-            color: #7b1fa2;
-        }
-        
-        .badge-dataentry {
-            background: #e8f5e9;
-            color: #388e3c;
-        }
-        
-        .badge-active {
-            background: linear-gradient(135deg, #d4edda, #c3e6cb);
-            color: #155724;
-        }
-        
-        .badge-inactive {
-            background: linear-gradient(135deg, #f8d7da, #f5c6cb);
-            color: #721c24;
-        }
-        
-        /* Action Buttons */
-        .action-buttons {
-            display: flex;
             gap: 5px;
+            padding: 3px 9px;
+            border-radius: 12px;
+            font-size: 0.72rem;
+            font-weight: 700;
+            letter-spacing: 0.3px;
+            text-transform: uppercase;
+            white-space: nowrap;
+        }
+
+        .status-indicator-badge.active {
+            background: #ecfdf5;
+            color: #047857;
+            border: 1px solid #a7f3d0;
+        }
+
+        .status-indicator-badge.active::before {
+            content: "";
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: #10b981;
+            display: inline-block;
+        }
+
+        .status-indicator-badge.inactive {
+            background: #fef2f2;
+            color: #b91c1c;
+            border: 1px solid #fecaca;
+        }
+
+        .status-indicator-badge.inactive::before {
+            content: "";
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: #ef4444;
+            display: inline-block;
+        }
+        
+        /* Self-Contained Custom Role Modal Styles */
+        .custom-modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background: rgba(15, 23, 42, 0.7);
+            backdrop-filter: blur(3px);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 999999;
+            padding: 20px;
+            opacity: 0;
+            transition: opacity 0.2s ease-in-out;
+        }
+        
+        .custom-modal-overlay.active {
+            display: flex;
+            opacity: 1;
+        }
+        
+        .custom-modal-box {
+            background: #ffffff;
+            width: 100%;
+            max-width: 480px;
+            border-radius: 12px;
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.3), 0 10px 10px -5px rgba(0, 0, 0, 0.1);
+            overflow: hidden;
+            transform: translateY(-20px) scale(0.98);
+            transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+        
+        .custom-modal-overlay.active .custom-modal-box {
+            transform: translateY(0) scale(1);
+        }
+        
+        .custom-modal-header {
+            background: linear-gradient(135deg, #1a5c2e, #113f1f);
+            padding: 16px 20px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            color: #ffffff;
+        }
+        
+        .custom-modal-header h5 {
+            margin: 0;
+            font-weight: 700;
+            font-size: 1.05rem;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            color: #ffffff;
+        }
+        
+        .custom-modal-close {
+            background: transparent;
+            border: none;
+            color: rgba(255, 255, 255, 0.85);
+            font-size: 1.6rem;
+            line-height: 1;
+            cursor: pointer;
+            padding: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: color 0.2s;
+        }
+        
+        .custom-modal-close:hover {
+            color: #ffffff;
+        }
+        
+        .custom-modal-body {
+            padding: 22px 24px;
+        }
+        
+        .custom-modal-footer {
+            background: #f8fafc;
+            padding: 14px 20px;
+            display: flex;
+            align-items: center;
+            justify-content: flex-end;
+            gap: 10px;
+            border-top: 1px solid #e2e8f0;
+        }
+        
+        /* Professional User Table Action Buttons */
+        .user-actions-group {
+            display: inline-flex !important;
+            align-items: center !important;
+            justify-content: flex-end !important;
+            gap: 6px !important;
+            flex-wrap: nowrap !important;
+            white-space: nowrap !important;
+        }
+        
+        .btn-action-user {
+            display: inline-flex !important;
+            align-items: center !important;
+            gap: 5px !important;
+            padding: 5px 10px !important;
+            font-size: 0.78rem !important;
+            font-weight: 600 !important;
+            line-height: 1.35 !important;
+            border-radius: 6px !important;
+            border: 1px solid transparent !important;
+            cursor: pointer !important;
+            text-decoration: none !important;
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
+            white-space: nowrap !important;
+            outline: none !important;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.04) !important;
+        }
+        
+        .btn-action-user i {
+            font-size: 0.8rem !important;
+        }
+        
+        /* Deactivate Button (Rose) */
+        .btn-action-deactivate {
+            background-color: #fff1f2 !important;
+            color: #e11d48 !important;
+            border-color: #fecdd3 !important;
+        }
+        .btn-action-deactivate:hover {
+            background-color: #e11d48 !important;
+            color: #ffffff !important;
+            border-color: #e11d48 !important;
+            box-shadow: 0 3px 8px rgba(225, 29, 72, 0.28) !important;
+            transform: translateY(-1px);
+        }
+        
+        /* Activate Button (Emerald) */
+        .btn-action-activate {
+            background-color: #ecfdf5 !important;
+            color: #059669 !important;
+            border-color: #a7f3d0 !important;
+        }
+        .btn-action-activate:hover {
+            background-color: #059669 !important;
+            color: #ffffff !important;
+            border-color: #059669 !important;
+            box-shadow: 0 3px 8px rgba(5, 150, 105, 0.28) !important;
+            transform: translateY(-1px);
+        }
+        
+        /* Edit Role Button (Blue) */
+        .btn-action-role {
+            background-color: #eff6ff !important;
+            color: #2563eb !important;
+            border-color: #bfdbfe !important;
+        }
+        .btn-action-role:hover {
+            background-color: #2563eb !important;
+            color: #ffffff !important;
+            border-color: #2563eb !important;
+            box-shadow: 0 3px 8px rgba(37, 99, 235, 0.28) !important;
+            transform: translateY(-1px);
+        }
+        
+        /* Reset Password Button (Amber) */
+        .btn-action-reset {
+            background-color: #fffbeb !important;
+            color: #d97706 !important;
+            border-color: #fde68a !important;
+        }
+        .btn-action-reset:hover {
+            background-color: #d97706 !important;
+            color: #ffffff !important;
+            border-color: #d97706 !important;
+            box-shadow: 0 3px 8px rgba(217, 119, 6, 0.28) !important;
+            transform: translateY(-1px);
         }
         
         /* Role Cards */
         .role-item {
-            margin-bottom: 15px;
-            padding-bottom: 15px;
-            border-bottom: 1px solid #e1e5e9;
+            margin-bottom: 12px;
+            padding: 12px 16px;
+            border-radius: 8px;
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            transition: all 0.3s ease;
         }
-        
-        .role-item:last-child {
-            margin-bottom: 0;
-            padding-bottom: 0;
-            border-bottom: none;
+        .role-item:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
         }
+
         
         .role-title {
-            font-weight: 600;
+            font-weight: 700;
             margin-bottom: 4px;
             font-size: 0.95rem;
         }
         
         .role-description {
             font-size: 0.85rem;
-            color: var(--gray);
+            color: #64748b;
         }
         
+        /* Compact Professional Passport Photograph Upload Component */
+        .photo-upload-wrapper {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 8px 12px;
+            background: #f8fafc;
+            border: 1.5px dashed #cbd5e1;
+            border-radius: 8px;
+            transition: all 0.2s ease;
+        }
+
+        .photo-upload-wrapper:hover, .photo-upload-wrapper.dragover {
+            border-color: var(--primary);
+            background: #f0fdf4;
+        }
+
+        .photo-preview-box {
+            width: 48px;
+            height: 48px;
+            min-width: 48px;
+            border-radius: 50%;
+            overflow: hidden;
+            background: #e2e8f0;
+            border: 2px solid white;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+            flex-shrink: 0;
+        }
+
+        .photo-preview-box img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .photo-placeholder i {
+            font-size: 28px;
+            color: #94a3b8;
+        }
+
+        .photo-upload-controls {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 3px;
+        }
+
+        .photo-dropzone {
+            cursor: pointer;
+            padding: 5px 8px;
+            border-radius: 6px;
+            background: white;
+            border: 1px solid #e2e8f0;
+            transition: all 0.2s ease;
+        }
+
+        .photo-dropzone:hover {
+            border-color: var(--primary);
+            background: #f8fdf9;
+        }
+
+        .upload-icon {
+            font-size: 0.95rem;
+            color: var(--primary);
+            margin-right: 5px;
+        }
+
+        .upload-text {
+            font-size: 0.8rem;
+            color: var(--dark);
+            display: inline-block;
+        }
+
+        .upload-text strong {
+            color: var(--primary);
+        }
+
+        .upload-hint {
+            font-size: 0.7rem;
+            color: var(--gray);
+            margin-top: 1px;
+        }
+
+        .photo-file-info {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 4px 8px;
+            background: white;
+            border-radius: 6px;
+            border: 1px solid #bbf7d0;
+        }
+
+        /* User search input group */
+        .user-search-wrapper {
+            position: relative;
+            display: flex;
+            align-items: center;
+            min-width: 280px;
+        }
+
+        .user-search-wrapper .form-control {
+            padding-left: 36px;
+            padding-right: 75px;
+            height: 38px;
+            border-radius: 8px;
+            font-size: 0.85rem;
+            border-color: #cbd5e1;
+        }
+
+        .user-search-wrapper .search-icon {
+            position: absolute;
+            left: 12px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: #94a3b8;
+            font-size: 0.85rem;
+            pointer-events: none;
+        }
+
+        .user-search-wrapper .btn-search-trigger {
+            position: absolute;
+            right: 4px;
+            top: 50%;
+            transform: translateY(-50%);
+            height: 30px;
+            padding: 0 12px;
+            font-size: 0.78rem;
+            font-weight: 600;
+            border-radius: 6px;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            background: linear-gradient(135deg, var(--secondary), #219a52);
+            border: none;
+            color: white;
+            transition: all 0.2s ease;
+        }
+
+        .user-search-wrapper .btn-search-trigger:hover {
+            background: linear-gradient(135deg, #219a52, #1a5c2e);
+            color: white;
+            box-shadow: 0 2px 6px rgba(39, 174, 96, 0.3);
+        }
+
         /* Footer Styles */
         .main-footer {
             background: transparent;
@@ -923,24 +1526,22 @@ $total_users = mysqli_num_rows($users_result);
             
             <!-- Display success/error messages -->
             <?php if (isset($success_msg)): ?>
-                <div class="alert alert-success alert-dismissible fade show" role="alert">
+                <div class="status-message status-success">
                     <i class="fa fa-check-circle"></i> <?php echo $success_msg; ?>
-                    <button type="button" class="btn-close" onclick="this.parentElement.style.display='none'">&times;</button>
                 </div>
             <?php endif; ?>
             
             <?php if (isset($error_msg)): ?>
-                <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                <div class="status-message status-error">
                     <i class="fa fa-exclamation-circle"></i> <?php echo $error_msg; ?>
-                    <button type="button" class="btn-close" onclick="this.parentElement.style.display='none'">&times;</button>
                 </div>
             <?php endif; ?>
 
             <!-- Main Content Grid -->
-            <div class="row">
-                <div class="col-lg-8 col-md-7">
+            <div class="row g-4 align-items-stretch">
+                <div class="col-lg-8 col-md-7 d-flex">
                     <!-- User Creation Form -->
-                    <div class="card">
+                    <div class="card w-100 mb-0">
                         <div class="card-header">
                             <h4><i class="fa fa-user-plus" style="color: var(--secondary);"></i> Create New User</h4>
                         </div>
@@ -957,13 +1558,14 @@ $total_users = mysqli_num_rows($users_result);
                                         <label for="userRole" class="form-label">User Role</label>
                                         <select name="userRole" class="form-select" id="userRole" required>
                                             <option value="">--Select User Role--</option>
-                                            <?php if ($currentUserRole === 'Admin'): ?>
+                                            <!-- <?php if ($currentUserRole === 'Admin'): ?>
                                                 <option value="Admin" <?php echo (isset($_POST['userRole']) && $_POST['userRole'] == 'Admin') ? 'selected' : ''; ?>>Administrator</option>
-                                            <?php endif; ?>
+                                            <?php endif; ?> -->
                                             <?php if ($currentUserRole === 'Admin' || $currentUserRole === 'Supervisor'): ?>
-                                                <option value="Supervisor" <?php echo (isset($_POST['userRole']) && $_POST['userRole'] == 'Supervisor') ? 'selected' : ''; ?>>Supervisor</option>
+                                                <option value="Supervisor" <?php echo (isset($_POST['userRole']) && $_POST['userRole'] == 'Supervisor') ? 'selected' : ''; ?>>Administrator</option>
                                             <?php endif; ?>
                                             <option value="DataEntry" <?php echo (isset($_POST['userRole']) && $_POST['userRole'] == 'DataEntry') ? 'selected' : ''; ?>>Data Entry</option>
+                                            <option value="ViewOnly" <?php echo (isset($_POST['userRole']) && $_POST['userRole'] == 'ViewOnly') ? 'selected' : ''; ?>>View only</option>
                                         </select>
                                     </div>
                                 </div>
@@ -989,48 +1591,87 @@ $total_users = mysqli_num_rows($users_result);
                                     </div>
                                     <div class="col-md-6">
                                         <label for="password" class="form-label">Password</label>
-                                        <input type="password" class="form-control" name="password" id="password" placeholder="Password" required>
+                                        <div class="password-field-wrapper">
+                                            <input type="password" class="form-control no-uppercase" name="password" id="password" placeholder="Password" data-password-field="true" data-no-uppercase="true" style="text-transform: none !important;" required>
+                                            <button type="button" class="toggle-password-btn" onclick="togglePasswordVisibility('password', this)" aria-label="Toggle password visibility">
+                                                <i class="fa fa-eye"></i>
+                                            </button>
+                                        </div>
                                     </div>
                                 </div>
                                 
+                                <!-- Professional Passport Photograph Upload Section -->
                                 <div class="row mb-4">
                                     <div class="col-md-12">
-                                        <label for="photo" class="form-label">Passport Photograph (JPG or PNG)</label>
-                                        <input name="photo" class="form-control" id="photo" type="file" accept=".jpg,.jpeg,.png" />
-                                        <small class="text-muted">Max file size: 2MB</small>
+                                        <label class="form-label d-flex justify-content-between align-items-center">
+                                            <span>Passport Photograph (JPG or PNG)</span>
+                                            <span class="badge bg-light text-muted" style="font-size: 0.75rem; font-weight: normal; border: 1px solid #e2e8f0;">Max size: 2MB</span>
+                                        </label>
+                                        
+                                        <div class="photo-upload-wrapper" id="photoUploadWrapper">
+                                            <div class="photo-preview-box" id="photoPreviewContainer">
+                                                <div class="photo-placeholder" id="photoPlaceholder">
+                                                    <i class="fa fa-user-circle"></i>
+                                                </div>
+                                                <img id="photoPreviewImg" src="" alt="Preview" style="display: none;">
+                                            </div>
+                                            <div class="photo-upload-controls">
+                                                <div class="photo-dropzone" id="photoDropzone" onclick="document.getElementById('photo').click()">
+                                                    <i class="fa fa-cloud-upload upload-icon"></i>
+                                                    <div class="upload-text">
+                                                        <strong>Click to browse</strong> or drag & drop photo here
+                                                    </div>
+                                                    <div class="upload-hint">Supports JPEG, JPG, PNG</div>
+                                                </div>
+                                                <input name="photo" class="d-none" id="photo" type="file" accept=".jpg,.jpeg,.png" />
+                                                <div id="photoFileInfo" class="photo-file-info" style="display: none;">
+                                                    <div class="d-flex align-items-center gap-2">
+                                                        <i class="fa fa-image text-success"></i>
+                                                        <span id="photoFileName" class="text-truncate fw-bold" style="max-width: 220px; font-size: 0.82rem; color: #1e293b;"></span>
+                                                        <span id="photoFileSize" class="badge bg-secondary" style="font-size: 0.72rem;"></span>
+                                                    </div>
+                                                    <button type="button" class="btn btn-sm btn-outline-danger" id="removePhotoBtn" style="padding: 2px 8px; font-size: 0.75rem;" title="Remove selected image">
+                                                        <i class="fa fa-trash"></i> Remove
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        </div>
                                     </div>
                                 </div>
                                 
-                                <div class="d-flex justify-content-end">
-                                    <button type="submit" name="regUser" class="btn btn-success">
+                                <div class="d-flex justify-content-end" style="margin-top: 36px; padding-top: 8px;">
+                                    <button type="submit" name="regUser" class="btn btn-success" style="padding: 11px 28px; font-size: 0.95rem; box-shadow: 0 4px 12px rgba(26, 92, 46, 0.2);">
                                         <i class="fa fa-user-plus"></i> Create User
                                     </button>
                                 </div>
                             </form>
                         </div>
                     </div>
-
                 </div> <!-- End of col-lg-8 col-md-7 -->
                 
                 <!-- Sidebar Cards -->
-                <div class="col-lg-4 col-md-5">
+                <div class="col-lg-4 col-md-5 d-flex">
                     <!-- User Roles Card -->
-                    <div class="card">
+                    <div class="card w-100 mb-0">
                         <div class="card-header">
                             <h4><i class="fa fa-key" style="color: var(--warning);"></i> User Roles</h4>
                         </div>
                         <div class="card-body">
-                            <div class="role-item">
+                            <!-- <div class="role-item role-admin">
                                 <div class="role-title text-primary">Administrator</div>
                                 <div class="role-description">Full system access with user management capabilities</div>
-                            </div>
-                            <div class="role-item">
-                                <div class="role-title text-info">Supervisor</div>
+                            </div> -->
+                            <div class="role-item role-Administrator">
+                                <div class="role-title text-info">Administrator</div>
                                 <div class="role-description">Can create, edit, print and view reports</div>
                             </div>
-                            <div class="role-item">
+                            <div class="role-item role-dataentry">
                                 <div class="role-title text-success">Data Entry</div>
                                 <div class="role-description">Can create, edit and print visa applications</div>
+                            </div>
+                            <div class="role-item role-viewonly">
+                                <div class="role-title text-secondary">View only</div>
+                                <div class="role-description">Allowed access to Dashboard, View Re-Entry Visas, Reports, and Profile only</div>
                             </div>
                         </div>
                     </div>
@@ -1040,117 +1681,181 @@ $total_users = mysqli_num_rows($users_result);
             <!-- Existing Users Table - Expanded Full Width -->
             <div class="row mt-4">
                 <div class="col-12">
-                    <div class="card shadow-sm border-0">
-                        <div class="card-header d-flex justify-content-between align-items-center">
-                            <h4 class="mb-0 text-primary fw-bold"><i class="fa fa-users" style="color: var(--secondary);"></i> Existing Users (<?php echo $total_users; ?>)</h4>
+                    <div class="users-table-container">
+                        <div class="users-table-header">
+                            <h4 class="users-table-title">
+                                <i class="fa fa-users" style="color: var(--primary);"></i> 
+                                Existing Users 
+                                <span class="user-count-pill" id="userCount"><?php echo $total_users; ?></span>
+                            </h4>
+                            
+                            <!-- Search Existing Users Controls -->
+                            <div class="user-search-wrapper">
+                                <i class="fa fa-search search-icon"></i>
+                                <input type="text" id="userSearchInput" class="form-control no-uppercase" 
+                                       placeholder="Search by name or service no..." 
+                                       data-no-uppercase="true" autocomplete="off">
+                                <button type="button" class="btn btn-sm btn-success btn-search-trigger" id="userSearchBtn">
+                                    <i class="fa fa-search"></i> Search
+                                </button>
+                                <button type="button" class="btn btn-sm btn-outline-secondary" id="clearUserSearch" 
+                                        style="display: none; position: absolute; right: 85px; top: 50%; transform: translateY(-50%); padding: 2px 6px; font-size: 0.75rem; border: none; background: transparent;" 
+                                        title="Clear search">
+                                    <i class="fa fa-times text-muted"></i>
+                                </button>
+                            </div>
                         </div>
-                        <div class="card-body">
-                            <?php if ($total_users > 0): ?>
-                                <div class="table-responsive">
-                                    <table class="table table-hover align-middle mb-0" style="font-size: 0.9rem; width: 100%;">
-                                        <thead class="table-light">
-                                            <tr>
-                                                <th style="padding-left: 20px;">User Profile</th>
-                                                <th>Email</th>
-                                                <th>Role</th>
-                                                <th>Status</th>
-                                                <th>Joined Date</th>
-                                                <th style="padding-right: 20px; text-align: right;">Actions</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            <?php 
-                                            mysqli_data_seek($users_result, 0);
-                                            while ($user = mysqli_fetch_assoc($users_result)): 
-                                                $role_class = 'badge-' . strtolower($user['role']);
-                                                if ($role_class == 'badge-dat') $role_class = 'badge-dataentry';
-                                                if ($role_class == 'badge-adm') $role_class = 'badge-admin';
-                                            ?>
-                                            <tr>
-                                                <td style="padding-left: 20px;">
-                                                    <div class="profile-cell">
-                                                        <div class="avatar-container">
-                                                            <?php 
-                                                            $user_photo_path = '';
-                                                            if (!empty($user['photo'])) {
-                                                                if (strpos($user['photo'], 'uploads/') === 0) {
-                                                                    $user_photo_path = $user['photo'];
-                                                                } else {
-                                                                    $user_photo_path = 'uploads/' . $user['photo'];
-                                                                }
-                                                            }
-                                                            if (!empty($user_photo_path) && file_exists($user_photo_path)): 
-                                                            ?>
-                                                                <img src="<?php echo htmlspecialchars($user_photo_path); ?>" alt="Profile" class="avatar-img">
-                                                            <?php else: ?>
-                                                                <div class="avatar-initials">
-                                                                    <?php 
-                                                                    $initials = strtoupper(substr($user['fname'] ?? '', 0, 1) . substr($user['lname'] ?? '', 0, 1));
-                                                                    echo htmlspecialchars($initials ?: 'U');
-                                                                    ?>
-                                                                </div>
-                                                            <?php endif; ?>
-                                                        </div>
-                                                        <div class="profile-details">
-                                                            <span class="profile-name"><?php echo htmlspecialchars($user['fname'] . ' ' . $user['lname']); ?></span>
-                                                            <span class="profile-service">Service No: <?php echo htmlspecialchars($user['service_no']); ?></span>
-                                                        </div>
-                                                    </div>
-                                                </td>
-                                                <td><?php echo htmlspecialchars($user['email']); ?></td>
-                                                <td>
-                                                    <span class="badge <?php echo $role_class; ?>">
-                                                        <?php echo htmlspecialchars($user['role']); ?>
-                                                    </span>
-                                                </td>
-                                                <td>
-                                                    <span class="badge badge-<?php echo strtolower($user['status']); ?>">
-                                                        <?php echo ucfirst($user['status']); ?>
-                                                    </span>
-                                                </td>
-                                                <td>
-                                                    <span class="text-muted" style="font-size: 0.85rem;">
-                                                        <?php echo date('M j, Y', strtotime($user['created_at'])); ?>
-                                                    </span>
-                                                </td>
-                                                <td style="padding-right: 20px; text-align: right;">
-                                                    <div class="d-flex justify-content-end align-items-center">
-                                                        <?php if ($user['service_no'] != $username): ?>
-                                                            <?php if ($user['status'] == 'active'): ?>
-                                                                <button class="btn btn-sm btn-outline-danger btn-action-user deactivate-user" 
-                                                                        data-id="<?php echo $user['id']; ?>" 
-                                                                        data-name="<?php echo htmlspecialchars($user['fname'] . ' ' . $user['lname']); ?>">
-                                                                    <i class="fa fa-ban"></i> Deactivate
-                                                                </button>
-                                                            <?php else: ?>
-                                                                <button class="btn btn-sm btn-outline-success btn-action-user activate-user" 
-                                                                        data-id="<?php echo $user['id']; ?>" 
-                                                                        data-name="<?php echo htmlspecialchars($user['fname'] . ' ' . $user['lname']); ?>">
-                                                                    <i class="fa fa-check"></i> Activate
-                                                                </button>
-                                                            <?php endif; ?>
-                                                            <button class="btn btn-sm btn-outline-warning btn-action-user reset-password-btn ms-1" 
-                                                                    data-id="<?php echo $user['id']; ?>" 
-                                                                    data-name="<?php echo htmlspecialchars($user['fname'] . ' ' . $user['lname']); ?>">
-                                                                <i class="fa fa-key"></i> Reset Password
-                                                            </button>
-                                                        <?php else: ?>
-                                                            <span class="badge bg-light text-muted border" style="font-size: 0.75rem;">Current User</span>
-                                                        <?php endif; ?>
-                                                    </div>
-                                                </td>
-                                            </tr>
-                                            <?php endwhile; ?>
-                                        </tbody>
-                                    </table>
-                                </div>
-                            <?php else: ?>
-                                <div class="text-center py-4">
-                                    <i class="fa fa-users fa-3x text-muted mb-3"></i>
-                                    <p class="text-muted">No users found. Create your first user above.</p>
-                                </div>
-                            <?php endif; ?>
-                        </div>
+                        
+                        <?php if ($total_users > 0): ?>
+                            <div class="table-responsive" style="margin-bottom: 0;">
+                                <table class="custom-users-table" id="usersTable">
+                                    <thead>
+                                        <tr>
+                                            <th style="width: 45px; text-align: center;">S/No</th>
+                                            <th style="width: 105px; text-align: center;">Service No</th>
+                                            <th style="text-align: left;">User Profile</th>
+                                            <th style="text-align: left;">Email</th>
+                                            <th style="width: 115px; text-align: center;">Role</th>
+                                            <th style="width: 95px; text-align: center;">Status</th>
+                                            <th style="width: 110px; text-align: center;">Joined Date</th>
+                                            <th style="width: 270px; text-align: right; padding-right: 18px;">Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="usersTableBody">
+                                        <?php 
+                                         mysqli_data_seek($users_result, 0);
+                                         $u_sno = 1;
+                                         while ($user = mysqli_fetch_assoc($users_result)): 
+                                             $raw_role = trim($user['role'] ?? '');
+                                             $role_clean = str_replace([' ', '_', '-'], '', strtolower($raw_role));
+                                             
+                                             if ($role_clean === 'admin' || $role_clean === 'administrator') {
+                                                 $role_badge_class = 'badge-admin';
+                                                 $role_display_text = 'ADMINISTRATOR';
+                                                 $role_val = 'Admin';
+                                             } elseif ($role_clean === 'supervisor') {
+                                                 $role_badge_class = 'badge-supervisor';
+                                                 $role_display_text = 'SUPERVISOR';
+                                                 $role_val = 'Supervisor';
+                                             } elseif ($role_clean === 'dataentry' || $role_clean === 'dat') {
+                                                 $role_badge_class = 'badge-dataentry';
+                                                 $role_display_text = 'DATA ENTRY';
+                                                 $role_val = 'DataEntry';
+                                             } elseif ($role_clean === 'viewonly' || $role_clean === 'view') {
+                                                 $role_badge_class = 'badge-viewonly';
+                                                 $role_display_text = 'VIEW ONLY';
+                                                 $role_val = 'ViewOnly';
+                                             } elseif (empty($raw_role)) {
+                                                 $role_badge_class = 'badge-secondary';
+                                                 $role_display_text = 'NOT SET';
+                                                 $role_val = '';
+                                             } else {
+                                                 $role_badge_class = 'badge-secondary';
+                                                 $role_display_text = strtoupper($raw_role);
+                                                 $role_val = $raw_role;
+                                             }
+                                         ?>
+                                         <tr>
+                                             <td style="text-align: center; color: #94a3b8; font-weight: 600; font-size: 0.8rem;">
+                                                 <?php echo $u_sno++; ?>
+                                             </td>
+                                             <td style="text-align: center;">
+                                                 <span class="service-badge">
+                                                     <?php echo htmlspecialchars($user['service_no']); ?>
+                                                 </span>
+                                             </td>
+                                             <td>
+                                                 <div class="user-info-cell">
+                                                     <div class="avatar-circle">
+                                                         <?php 
+                                                         $user_photo_path = '';
+                                                         if (!empty($user['photo'])) {
+                                                             if (strpos($user['photo'], 'uploads/') === 0) {
+                                                                 $user_photo_path = $user['photo'];
+                                                             } else {
+                                                                 $user_photo_path = 'uploads/' . $user['photo'];
+                                                             }
+                                                         }
+                                                         if (!empty($user_photo_path) && file_exists($user_photo_path)): 
+                                                         ?>
+                                                             <img src="<?php echo htmlspecialchars($user_photo_path); ?>" alt="Profile">
+                                                         <?php else: ?>
+                                                             <div class="avatar-initials-text">
+                                                                 <?php 
+                                                                 $initials = strtoupper(substr($user['fname'] ?? '', 0, 1) . substr($user['lname'] ?? '', 0, 1));
+                                                                 echo htmlspecialchars($initials ?: 'U');
+                                                                 ?>
+                                                             </div>
+                                                         <?php endif; ?>
+                                                     </div>
+                                                     <span class="user-fullname"><?php echo htmlspecialchars($user['fname'] . ' ' . $user['lname']); ?></span>
+                                                 </div>
+                                             </td>
+                                             <td>
+                                                 <span class="user-email-text"><?php echo htmlspecialchars(strtolower($user['email'])); ?></span>
+                                             </td>
+                                             <td style="text-align: center;">
+                                                 <span class="role-badge <?php echo $role_badge_class; ?>">
+                                                     <?php echo htmlspecialchars($role_display_text); ?>
+                                                 </span>
+                                             </td>
+                                             <td style="text-align: center;">
+                                                 <span class="status-indicator-badge <?php echo strtolower($user['status']); ?>">
+                                                     <?php echo ucfirst($user['status']); ?>
+                                                 </span>
+                                             </td>
+                                             <td style="text-align: center;">
+                                                 <span class="date-joined-text">
+                                                     <?php echo date('M d, Y', strtotime($user['created_at'])); ?>
+                                                 </span>
+                                             </td>
+                                             <td style="text-align: right; padding-right: 18px; white-space: nowrap;">
+                                                 <div class="user-actions-group">
+                                                     <?php if ($user['service_no'] != $username): ?>
+                                                         <?php if ($user['status'] == 'active'): ?>
+                                                             <button class="btn-action-user btn-action-deactivate deactivate-user" 
+                                                                     data-id="<?php echo $user['id']; ?>" 
+                                                                     data-name="<?php echo htmlspecialchars($user['fname'] . ' ' . $user['lname']); ?>"
+                                                                     title="Deactivate Account">
+                                                                 <i class="fa fa-ban"></i> Deactivate
+                                                             </button>
+                                                         <?php else: ?>
+                                                             <button class="btn-action-user btn-action-activate activate-user" 
+                                                                     data-id="<?php echo $user['id']; ?>" 
+                                                                     data-name="<?php echo htmlspecialchars($user['fname'] . ' ' . $user['lname']); ?>"
+                                                                     title="Activate Account">
+                                                                 <i class="fa fa-check"></i> Activate
+                                                             </button>
+                                                         <?php endif; ?>
+                                                         <button class="btn-action-user btn-action-role edit-role-btn" 
+                                                                 data-id="<?php echo $user['id']; ?>" 
+                                                                 data-name="<?php echo htmlspecialchars($user['fname'] . ' ' . $user['lname']); ?>"
+                                                                 data-role="<?php echo htmlspecialchars($role_val); ?>"
+                                                                 title="Change User Role">
+                                                             <i class="fa fa-user-circle"></i> Edit Role
+                                                         </button>
+                                                         <button class="btn-action-user btn-action-reset reset-password-btn" 
+                                                                 data-id="<?php echo $user['id']; ?>" 
+                                                                 data-name="<?php echo htmlspecialchars($user['fname'] . ' ' . $user['lname']); ?>"
+                                                                 title="Reset Password">
+                                                             <i class="fa fa-key"></i> Reset Password
+                                                         </button>
+                                                     <?php else: ?>
+                                                         <span class="badge bg-light text-muted border" style="font-size: 0.75rem; padding: 5px 10px;">Current User</span>
+                                                     <?php endif; ?>
+                                                 </div>
+                                             </td>
+                                         </tr>
+                                         <?php endwhile; ?>
+                                    </tbody>
+                                </table>
+                            </div>
+                        <?php else: ?>
+                            <div class="text-center py-5">
+                                <i class="fa fa-users fa-3x text-muted mb-3" style="opacity: 0.4;"></i>
+                                <p class="text-muted mb-0">No users found. Create your first user above.</p>
+                            </div>
+                        <?php endif; ?>
                     </div>
                 </div>
             </div>
@@ -1164,8 +1869,51 @@ $total_users = mysqli_num_rows($users_result);
         ?>
     </div>
     
-    <!-- Bootstrap JS -->
-    <script src="vendors/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
+    <!-- Self-Contained Edit Role Modal -->
+    <div class="custom-modal-overlay" id="editRoleModalOverlay">
+        <div class="custom-modal-box">
+            <div class="custom-modal-header">
+                <h5><i class="fa fa-user-circle"></i> Change User Role</h5>
+                <button type="button" class="custom-modal-close" id="closeRoleModalBtn" aria-label="Close">&times;</button>
+            </div>
+            <div class="custom-modal-body">
+                <div class="mb-3" style="background: #f1f5f9; padding: 12px 16px; border-radius: 8px; border-left: 4px solid #1a5c2e;">
+                    <div style="font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.5px; color: #64748b; font-weight: 600;">Updating Role For</div>
+                    <div id="modalUserName" style="font-size: 1rem; font-weight: 700; color: #0f172a; margin-top: 2px;"></div>
+                </div>
+                
+                <input type="hidden" id="modalUserId">
+                
+                <div class="form-group mb-2">
+                    <label for="modalUserRoleSelect" class="form-label fw-bold" style="font-size: 0.9rem; color: #334155;">Select Role <span class="text-danger">*</span></label>
+                    <select class="form-select" id="modalUserRoleSelect" style="border: 1.5px solid #cbd5e1; border-radius: 8px; padding: 10px 14px; font-size: 0.92rem; width: 100%;" required>
+                        <option value="">-- Choose Role --</option>
+                        <?php if ($currentUserRole === 'Admin'): ?>
+                            <option value="Admin">Administrator (Full Access)</option>
+                        <?php endif; ?>
+                        <option value="Supervisor">Supervisor</option>
+                        <option value="DataEntry">Data Entry</option>
+                        <option value="ViewOnly">View only</option>
+                    </select>
+                    
+                    <div style="margin-top: 14px; font-size: 0.8rem; color: #64748b; background: #f8fafc; padding: 10px 14px; border-radius: 8px; border: 1px solid #e2e8f0;">
+                        <div style="font-weight: 600; color: #1e293b; margin-bottom: 4px;"><i class="fa fa-shield text-primary"></i> Role Access Summary:</div>
+                        <ul style="margin: 0; padding-left: 18px; font-size: 0.78rem; line-height: 1.5;">
+                            <li><strong>View only:</strong> General Dashboard, View Re-Entry Visas, Reports, and Profile only.</li>
+                            <li><strong>Data Entry:</strong> Data Entry Dashboard, Create, Edit and Print Visas.</li>
+                            <li><strong>Administrator:</strong> Full Access with User Management.</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+            <div class="custom-modal-footer">
+                <button type="button" class="btn btn-secondary" id="cancelRoleModalBtn" style="padding: 8px 18px; font-size: 0.88rem;">Cancel</button>
+                <button type="button" class="btn btn-success" id="saveRoleBtn" style="padding: 8px 22px; font-size: 0.88rem;">
+                    <i class="fa fa-save me-1"></i> Update Role
+                </button>
+            </div>
+        </div>
+    </div>
     
     <script>
         // Function to update date and time safely
@@ -1192,18 +1940,186 @@ $total_users = mysqli_num_rows($users_result);
         
         // Sidebar functionality - MATCHING re-entry-visa.php
         document.addEventListener('DOMContentLoaded', function() {
-            // File size validation
-            document.getElementById('photo')?.addEventListener('change', function(e) {
-                var file = e.target.files[0];
-                if (file) {
-                    var fileSize = file.size / 1024 / 1024; // in MB
-                    if (fileSize > 2) {
-                        alert('File size must be less than 2MB');
-                        e.target.value = '';
-                    }
+            // Passport Photograph upload preview & drag-drop handling
+            const photoInput = document.getElementById('photo');
+            const photoWrapper = document.getElementById('photoUploadWrapper');
+            const photoPreviewImg = document.getElementById('photoPreviewImg');
+            const photoPlaceholder = document.getElementById('photoPlaceholder');
+            const photoFileInfo = document.getElementById('photoFileInfo');
+            const photoFileName = document.getElementById('photoFileName');
+            const photoFileSize = document.getElementById('photoFileSize');
+            const removePhotoBtn = document.getElementById('removePhotoBtn');
+
+            function handlePhotoSelection(file) {
+                if (!file) return;
+
+                // Validate file type
+                const validTypes = ['image/jpeg', 'image/jpg', 'image/png'];
+                if (!validTypes.includes(file.type.toLowerCase())) {
+                    alert('Invalid file format. Please upload a JPG or PNG image.');
+                    if (photoInput) photoInput.value = '';
+                    return;
                 }
-            });
-            
+
+                // Validate file size (max 2MB)
+                const fileSizeMB = file.size / (1024 * 1024);
+                if (fileSizeMB > 2) {
+                    alert('File size exceeds 2MB limit. Please choose a smaller image.');
+                    if (photoInput) photoInput.value = '';
+                    return;
+                }
+
+                // Render live preview
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    if (photoPreviewImg && photoPlaceholder) {
+                        photoPreviewImg.src = e.target.result;
+                        photoPreviewImg.style.display = 'block';
+                        photoPlaceholder.style.display = 'none';
+                    }
+                    if (photoFileInfo && photoFileName && photoFileSize) {
+                        photoFileName.textContent = file.name;
+                        photoFileSize.textContent = fileSizeMB < 1 
+                            ? (file.size / 1024).toFixed(1) + ' KB' 
+                            : fileSizeMB.toFixed(2) + ' MB';
+                        photoFileInfo.style.display = 'flex';
+                    }
+                };
+                reader.readAsDataURL(file);
+            }
+
+            if (photoInput) {
+                photoInput.addEventListener('change', function(e) {
+                    if (e.target.files && e.target.files[0]) {
+                        handlePhotoSelection(e.target.files[0]);
+                    }
+                });
+            }
+
+            if (removePhotoBtn) {
+                removePhotoBtn.addEventListener('click', function(e) {
+                    e.stopPropagation();
+                    if (photoInput) photoInput.value = '';
+                    if (photoPreviewImg) {
+                        photoPreviewImg.src = '';
+                        photoPreviewImg.style.display = 'none';
+                    }
+                    if (photoPlaceholder) photoPlaceholder.style.display = 'flex';
+                    if (photoFileInfo) photoFileInfo.style.display = 'none';
+                });
+            }
+
+            // Drag and drop for photo upload
+            if (photoWrapper) {
+                ['dragenter', 'dragover'].forEach(eventName => {
+                    photoWrapper.addEventListener(eventName, function(e) {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        photoWrapper.classList.add('dragover');
+                    });
+                });
+
+                ['dragleave', 'drop'].forEach(eventName => {
+                    photoWrapper.addEventListener(eventName, function(e) {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        photoWrapper.classList.remove('dragover');
+                    });
+                });
+
+                photoWrapper.addEventListener('drop', function(e) {
+                    const dt = e.dataTransfer;
+                    if (dt && dt.files && dt.files[0]) {
+                        if (photoInput) {
+                            photoInput.files = dt.files;
+                            handlePhotoSelection(dt.files[0]);
+                        }
+                    }
+                });
+            }
+
+            // Existing Users Real-Time Search & Search Button
+            const userSearchInput = document.getElementById('userSearchInput');
+            const userSearchBtn = document.getElementById('userSearchBtn');
+            const clearUserSearch = document.getElementById('clearUserSearch');
+            const usersTableBody = document.getElementById('usersTableBody');
+            const userCountSpan = document.getElementById('userCount');
+            const initialUserCount = <?php echo $total_users; ?>;
+
+            function filterUsersTable() {
+                if (!usersTableBody || !userSearchInput) return;
+                const query = userSearchInput.value.trim().toLowerCase();
+                const rows = usersTableBody.querySelectorAll('tr:not(.no-search-results)');
+                let matchedCount = 0;
+
+                // Toggle clear button
+                if (clearUserSearch) {
+                    clearUserSearch.style.display = query.length > 0 ? 'inline-block' : 'none';
+                }
+
+                rows.forEach(row => {
+                    // Extract text content of searchable cells
+                    const text = row.innerText.toLowerCase();
+                    if (!query || text.includes(query)) {
+                        row.style.display = '';
+                        matchedCount++;
+                    } else {
+                        row.style.display = 'none';
+                    }
+                });
+
+                // Handle no results message
+                let noResultRow = usersTableBody.querySelector('.no-search-results');
+                if (matchedCount === 0 && query.length > 0) {
+                    if (!noResultRow) {
+                        noResultRow = document.createElement('tr');
+                        noResultRow.className = 'no-search-results';
+                        noResultRow.innerHTML = `<td colspan="8" class="text-center py-4 text-muted">
+                            <i class="fa fa-search fa-2x mb-2 text-secondary opacity-50"></i>
+                            <div>No users found matching "<strong>${escapeHtml(query)}</strong>"</div>
+                        </td>`;
+                        usersTableBody.appendChild(noResultRow);
+                    } else {
+                        noResultRow.style.display = '';
+                        noResultRow.querySelector('strong').textContent = query;
+                    }
+                } else if (noResultRow) {
+                    noResultRow.style.display = 'none';
+                }
+
+                if (userCountSpan) {
+                    userCountSpan.textContent = query.length > 0 ? `${matchedCount} of ${initialUserCount}` : initialUserCount;
+                }
+            }
+
+            function escapeHtml(str) {
+                return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
+            }
+
+            if (userSearchInput) {
+                userSearchInput.addEventListener('input', filterUsersTable);
+                userSearchInput.addEventListener('keydown', function(e) {
+                    if (e.key === 'Enter') {
+                        e.preventDefault();
+                        filterUsersTable();
+                    }
+                });
+            }
+
+            if (userSearchBtn) {
+                userSearchBtn.addEventListener('click', filterUsersTable);
+            }
+
+            if (clearUserSearch) {
+                clearUserSearch.addEventListener('click', function() {
+                    if (userSearchInput) {
+                        userSearchInput.value = '';
+                        filterUsersTable();
+                        userSearchInput.focus();
+                    }
+                });
+            }
+
             // Handle user activation/deactivation
             document.querySelectorAll('.deactivate-user').forEach(button => {
                 button.addEventListener('click', function() {
@@ -1237,6 +2153,108 @@ $total_users = mysqli_num_rows($users_result);
                     }
                 });
             });
+
+            // Modal open/close helpers
+            function openRoleModal(userId, userName, currentRole) {
+                const modalOverlay = document.getElementById('editRoleModalOverlay');
+                const modalUserId = document.getElementById('modalUserId');
+                const modalUserName = document.getElementById('modalUserName');
+                const modalRoleSelect = document.getElementById('modalUserRoleSelect');
+                
+                if (!modalOverlay) return;
+                
+                modalUserId.value = userId;
+                modalUserName.textContent = userName;
+                
+                if (modalRoleSelect) {
+                    modalRoleSelect.value = currentRole || '';
+                }
+                
+                modalOverlay.style.display = 'flex';
+                setTimeout(function() {
+                    modalOverlay.classList.add('active');
+                }, 10);
+            }
+
+            function closeRoleModal() {
+                const modalOverlay = document.getElementById('editRoleModalOverlay');
+                if (!modalOverlay) return;
+                
+                modalOverlay.classList.remove('active');
+                setTimeout(function() {
+                    modalOverlay.style.display = 'none';
+                }, 200);
+            }
+
+            // Handle Edit Role button clicks
+            document.querySelectorAll('.edit-role-btn').forEach(button => {
+                button.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    const userId = this.getAttribute('data-id');
+                    const userName = this.getAttribute('data-name');
+                    const currentRole = this.getAttribute('data-role');
+                    openRoleModal(userId, userName, currentRole);
+                });
+            });
+
+            // Modal Close Buttons
+            const closeRoleBtn = document.getElementById('closeRoleModalBtn');
+            if (closeRoleBtn) {
+                closeRoleBtn.addEventListener('click', closeRoleModal);
+            }
+
+            const cancelRoleBtn = document.getElementById('cancelRoleModalBtn');
+            if (cancelRoleBtn) {
+                cancelRoleBtn.addEventListener('click', closeRoleModal);
+            }
+
+            const modalOverlay = document.getElementById('editRoleModalOverlay');
+            if (modalOverlay) {
+                modalOverlay.addEventListener('click', function(e) {
+                    if (e.target === modalOverlay) {
+                        closeRoleModal();
+                    }
+                });
+            }
+
+            // Handle Save Role click
+            const saveRoleBtn = document.getElementById('saveRoleBtn');
+            if (saveRoleBtn) {
+                saveRoleBtn.addEventListener('click', function() {
+                    const userId = document.getElementById('modalUserId').value;
+                    const newRole = document.getElementById('modalUserRoleSelect').value;
+                    
+                    if (!newRole) {
+                        alert('Please select a valid user role.');
+                        return;
+                    }
+                    
+                    saveRoleBtn.disabled = true;
+                    saveRoleBtn.innerHTML = '<i class="fa fa-spinner fa-spin me-1"></i> Updating...';
+                    
+                    const formData = new FormData();
+                    formData.append('user_id', userId);
+                    formData.append('role', newRole);
+                    formData.append('update_role', '1');
+                    formData.append('csrf_token', '<?php echo $_SESSION['csrf_token']; ?>');
+                    
+                    fetch(window.location.href, {
+                        method: 'POST',
+                        body: formData
+                    })
+                    .then(response => response.text())
+                    .then(data => {
+                        alert(data);
+                        location.reload();
+                    })
+                    .catch(error => {
+                        console.error('Error:', error);
+                        alert('An error occurred while updating the role.');
+                        saveRoleBtn.disabled = false;
+                        saveRoleBtn.innerHTML = '<i class="fa fa-save me-1"></i> Update Role';
+                    });
+                });
+            }
             
             // Clear form after successful submission
             <?php if (isset($success_msg)): ?>
@@ -1269,6 +2287,17 @@ $total_users = mysqli_num_rows($users_result);
             });
         }
         
+        function togglePasswordVisibility(fieldId, btn) {
+            const field = document.getElementById(fieldId);
+            if (!field) return;
+            const isPassword = field.type === 'password';
+            field.type = isPassword ? 'text' : 'password';
+            const icon = btn.querySelector('i');
+            if (icon) {
+                icon.className = isPassword ? 'fa fa-eye-slash' : 'fa fa-eye';
+            }
+        }
+
         function resetUserPassword(userId) {
             const formData = new FormData();
             formData.append('user_id', userId);

@@ -26,15 +26,33 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
         exit();
     }
 
+    // Block ViewOnly users from submitting applications
+    $userRole = $_SESSION['role'] ?? 'DataEntry';
+    if ($userRole === 'ViewOnly' || strcasecmp($userRole, 'viewonly') === 0 || strcasecmp($userRole, 'view only') === 0) {
+        $_SESSION['message'] = [
+            'type' => 'error',
+            'text' => 'Access Denied: View Only users cannot create or submit visa applications.'
+        ];
+        header("Location: index");
+        exit();
+    }
+
     // Check if all required fields are present
     $required_fields = [
         'visa_number', 'passport_number', 'surname', 'given_name', 'nationality',
-        'place_of_issue', 'date_of_issue', 'embassy', 'authority', 'within', 'journey', 'fees', 'category'
+        'place_of_issue', 'date_of_issue', 'embassy', 'authority', 'within', 'journey', 'fees', 'category',
+        'application_type', 'number_of_dependencies', 'visa_type', 'gender', 'mfa_letter', 'covering_letter', 
+        'entry_stamp_date', 'contract_duration', 'passport_date_of_issue', 'passport_date_of_expiry'
     ];
+    
+    // Add old_visa_number to required if renewal
+    if (isset($_POST['application_type']) && $_POST['application_type'] === 'renewal') {
+        $required_fields[] = 'old_visa_number';
+    }
     
     $missing_fields = [];
     foreach ($required_fields as $field) {
-        if (empty($_POST[$field])) {
+        if (!isset($_POST[$field]) || $_POST[$field] === '') {
             $missing_fields[] = $field;
         }
     }
@@ -63,6 +81,29 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     $fees = strtoupper(mysqli_real_escape_string($conn, $_POST['fees']));
     $category = strtoupper(mysqli_real_escape_string($conn, $_POST['category']));
     $created_by = mysqli_real_escape_string($conn, $_SESSION['username']);
+
+    $application_type = strtolower(mysqli_real_escape_string($conn, trim($_POST['application_type'] ?? 'fresh')));
+    $number_of_dependencies = intval($_POST['number_of_dependencies'] ?? 0);
+    $visa_type = strtoupper(mysqli_real_escape_string($conn, trim($_POST['visa_type'] ?? '')));
+    $gender = strtoupper(mysqli_real_escape_string($conn, trim($_POST['gender'] ?? '')));
+    $mfa_letter = strtoupper(mysqli_real_escape_string($conn, trim($_POST['mfa_letter'] ?? '')));
+    $covering_letter = strtoupper(mysqli_real_escape_string($conn, trim($_POST['covering_letter'] ?? '')));
+    $entry_stamp_date = mysqli_real_escape_string($conn, $_POST['entry_stamp_date'] ?? '');
+    $contract_duration = strtoupper(mysqli_real_escape_string($conn, trim($_POST['contract_duration'] ?? '')));
+    $old_visa_number = ($application_type === 'renewal') ? strtoupper(mysqli_real_escape_string($conn, trim($_POST['old_visa_number'] ?? ''))) : null;
+    
+    $passport_date_of_issue = mysqli_real_escape_string($conn, $_POST['passport_date_of_issue']);
+    $passport_date_of_expiry = mysqli_real_escape_string($conn, $_POST['passport_date_of_expiry']);
+
+    // Validate Embassy/High Commission name to only accept up to 20 characters
+    if (strlen($_POST['embassy']) > 20) {
+        $_SESSION['message'] = [
+            'type' => 'error',
+            'text' => 'Embassy/High Commission name must not exceed 20 characters!'
+        ];
+        header("Location: new-record");
+        exit();
+    }
 
     // Validate Passport Number (Numbers and Alphabets only, no spaces or special characters)
     $passport_clean = preg_replace('/[^A-Z0-9]/', '', $passport_number);
@@ -95,6 +136,24 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
         exit();
     }
 
+    if ($passport_date_of_issue > $current_date) {
+        $_SESSION['message'] = [
+            'type' => 'error',
+            'text' => 'Passport date of issue cannot be in the future!'
+        ];
+        header("Location: new-record");
+        exit();
+    }
+
+    if ($passport_date_of_expiry <= $passport_date_of_issue) {
+        $_SESSION['message'] = [
+            'type' => 'error',
+            'text' => 'Passport date of expiry must be after passport date of issue!'
+        ];
+        header("Location: new-record");
+        exit();
+    }
+
     // First, let's check if the table exists, if not create it
     $table_check = mysqli_query($conn, "SHOW TABLES LIKE 'visa_applications'");
     if (mysqli_num_rows($table_check) == 0) {
@@ -118,7 +177,19 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             status VARCHAR(20) DEFAULT 'pending',
             created_by VARCHAR(100),
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            application_type VARCHAR(20) NOT NULL DEFAULT 'fresh',
+            number_of_dependencies INT NOT NULL DEFAULT 0,
+            visa_type VARCHAR(50) DEFAULT NULL,
+            gender VARCHAR(20) DEFAULT NULL,
+            mfa_letter VARCHAR(3) DEFAULT NULL,
+            covering_letter VARCHAR(50) DEFAULT NULL,
+            entry_stamp VARCHAR(3) DEFAULT NULL,
+            entry_stamp_date DATE DEFAULT NULL,
+            contract_duration VARCHAR(100) DEFAULT NULL,
+            old_visa_number VARCHAR(50) DEFAULT NULL,
+            passport_date_of_issue DATE DEFAULT NULL,
+            passport_date_of_expiry DATE DEFAULT NULL
         )";
         
         if (!mysqli_query($conn, $create_table_sql)) {
@@ -171,37 +242,22 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
         }
     }
     mysqli_stmt_close($check_passport_stmt);
-
-    // Check if authority number already exists in the system
-    $check_auth_sql = "SELECT id FROM visa_applications WHERE authority = ?";
-    $check_auth_stmt = mysqli_prepare($conn, $check_auth_sql);
-    mysqli_stmt_bind_param($check_auth_stmt, "s", $authority);
-    mysqli_stmt_execute($check_auth_stmt);
-    mysqli_stmt_store_result($check_auth_stmt);
-    
-    if (mysqli_stmt_num_rows($check_auth_stmt) > 0) {
-        $_SESSION['message'] = [
-            'type' => 'error',
-            'text' => "This Authority Number '$authority' already exists in the system!"
-        ];
-        mysqli_stmt_close($check_auth_stmt);
-        header("Location: new-record");
-        exit();
-    }
-    mysqli_stmt_close($check_auth_stmt);
     
     // Insert into database
     $sql = "INSERT INTO visa_applications 
             (visa_number, passport_number, surname, given_name, nationality, place_of_issue, 
-             date_of_issue, embassy, authority, within, journey, fees, category, created_by, status) 
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active')";
+             date_of_issue, embassy, authority, within, journey, fees, category, created_by, status,
+             application_type, number_of_dependencies, visa_type, gender, mfa_letter, covering_letter, entry_stamp_date, contract_duration, old_visa_number, passport_date_of_issue, passport_date_of_expiry) 
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
     
     $stmt = mysqli_prepare($conn, $sql);
     if ($stmt) {
-        mysqli_stmt_bind_param($stmt, "ssssssssssssss", 
+        mysqli_stmt_bind_param($stmt, "sssssssssssssssisssssssss", 
             $visa_number, $passport_number, $surname, $given_name, $nationality,
             $place_of_issue, $date_of_issue, $embassy, $authority, $within, 
-            $journey, $fees, $category, $created_by);
+            $journey, $fees, $category, $created_by,
+            $application_type, $number_of_dependencies, $visa_type, $gender,
+            $mfa_letter, $covering_letter, $entry_stamp_date, $contract_duration, $old_visa_number, $passport_date_of_issue, $passport_date_of_expiry);
         
         if ($stmt->execute()) {
     $applicationId = $conn->insert_id;

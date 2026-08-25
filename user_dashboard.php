@@ -19,10 +19,10 @@ if (!isset($_SESSION['user_id'])) {
     exit();
 }
 
-// Verify this is a regular user (not Admin/Supervisor)
+// Verify this is a regular DataEntry user (not Admin/Supervisor/ViewOnly)
 $userRole = $_SESSION['role'] ?? 'DataEntry';
-if ($userRole === 'Admin' || $userRole === 'Supervisor') {
-    // Admin/Supervisor should use the main dashboard
+if ($userRole === 'Admin' || $userRole === 'Supervisor' || $userRole === 'ViewOnly' || strcasecmp($userRole, 'viewonly') === 0 || strcasecmp($userRole, 'view only') === 0) {
+    // Admin, Supervisor, and ViewOnly should use the main general dashboard
     header("Location: index");
     exit();
 }

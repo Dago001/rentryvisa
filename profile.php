@@ -141,6 +141,37 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_profile'])) {
                             }
                             
                             if (mysqli_stmt_execute($stmt_update)) {
+                                if ($update_password) {
+                                    // Insert activity log
+                                    $log_action = "UPDATE";
+                                    $log_desc = "Updated password and profile details";
+                                    $log_query = "INSERT INTO activity_log (user_id, action, description, ip_address) VALUES (?, ?, ?, ?)";
+                                    $stmt_log = mysqli_prepare($conn, $log_query);
+                                    $ip = $_SERVER['REMOTE_ADDR'] ?? '';
+                                    mysqli_stmt_bind_param($stmt_log, "ssss", $username, $log_action, $log_desc, $ip);
+                                    mysqli_stmt_execute($stmt_log);
+                                    mysqli_stmt_close($stmt_log);
+                                    mysqli_stmt_close($stmt_update);
+
+                                    // Unset user session variables to automatically log out user
+                                    unset($_SESSION['user_id']);
+                                    unset($_SESSION['username']);
+                                    unset($_SESSION['full_name']);
+                                    unset($_SESSION['email']);
+                                    unset($_SESSION['role']);
+                                    unset($_SESSION['photo']);
+                                    unset($_SESSION['temp_user']);
+                                    unset($_SESSION['temp_mfa_secret']);
+
+                                    $_SESSION['message'] = [
+                                        'type' => 'success',
+                                        'text' => 'Password updated successfully! Please sign in with your new password.'
+                                    ];
+
+                                    header("Location: index");
+                                    exit();
+                                }
+
                                 $success_msg = "Profile updated successfully!";
                                 
                                 // Update session variables
@@ -169,7 +200,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_profile'])) {
                             } else {
                                 $error_msg = "Database update failed: " . mysqli_error($conn);
                             }
-                            mysqli_stmt_close($stmt_update);
+                            if (isset($stmt_update) && $stmt_update) {
+                                mysqli_stmt_close($stmt_update);
+                            }
                         }
                     }
                 }
@@ -373,32 +406,32 @@ if (!empty($user['photo'])) {
         }
         
         .profile-header-banner {
-            height: 140px;
+            height: 55px;
             background: linear-gradient(135deg, var(--primary), #113f1f);
             position: relative;
         }
         
         .profile-body {
-            padding: 40px;
+            padding: 16px 28px 28px;
             position: relative;
         }
         
         .profile-avatar-section {
-            margin-top: -100px;
-            margin-bottom: 30px;
+            margin-top: -42px;
+            margin-bottom: 10px;
             text-align: center;
             position: relative;
             z-index: 2;
         }
         
         .profile-avatar-outer {
-            width: 130px;
-            height: 130px;
+            width: 76px;
+            height: 76px;
             border-radius: 50%;
             background: white;
-            padding: 5px;
+            padding: 3px;
             display: inline-block;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.15);
+            box-shadow: 0 3px 10px rgba(0,0,0,0.15);
         }
         
         .profile-avatar {
@@ -411,8 +444,8 @@ if (!empty($user['photo'])) {
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 3rem;
-            font-weight: bold;
+            font-size: 1.6rem;
+            font-weight: 700;
         }
         
         .profile-avatar img {
@@ -423,19 +456,21 @@ if (!empty($user['photo'])) {
         
         .profile-title {
             text-align: center;
-            margin-bottom: 40px;
+            margin-bottom: 22px;
         }
         
         .profile-title h2 {
             font-weight: 700;
             color: var(--dark);
-            margin-bottom: 5px;
+            font-size: 1.35rem;
+            margin-bottom: 2px;
         }
         
         .profile-title p {
             color: var(--gray);
             font-weight: 500;
-            font-size: 0.95rem;
+            font-size: 0.85rem;
+            margin-bottom: 0;
         }
         
         .form-section-title {
@@ -503,6 +538,137 @@ if (!empty($user['photo'])) {
             color: white;
             transform: translateY(-1px);
             box-shadow: 0 6px 15px rgba(26, 92, 46, 0.3);
+        }
+
+        /* Password toggle wrapper & button */
+        .password-field-wrapper {
+            position: relative;
+            display: flex;
+            align-items: center;
+        }
+        
+        .password-field-wrapper .form-control {
+            padding-right: 42px;
+            width: 100%;
+        }
+        
+        .password-field-wrapper .toggle-password-btn {
+            position: absolute;
+            right: 8px;
+            top: 50%;
+            transform: translateY(-50%);
+            background: transparent;
+            border: none;
+            color: #6c757d;
+            cursor: pointer;
+            padding: 8px 10px;
+            z-index: 4;
+            transition: color 0.2s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1rem;
+        }
+        
+        .password-field-wrapper .toggle-password-btn:hover {
+            color: var(--primary);
+        }
+
+        /* Compact Professional Passport Photograph Upload Component */
+        .photo-upload-wrapper {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 8px 12px;
+            background: #f8fafc;
+            border: 1.5px dashed #cbd5e1;
+            border-radius: 8px;
+            transition: all 0.2s ease;
+        }
+
+        .photo-upload-wrapper:hover, .photo-upload-wrapper.dragover {
+            border-color: var(--primary);
+            background: #f0fdf4;
+        }
+
+        .photo-preview-box {
+            width: 48px;
+            height: 48px;
+            min-width: 48px;
+            border-radius: 50%;
+            overflow: hidden;
+            background: #e2e8f0;
+            border: 2px solid white;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+            flex-shrink: 0;
+        }
+
+        .photo-preview-box img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .photo-placeholder i {
+            font-size: 28px;
+            color: #94a3b8;
+        }
+
+        .photo-upload-controls {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 3px;
+        }
+
+        .photo-dropzone {
+            cursor: pointer;
+            padding: 5px 8px;
+            border-radius: 6px;
+            background: white;
+            border: 1px solid #e2e8f0;
+            transition: all 0.2s ease;
+        }
+
+        .photo-dropzone:hover {
+            border-color: var(--primary);
+            background: #f8fdf9;
+        }
+
+        .upload-icon {
+            font-size: 0.95rem;
+            color: var(--primary);
+            margin-right: 5px;
+        }
+
+        .upload-text {
+            font-size: 0.8rem;
+            color: var(--dark);
+            display: inline-block;
+        }
+
+        .upload-text strong {
+            color: var(--primary);
+        }
+
+        .upload-hint {
+            font-size: 0.7rem;
+            color: var(--gray);
+            margin-top: 1px;
+        }
+
+        .photo-file-info {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 4px 8px;
+            background: white;
+            border-radius: 6px;
+            border: 1px solid #bbf7d0;
         }
         
         /* Footer Styles */
@@ -696,12 +862,49 @@ if (!empty($user['photo'])) {
                             </div>
                             
                             <!-- Photo photograph upload -->
-                            <div class="row">
-                                <div class="col-md-12">
+                            <div class="row mb-3">
+                                <div class="col-md-6">
                                     <div class="form-group">
-                                        <label for="photo">Passport Photograph (JPG or PNG)</label>
-                                        <input type="file" id="photo" class="form-control" name="photo" accept=".jpg,.jpeg,.png">
-                                        <small class="text-muted">Upload a new photograph to change your current avatar. Max file size: 2MB.</small>
+                                        <label class="d-flex justify-content-between align-items-center">
+                                            <span>Passport Photograph (JPG or PNG)</span>
+                                            <span class="badge bg-light text-muted" style="font-size: 0.75rem; font-weight: normal; border: 1px solid #e2e8f0;">Max size: 2MB</span>
+                                        </label>
+                                        
+                                        <div class="photo-upload-wrapper" id="photoUploadWrapper" style="max-width: 440px;">
+                                            <div class="photo-preview-box" id="photoPreviewContainer">
+                                                <?php if (!empty($user_photo_path) && file_exists($user_photo_path)): ?>
+                                                    <img id="photoPreviewImg" src="<?php echo htmlspecialchars($user_photo_path); ?>" alt="Preview">
+                                                    <div class="photo-placeholder" id="photoPlaceholder" style="display: none;">
+                                                        <i class="fa fa-user-circle"></i>
+                                                    </div>
+                                                <?php else: ?>
+                                                    <div class="photo-placeholder" id="photoPlaceholder">
+                                                        <i class="fa fa-user-circle"></i>
+                                                    </div>
+                                                    <img id="photoPreviewImg" src="" alt="Preview" style="display: none;">
+                                                <?php endif; ?>
+                                            </div>
+                                            <div class="photo-upload-controls">
+                                                <div class="photo-dropzone" id="photoDropzone" onclick="document.getElementById('photo').click()">
+                                                    <i class="fa fa-cloud-upload upload-icon"></i>
+                                                    <div class="upload-text">
+                                                        <strong>Click to browse</strong> or drag & drop new photo here
+                                                    </div>
+                                                    <div class="upload-hint">Upload a new photograph. Max file size: 2MB.</div>
+                                                </div>
+                                                <input name="photo" class="d-none" id="photo" type="file" accept=".jpg,.jpeg,.png" />
+                                                <div id="photoFileInfo" class="photo-file-info" style="display: none;">
+                                                    <div class="d-flex align-items-center gap-2">
+                                                        <i class="fa fa-image text-success"></i>
+                                                        <span id="photoFileName" class="text-truncate fw-bold" style="max-width: 140px; font-size: 0.78rem; color: #1e293b;"></span>
+                                                        <span id="photoFileSize" class="badge bg-secondary" style="font-size: 0.7rem;"></span>
+                                                    </div>
+                                                    <button type="button" class="btn btn-sm btn-outline-danger" id="removePhotoBtn" style="padding: 2px 8px; font-size: 0.75rem;" title="Cancel selected image">
+                                                        <i class="fa fa-trash"></i> Cancel
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
@@ -715,15 +918,25 @@ if (!empty($user['photo'])) {
                                 <div class="col-md-6">
                                     <div class="form-group">
                                         <label for="new_password">New Password</label>
-                                        <input type="password" id="new_password" class="form-control" name="new_password" 
-                                               placeholder="Leave blank to keep current password">
+                                        <div class="password-field-wrapper">
+                                            <input type="password" id="new_password" class="form-control no-uppercase" name="new_password" 
+                                                   placeholder="Leave blank to keep current password" data-password-field="true" data-no-uppercase="true" style="text-transform: none !important;">
+                                            <button type="button" class="toggle-password-btn" onclick="togglePasswordVisibility('new_password', this)" aria-label="Toggle password visibility">
+                                                <i class="fa fa-eye"></i>
+                                            </button>
+                                        </div>
                                     </div>
                                 </div>
                                 <div class="col-md-6">
                                     <div class="form-group">
                                         <label for="confirm_password">Confirm New Password</label>
-                                        <input type="password" id="confirm_password" class="form-control" name="confirm_password" 
-                                               placeholder="Confirm new password">
+                                        <div class="password-field-wrapper">
+                                            <input type="password" id="confirm_password" class="form-control no-uppercase" name="confirm_password" 
+                                                   placeholder="Confirm new password" data-password-field="true" data-no-uppercase="true" style="text-transform: none !important;">
+                                            <button type="button" class="toggle-password-btn" onclick="togglePasswordVisibility('confirm_password', this)" aria-label="Toggle password visibility">
+                                                <i class="fa fa-eye"></i>
+                                            </button>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
@@ -734,11 +947,16 @@ if (!empty($user['photo'])) {
                             </h5>
                             
                             <div class="row">
-                                <div class="col-md-12">
+                                <div class="col-md-6">
                                     <div class="form-group">
                                         <label for="current_password" class="text-danger fw-bold">Current Password (Required)</label>
-                                        <input type="password" id="current_password" class="form-control border-danger" name="current_password" 
-                                               placeholder="Enter current password to save profile changes" required>
+                                        <div class="password-field-wrapper">
+                                            <input type="password" id="current_password" class="form-control border-danger no-uppercase" name="current_password" 
+                                                   placeholder="Enter current password to save profile changes" data-password-field="true" data-no-uppercase="true" style="text-transform: none !important;" required>
+                                            <button type="button" class="toggle-password-btn" onclick="togglePasswordVisibility('current_password', this)" aria-label="Toggle password visibility">
+                                                <i class="fa fa-eye"></i>
+                                            </button>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
@@ -767,8 +985,124 @@ if (!empty($user['photo'])) {
     <script src="vendors/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
     
     <script>
-        // Handle Sidebar Toggle on Mobile
+        // Toggle password visibility
+        function togglePasswordVisibility(fieldId, btn) {
+            const field = document.getElementById(fieldId);
+            if (!field) return;
+            const isPassword = field.type === 'password';
+            field.type = isPassword ? 'text' : 'password';
+            const icon = btn.querySelector('i');
+            if (icon) {
+                icon.className = isPassword ? 'fa fa-eye-slash' : 'fa fa-eye';
+            }
+        }
+
+        // Handle Passport Photograph Preview & Drag-Drop
         document.addEventListener('DOMContentLoaded', function() {
+            const photoInput = document.getElementById('photo');
+            const photoWrapper = document.getElementById('photoUploadWrapper');
+            const photoPreviewImg = document.getElementById('photoPreviewImg');
+            const photoPlaceholder = document.getElementById('photoPlaceholder');
+            const photoFileInfo = document.getElementById('photoFileInfo');
+            const photoFileName = document.getElementById('photoFileName');
+            const photoFileSize = document.getElementById('photoFileSize');
+            const removePhotoBtn = document.getElementById('removePhotoBtn');
+            const initialPhotoSrc = "<?php echo (!empty($user_photo_path) && file_exists($user_photo_path)) ? htmlspecialchars($user_photo_path) : ''; ?>";
+
+            function handlePhotoSelection(file) {
+                if (!file) return;
+
+                const validTypes = ['image/jpeg', 'image/jpg', 'image/png'];
+                if (!validTypes.includes(file.type.toLowerCase())) {
+                    alert('Invalid file format. Please upload a JPG or PNG image.');
+                    if (photoInput) photoInput.value = '';
+                    return;
+                }
+
+                const fileSizeMB = file.size / (1024 * 1024);
+                if (fileSizeMB > 2) {
+                    alert('File size exceeds 2MB limit. Please choose a smaller image.');
+                    if (photoInput) photoInput.value = '';
+                    return;
+                }
+
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    if (photoPreviewImg && photoPlaceholder) {
+                        photoPreviewImg.src = e.target.result;
+                        photoPreviewImg.style.display = 'block';
+                        photoPlaceholder.style.display = 'none';
+                    }
+                    if (photoFileInfo && photoFileName && photoFileSize) {
+                        photoFileName.textContent = file.name;
+                        photoFileSize.textContent = fileSizeMB < 1 
+                            ? (file.size / 1024).toFixed(1) + ' KB' 
+                            : fileSizeMB.toFixed(2) + ' MB';
+                        photoFileInfo.style.display = 'flex';
+                    }
+                };
+                reader.readAsDataURL(file);
+            }
+
+            if (photoInput) {
+                photoInput.addEventListener('change', function(e) {
+                    if (e.target.files && e.target.files[0]) {
+                        handlePhotoSelection(e.target.files[0]);
+                    }
+                });
+            }
+
+            if (removePhotoBtn) {
+                removePhotoBtn.addEventListener('click', function(e) {
+                    e.stopPropagation();
+                    if (photoInput) photoInput.value = '';
+                    if (initialPhotoSrc) {
+                        if (photoPreviewImg) {
+                            photoPreviewImg.src = initialPhotoSrc;
+                            photoPreviewImg.style.display = 'block';
+                        }
+                        if (photoPlaceholder) photoPlaceholder.style.display = 'none';
+                    } else {
+                        if (photoPreviewImg) {
+                            photoPreviewImg.src = '';
+                            photoPreviewImg.style.display = 'none';
+                        }
+                        if (photoPlaceholder) photoPlaceholder.style.display = 'flex';
+                    }
+                    if (photoFileInfo) photoFileInfo.style.display = 'none';
+                });
+            }
+
+            // Drag and drop for photo upload
+            if (photoWrapper) {
+                ['dragenter', 'dragover'].forEach(eventName => {
+                    photoWrapper.addEventListener(eventName, function(e) {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        photoWrapper.classList.add('dragover');
+                    });
+                });
+
+                ['dragleave', 'drop'].forEach(eventName => {
+                    photoWrapper.addEventListener(eventName, function(e) {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        photoWrapper.classList.remove('dragover');
+                    });
+                });
+
+                photoWrapper.addEventListener('drop', function(e) {
+                    const dt = e.dataTransfer;
+                    if (dt && dt.files && dt.files[0]) {
+                        if (photoInput) {
+                            photoInput.files = dt.files;
+                            handlePhotoSelection(dt.files[0]);
+                        }
+                    }
+                });
+            }
+
+            // Handle Sidebar Toggle on Mobile
             const toggle = document.getElementById('sidebarToggle');
             const sidebar = document.querySelector('.sidebar');
             if (toggle && sidebar) {

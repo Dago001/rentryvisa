@@ -11,6 +11,10 @@ if (!isset($_SESSION['user_id'])) {
 }
 
 $userRole = $_SESSION['role'] ?? 'DataEntry';
+if ($userRole === 'ViewOnly' || strcasecmp($userRole, 'viewonly') === 0 || strcasecmp($userRole, 'view only') === 0) {
+    header("Location: index");
+    exit();
+}
 $username = $_SESSION['username'] ?? 'User';
 $fullName = $_SESSION['full_name'] ?? $username;
 
@@ -38,6 +42,7 @@ $sqluse = "SELECT
     passport_number, 
     surname, 
     given_name, 
+    " . (in_array('application_type', $columns) ? "application_type" : "'fresh' as application_type") . ",
     " . (in_array('within', $columns) ? "within" : 
         (in_array('validity_date', $columns) ? "validity_date" : 
         (in_array('expiry_date', $columns) ? "expiry_date" : "'' as within"))) . ",
@@ -49,15 +54,17 @@ FROM visa_applications";
 if ($userRole === 'DataEntry') {
     $sqluse .= " WHERE created_by = '" . mysqli_real_escape_string($conn, $username) . "'";
 }
+$sqluse .= " ORDER BY application_date DESC, id DESC";
 
 $retrieve = mysqli_query($conn, $sqluse);
 
 if (!$retrieve) {
     // If the dynamic query fails, try a basic query with only confirmed columns
-    $sqluse = "SELECT visa_number, passport_number, surname, given_name FROM visa_applications";
+    $sqluse = "SELECT visa_number, passport_number, surname, given_name, 'fresh' as application_type FROM visa_applications";
     if ($userRole === 'DataEntry') {
         $sqluse .= " WHERE created_by = '" . mysqli_real_escape_string($conn, $username) . "'";
     }
+    $sqluse .= " ORDER BY id DESC";
     $retrieve = mysqli_query($conn, $sqluse);
     
     if (!$retrieve) {
@@ -695,6 +702,17 @@ if (!$retrieve) {
             color: #7c6e60 !important;
             opacity: 1 !important;
         }
+        
+        .btn-print {
+            background-color: var(--primary) !important;
+            border-color: var(--primary) !important;
+            color: white !important;
+        }
+        .btn-print:hover {
+            background-color: #113f1f !important;
+            border-color: #113f1f !important;
+            color: white !important;
+        }
 </style>
 </head>
 <body>
@@ -792,6 +810,7 @@ if (!$retrieve) {
                                     <th>Surname</th>
                                     <th>Given Name</th>
                                     <th>Passport No.</th>
+                                    <th>Type of Application</th>
                                     <th>Journey</th>
                                     <th>Within (Validity Period)</th>
                                     <th>Action</th>
@@ -807,6 +826,8 @@ if (!$retrieve) {
                                         $surname = htmlspecialchars($ret['surname']);
                                         $given_name = htmlspecialchars($ret['given_name']);
                                         $passport_number = htmlspecialchars($ret['passport_number']);
+                                        $application_type = isset($ret['application_type']) ? htmlspecialchars($ret['application_type']) : 'N/A';
+                                        $application_type_label = ($application_type === 'renewal') ? 'Renewal' : (($application_type === 'fresh') ? 'Fresh' : ucfirst(strtolower($application_type)));
                                         $journey = isset($ret['journey']) ? htmlspecialchars($ret['journey']) : 'N/A';
                                         $within = isset($ret['within']) ? htmlspecialchars($ret['within']) : 'N/A';
 
@@ -817,10 +838,11 @@ if (!$retrieve) {
                                                 <td>{$surname}</td>
                                                 <td>{$given_name}</td>
                                                 <td>{$passport_number}</td>
+                                                <td>{$application_type_label}</td>
                                                 <td>{$journey}</td>
                                                 <td>{$within}</td>
                                                 <td>
-                                                    <button class='btn btn-primary' type='button' onclick='printVisa({$jsVisa})'>
+                                                    <button class='btn btn-print' type='button' onclick='printVisa({$jsVisa})'>
                                                         <i class='fa fa-print'></i> Print
                                                     </button>
                                                 </td>
@@ -829,7 +851,7 @@ if (!$retrieve) {
                                     // free result
                                     mysqli_free_result($retrieve);
                                 } else {
-                                    echo "<tr><td colspan='7' class='text-center'>No records found.</td></tr>";
+                                    echo "<tr><td colspan='8' class='text-center'>No records found.</td></tr>";
                                 }
                                 
                                 // Close database connection

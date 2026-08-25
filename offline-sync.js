@@ -69,7 +69,7 @@ function syncOfflineRecords() {
                 formData.append(key, record[key]);
             }
             
-            return fetch('offline_sync_api.php', {
+            return fetch('offline_sync_api', {
                 method: 'POST',
                 body: formData,
                 headers: {

@@ -29,65 +29,88 @@ $current_page = basename($_SERVER['PHP_SELF']);
     }
     
     .sidebar-header {
-        padding: 20px 15px;
-        text-align: center;
-        border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-        background: rgba(0, 0, 0, 0.2);
+        padding: 14px 16px;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+        background: rgba(0, 0, 0, 0.18);
         position: relative;
     }
     
     .sidebar-close {
         position: absolute;
-        top: 12px;
+        top: 50%;
         right: 12px;
+        transform: translateY(-50%);
         background: none;
         border: none;
         color: white;
         font-size: 1.1rem;
         cursor: pointer;
         display: none;
-        padding: 4px;
+        padding: 4px 8px;
         border-radius: 4px;
         transition: background 0.3s;
+        z-index: 10;
     }
     
     .sidebar-close:hover {
-        background: rgba(255, 255, 255, 0.1);
+        background: rgba(255, 255, 255, 0.15);
+    }
+    
+    .sidebar-brand {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        text-align: left;
     }
     
     .sidebar-logo {
-        width: 48px;
-        height: 48px;
-        margin: 0 auto 12px;
-        background: white;
+        width: 42px;
+        height: 42px;
+        min-width: 42px;
+        margin: 0;
+        background: #ffffff;
         border-radius: 50%;
-        padding: 8px;
+        padding: 5px;
         display: flex;
         align-items: center;
         justify-content: center;
+        box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25);
+        flex-shrink: 0;
     }
     
     .sidebar-logo img {
         width: 100%;
-        height: auto;
+        height: 100%;
         object-fit: contain;
     }
     
+    .sidebar-brand-text {
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        overflow: hidden;
+    }
+    
     .sidebar-title {
-        font-size: 1.05rem;
-        font-weight: 600;
-        margin-bottom: 3px;
-        color: white;
+        font-size: 1.1rem;
+        font-weight: 700;
+        color: #ffffff;
+        letter-spacing: 0.6px;
+        line-height: 1.15;
+        margin-bottom: 2px;
     }
     
     .sidebar-subtitle {
-        font-size: 0.75rem;
-        opacity: 0.8;
-        color: rgba(255, 255, 255, 0.9);
+        font-size: 0.72rem;
+        color: rgba(255, 255, 255, 0.85);
+        letter-spacing: 0.2px;
+        line-height: 1.2;
+        white-space: nowrap;
+        font-weight: 500;
     }
     
     .sidebar-menu {
-        padding: 15px 0;
+        padding: 10px 0;
     }
     
     .sidebar-menu ul {
@@ -181,10 +204,9 @@ $current_page = basename($_SERVER['PHP_SELF']);
         }
     }
     
-    /* Force all text inputs, search boxes, textareas, dropdowns, table cells, and overlay texts to uppercase */
-    input[type="text"], 
-    input[type="search"], 
-    textarea, 
+    /* Force standard text inputs to uppercase, while strictly preserving passwords, emails, and special fields */
+    input[type="text"]:not(.no-uppercase):not([data-no-uppercase="true"]):not([data-password-field="true"]):not([name*="password"]):not([id*="password"]):not([name*="email"]):not([id*="email"]):not([name*="search"]):not([id*="search"]), 
+    textarea:not(.no-uppercase):not([data-no-uppercase="true"]), 
     select, 
     option, 
     td, 
@@ -193,20 +215,40 @@ $current_page = basename($_SERVER['PHP_SELF']);
     .visa-text {
         text-transform: uppercase !important;
     }
+
+    /* Never transform password, email, or search fields */
+    input[type="password"],
+    input[type="email"],
+    input.no-uppercase,
+    input[data-no-uppercase="true"],
+    input[data-password-field="true"],
+    input[name*="password" i],
+    input[id*="password" i],
+    input[name*="email" i],
+    input[id*="email" i],
+    input[name*="search" i],
+    input[id*="search" i],
+    .password-field-wrapper input {
+        text-transform: none !important;
+    }
 </style>
 
 <!-- Sidebar HTML Structure -->
 <div class="sidebar-overlay" id="sidebarOverlay"></div>
 <div class="sidebar" id="sidebar">
     <div class="sidebar-header">
-        <button class="sidebar-close" id="sidebarClose">
+        <button class="sidebar-close" id="sidebarClose" aria-label="Close Sidebar">
             <i class="fa fa-times"></i>
         </button>
-        <div class="sidebar-logo">
-            <img src="assets/images/logo.png" alt="NIS Logo">
+        <div class="sidebar-brand">
+            <div class="sidebar-logo">
+                <img src="assets/images/logo.png" alt="NIS Logo">
+            </div>
+            <div class="sidebar-brand-text">
+                <div class="sidebar-title">NISREV</div>
+                <div class="sidebar-subtitle">Re-Entry Visa Portal</div>
+            </div>
         </div>
-        <div class="sidebar-title">NISREV</div>
-        <div class="sidebar-subtitle">Re-Entry Visa Portal</div>
     </div>
     
     <div class="sidebar-menu">
@@ -218,7 +260,10 @@ $current_page = basename($_SERVER['PHP_SELF']);
                 <li><a href="print_visas" class="<?php echo ($current_page === 'print_visas.php') ? 'active' : ''; ?>"><i class="fa fa-print"></i><span>Print Re-Entry Visa</span></a></li>
                 <li><a href="report" class="<?php echo ($current_page === 'report.php') ? 'active' : ''; ?>"><i class="fa fa-bar-chart"></i><span>Reports</span></a></li>
                 <li><a href="createuser" class="<?php echo ($current_page === 'createuser.php') ? 'active' : ''; ?>"><i class="fa fa-users"></i><span>User Management</span></a></li>
-                
+            <?php elseif ($role === 'ViewOnly' || strcasecmp($role, 'viewonly') === 0 || strcasecmp($role, 'view only') === 0): ?>
+                <li><a href="index" class="<?php echo ($current_page === 'index.php') ? 'active' : ''; ?>"><i class="fa fa-dashboard"></i><span>Dashboard</span></a></li>
+                <li><a href="re-entry-visa" class="<?php echo ($current_page === 're-entry-visa.php') ? 'active' : ''; ?>"><i class="fa fa-list"></i><span>View Re-Entry Visas</span></a></li>
+                <li><a href="report" class="<?php echo ($current_page === 'report.php') ? 'active' : ''; ?>"><i class="fa fa-bar-chart"></i><span>Reports</span></a></li>
             <?php else: ?>
                 <li><a href="user_dashboard" class="<?php echo ($current_page === 'user_dashboard.php' || $current_page === 'index.php') ? 'active' : ''; ?>"><i class="fa fa-dashboard"></i><span>My Dashboard</span></a></li>
                 <li><a href="new-record" class="<?php echo ($current_page === 'new-record.php') ? 'active' : ''; ?>"><i class="fa fa-plus"></i><span>New Re-Entry Visa</span></a></li>
@@ -305,13 +350,36 @@ document.querySelectorAll('a[href*="logout"]').forEach(link => {
     });
 });
 
-// Automatically convert all text inputs to uppercase in real-time as the user types
+// Automatically convert appropriate text inputs to uppercase in real-time as the user types
 document.addEventListener('input', function(event) {
-    if (event.target && event.target.tagName === 'INPUT' && (event.target.type === 'text' || event.target.type === 'search')) {
-        // Exclude specific fields if necessary, but apply globally to text/search inputs
-        event.target.value = event.target.value.toUpperCase();
+    if (!event.target || event.target.tagName !== 'INPUT') return;
+    const input = event.target;
+    
+    // Only process text or search inputs
+    if (input.type !== 'text' && input.type !== 'search') return;
+    
+    const name = (input.name || '').toLowerCase();
+    const id = (input.id || '').toLowerCase();
+    
+    // Strictly exclude password fields (even when toggled to type="text"), emails, search filters, and no-uppercase fields
+    if (
+        input.getAttribute('data-no-uppercase') === 'true' ||
+        input.getAttribute('data-password-field') === 'true' ||
+        input.classList.contains('no-uppercase') ||
+        name.indexOf('password') !== -1 ||
+        id.indexOf('password') !== -1 ||
+        name.indexOf('pass') !== -1 ||
+        id.indexOf('pass') !== -1 ||
+        name.indexOf('email') !== -1 ||
+        id.indexOf('email') !== -1 ||
+        name.indexOf('search') !== -1 ||
+        id.indexOf('search') !== -1
+    ) {
+        return;
     }
-});
+    
+    input.value = input.value.toUpperCase();
+}, true);
 </script>
 
 <!-- Offline Mode & Sync Integration -->

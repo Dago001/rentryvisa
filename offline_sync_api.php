@@ -56,6 +56,10 @@ $nationality = strtoupper(mysqli_real_escape_string($conn, trim($_POST['national
 $place_of_issue = strtoupper(mysqli_real_escape_string($conn, trim($_POST['place_of_issue'])));
 $date_of_issue = mysqli_real_escape_string($conn, $_POST['date_of_issue']);
 $embassy = strtoupper(mysqli_real_escape_string($conn, trim($_POST['embassy'])));
+if (strlen($_POST['embassy']) > 20) {
+    echo json_encode(['status' => 'error', 'message' => 'Embassy/High Commission name must not exceed 20 characters!']);
+    exit();
+}
 $authority = strtoupper(mysqli_real_escape_string($conn, trim($_POST['authority'])));
 $within = mysqli_real_escape_string($conn, $_POST['within']);
 $journey = strtoupper(mysqli_real_escape_string($conn, $_POST['journey']));
@@ -74,13 +78,6 @@ if ($check_passport && mysqli_num_rows($check_passport) > 0) {
         echo json_encode(['status' => 'error', 'message' => "Passport Number '$passport_number' already exists in system for another person ($existing_surname $existing_given)."]);
         exit();
     }
-}
-
-// Check duplicate authority
-$check_auth = mysqli_query($conn, "SELECT id FROM visa_applications WHERE authority = '$authority'");
-if ($check_auth && mysqli_num_rows($check_auth) > 0) {
-    echo json_encode(['status' => 'error', 'message' => "Authority Number '$authority' already exists in system."]);
-    exit();
 }
 
 // Check duplicate visa number. If it exists, append suffix to avoid conflicts
@@ -119,6 +116,30 @@ $insertFields = [
 
 if (in_array('remarks', $columns)) {
     $insertFields['remarks'] = $remarks;
+}
+
+$newOptionalFields = [
+    'application_type' => 'application_type',
+    'number_of_dependencies' => 'number_of_dependencies',
+    'visa_type' => 'visa_type',
+    'gender' => 'gender',
+    'mfa_letter' => 'mfa_letter',
+    'covering_letter' => 'covering_letter',
+    'entry_stamp' => 'entry_stamp',
+    'entry_stamp_date' => 'entry_stamp_date',
+    'contract_duration' => 'contract_duration',
+    'old_visa_number' => 'old_visa_number',
+    'passport_date_of_issue' => 'passport_date_of_issue',
+    'passport_date_of_expiry' => 'passport_date_of_expiry'
+];
+foreach ($newOptionalFields as $post_key => $col_name) {
+    if (in_array($col_name, $columns) && isset($_POST[$post_key]) && $_POST[$post_key] !== '') {
+        if ($col_name === 'number_of_dependencies') {
+            $insertFields[$col_name] = intval($_POST[$post_key]);
+        } else {
+            $insertFields[$col_name] = strtoupper(mysqli_real_escape_string($conn, trim($_POST[$post_key])));
+        }
+    }
 }
 
 $fields_str = implode(', ', array_keys($insertFields));
