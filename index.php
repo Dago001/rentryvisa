@@ -54,6 +54,71 @@ function showLoginForm() {
         exit();
     }
 
+    // Handle submission of new password when password reset is required (Step 3)
+    if (isset($_POST['set_new_password']) && isset($_SESSION['temp_user']) && !empty($_SESSION['temp_user']['mfa_verified'])) {
+        if (!isset($_POST['csrf_token']) || $_POST['csrf_token'] !== $_SESSION['csrf_token']) {
+            $error_message = "Security validation failed. Please refresh the page.";
+        } else {
+            $new_pwd = $_POST['new_password'] ?? '';
+            $confirm_pwd = $_POST['confirm_password'] ?? '';
+            $userId = intval($_SESSION['temp_user']['id']);
+
+            if (empty($new_pwd) || empty($confirm_pwd)) {
+                $error_message = "All password fields are required.";
+            } elseif (strlen($new_pwd) < 6) {
+                $error_message = "New password must be at least 6 characters long.";
+            } elseif ($new_pwd !== $confirm_pwd) {
+                $error_message = "New password and confirmation password do not match.";
+            } elseif ($new_pwd === 'password@123') {
+                $error_message = "New password cannot be the default 'password@123'. Please choose a unique password.";
+            } else {
+                $hashed_password = password_hash($new_pwd, PASSWORD_DEFAULT);
+                $stmt = mysqli_prepare($conn, "UPDATE users SET password = ?, password_reset_required = 0 WHERE id = ?");
+                mysqli_stmt_bind_param($stmt, "si", $hashed_password, $userId);
+
+                if (mysqli_stmt_execute($stmt)) {
+                    mysqli_stmt_close($stmt);
+
+                    // Audit log
+                    $username_who_did = $_SESSION['temp_user']['username'];
+                    $log_action = "PASSWORD_RESET_ON_LOGIN";
+                    $log_desc = "User reset default password upon login";
+                    $ip = $_SERVER['REMOTE_ADDR'] ?? '';
+                    $log_sql = "INSERT INTO activity_log (user_id, action, description, ip_address) VALUES (?, ?, ?, ?)";
+                    $log_stmt = mysqli_prepare($conn, $log_sql);
+                    if ($log_stmt) {
+                        mysqli_stmt_bind_param($log_stmt, "ssss", $username_who_did, $log_action, $log_desc, $ip);
+                        mysqli_stmt_execute($log_stmt);
+                        mysqli_stmt_close($log_stmt);
+                    }
+
+                    // Complete login
+                    $_SESSION['username'] = $_SESSION['temp_user']['username'];
+                    $_SESSION['user_id'] = $_SESSION['temp_user']['id'];
+                    $_SESSION['full_name'] = $_SESSION['temp_user']['full_name'];
+                    $_SESSION['email'] = $_SESSION['temp_user']['email'];
+                    $_SESSION['role'] = $_SESSION['temp_user']['role'];
+                    $_SESSION['photo'] = $_SESSION['temp_user']['photo'];
+
+                    unset($_SESSION['temp_user']);
+                    unset($_SESSION['temp_mfa_secret']);
+                    session_regenerate_id(true);
+
+                    // Redirect based on role
+                    $finalRole = $_SESSION['role'] ?? 'DataEntry';
+                    if ($finalRole === 'Admin' || $finalRole === 'Supervisor' || $finalRole === 'ViewOnly' || strcasecmp($finalRole, 'viewonly') === 0 || strcasecmp($finalRole, 'view only') === 0) {
+                        header("Location: index");
+                    } else {
+                        header("Location: user_dashboard");
+                    }
+                    exit();
+                } else {
+                    $error_message = "Error updating password: " . mysqli_error($conn);
+                }
+            }
+        }
+    }
+
     // Handle verification of Google Authenticator code (Step 2)
     if (isset($_POST['verify_mfa']) && isset($_SESSION['temp_user'])) {
         if (!isset($_POST['csrf_token']) || $_POST['csrf_token'] !== $_SESSION['csrf_token']) {
@@ -69,8 +134,8 @@ function showLoginForm() {
                 if ($ga->verifyCode($secret, $mfa_code, 2)) {
                     // Code is valid! 
                     // Check if we need to save the secret for a first-time user
-                    $userId = $_SESSION['temp_user']['id'];
-                    $db_check = mysqli_query($conn, "SELECT google_auth_secret FROM users WHERE id = '$userId'");
+                    $userId = intval($_SESSION['temp_user']['id']);
+                    $db_check = mysqli_query($conn, "SELECT google_auth_secret, password_reset_required, password FROM users WHERE id = '$userId'");
                     $user_row = mysqli_fetch_assoc($db_check);
                     
                     if (empty($user_row['google_auth_secret'])) {
@@ -81,7 +146,19 @@ function showLoginForm() {
                         mysqli_stmt_close($stmt);
                     }
 
-                    // Complete the login
+                    // Check if user is required to reset default password
+                    $must_reset = (!empty($user_row['password_reset_required']) && $user_row['password_reset_required'] == 1) 
+                                  || (!empty($_SESSION['temp_user']['password_reset_required']) && $_SESSION['temp_user']['password_reset_required'] == 1)
+                                  || password_verify('password@123', $user_row['password']);
+
+                    if ($must_reset) {
+                        $_SESSION['temp_user']['mfa_verified'] = true;
+                        $_SESSION['temp_user']['password_reset_required'] = 1;
+                        header("Location: index");
+                        exit();
+                    }
+
+                    // Complete the normal login
                     $_SESSION['username'] = $_SESSION['temp_user']['username'];
                     $_SESSION['user_id'] = $_SESSION['temp_user']['id'];
                     $_SESSION['full_name'] = $_SESSION['temp_user']['full_name'];
@@ -126,6 +203,8 @@ function showLoginForm() {
                     if (password_verify($password, $row['password'])) {
                         // Store user details in temporary session
                         $is_first_time = empty($row['google_auth_secret']);
+                        $is_pwd_reset_required = (!empty($row['password_reset_required']) && $row['password_reset_required'] == 1) || ($password === 'password@123');
+                        
                         $_SESSION['temp_user'] = [
                             'id' => $row['id'],
                             'username' => $row['service_no'],
@@ -133,7 +212,8 @@ function showLoginForm() {
                             'email' => $row['email'],
                             'role' => $row['role'],
                             'photo' => $row['photo'],
-                            'first_time' => $is_first_time
+                            'first_time' => $is_first_time,
+                            'password_reset_required' => $is_pwd_reset_required ? 1 : 0
                         ];
 
                         $ga = new GoogleAuthenticator();
@@ -504,7 +584,58 @@ function showLoginForm() {
                         </div>
                     <?php endif; ?>
                     
-                    <?php if (isset($_SESSION['temp_user'])): ?>
+                    <?php if (isset($_SESSION['temp_user']) && !empty($_SESSION['temp_user']['mfa_verified']) && !empty($_SESSION['temp_user']['password_reset_required'])): ?>
+                        <!-- Step 3: Password Reset Required Form -->
+                        <form method="post" id="resetPasswordForm" autocomplete="off">
+                            <input type="hidden" name="csrf_token" value="<?php echo $_SESSION['csrf_token']; ?>">
+                            
+                            <div class="text-center mb-3">
+                                <div style="width: 46px; height: 46px; background: #fef3c7; color: #b45309; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 1.25rem; border: 2px solid #fde68a; margin-bottom: 8px;">
+                                    <i class="fa fa-key"></i>
+                                </div>
+                                <p class="fw-bold text-dark mb-1" style="font-size: 0.95rem;">Password Reset Required</p>
+                                <p class="text-muted small mb-0" style="font-size: 0.72rem; line-height: 1.3;">
+                                    Welcome, <strong><?php echo htmlspecialchars($_SESSION['temp_user']['full_name']); ?></strong>.<br>
+                                    Your account is configured with a default password. Please create a new password to continue.
+                                </p>
+                            </div>
+
+                            <div class="form-group mb-2">
+                                <label class="form-label">New Password <span class="text-danger">*</span></label>
+                                <div class="password-wrapper">
+                                    <input type="password" name="new_password" class="form-control" 
+                                           placeholder="Enter new password (min. 6 chars)" required 
+                                           minlength="6" autocomplete="new-password" id="firstNewPwd">
+                                    <button type="button" class="toggle-password" aria-label="Toggle password visibility">
+                                        <i class="fa fa-eye"></i>
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div class="form-group mb-3">
+                                <label class="form-label">Confirm New Password <span class="text-danger">*</span></label>
+                                <div class="password-wrapper">
+                                    <input type="password" name="confirm_password" class="form-control" 
+                                           placeholder="Confirm new password" required 
+                                           minlength="6" autocomplete="new-password" id="firstConfirmPwd">
+                                    <button type="button" class="toggle-password" aria-label="Toggle password visibility">
+                                        <i class="fa fa-eye"></i>
+                                    </button>
+                                </div>
+                            </div>
+
+                            <button type="submit" name="set_new_password" class="btn-login w-100">
+                                <i class="fa fa-check-circle"></i>
+                                <span>Save Password & Sign In</span>
+                            </button>
+
+                            <div class="text-center mt-3" style="border-top: 1px solid #e1e5e9; padding-top: 10px; margin-top: 15px;">
+                                <a href="index?cancel_mfa=1" class="text-decoration-none text-muted small" style="font-size: 0.72rem;">
+                                    <i class="fa fa-arrow-left"></i> Cancel and sign out
+                                </a>
+                            </div>
+                        </form>
+                    <?php elseif (isset($_SESSION['temp_user'])): ?>
                         <!-- MFA Verification/Setup Form -->
                         <form method="post" id="mfaForm" autocomplete="off">
                             <input type="hidden" name="csrf_token" value="<?php echo $_SESSION['csrf_token']; ?>">
@@ -597,23 +728,32 @@ function showLoginForm() {
 
         <script>
             document.addEventListener('DOMContentLoaded', function() {
+                const firstNewPwd = document.getElementById('firstNewPwd');
                 const mfaCodeField = document.getElementById('mfaCodeField');
-                if (mfaCodeField) {
+                if (firstNewPwd) {
+                    firstNewPwd.focus();
+                } else if (mfaCodeField) {
                     mfaCodeField.focus();
                 } else {
                     document.querySelector('input[name="username"]')?.focus();
                 }
                 
-                const toggleBtn = document.getElementById('togglePassword');
-                const passwordField = document.getElementById('passwordField');
-                
-                if (toggleBtn && passwordField) {
-                    toggleBtn.addEventListener('click', function() {
-                        const type = passwordField.type === 'password' ? 'text' : 'password';
-                        passwordField.type = type;
-                        this.querySelector('i').className = type === 'password' ? 'fa fa-eye' : 'fa fa-eye-slash';
-                    });
-                }
+                // Universal password visibility toggle
+                document.querySelectorAll('.password-wrapper').forEach(wrapper => {
+                    const input = wrapper.querySelector('input');
+                    const btn = wrapper.querySelector('.toggle-password');
+                    if (input && btn) {
+                        btn.addEventListener('click', function(e) {
+                            e.preventDefault();
+                            const isPassword = input.type === 'password';
+                            input.type = isPassword ? 'text' : 'password';
+                            const icon = this.querySelector('i');
+                            if (icon) {
+                                icon.className = isPassword ? 'fa fa-eye-slash' : 'fa fa-eye';
+                            }
+                        });
+                    }
+                });
 
                 // Render QR code client-side if the container is present
                 const qrElement = document.getElementById('qrcode');

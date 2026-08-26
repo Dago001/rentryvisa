@@ -131,7 +131,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_profile'])) {
                         if (!isset($error_msg)) {
                             // Update users table
                             if ($update_password) {
-                                $update_query = "UPDATE users SET fname = ?, lname = ?, email = ?, password = ?, photo = ? WHERE id = ?";
+                                $update_query = "UPDATE users SET fname = ?, lname = ?, email = ?, password = ?, photo = ?, password_reset_required = 0 WHERE id = ?";
                                 $stmt_update = mysqli_prepare($conn, $update_query);
                                 mysqli_stmt_bind_param($stmt_update, "sssssi", $fname, $lname, $email, $new_pwd_hash, $photo, $userId);
                             } else {

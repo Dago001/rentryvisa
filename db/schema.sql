@@ -217,6 +217,7 @@ CREATE TABLE IF NOT EXISTS `users` (
   `updated_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   `status` enum('active','inactive') COLLATE utf8mb4_unicode_ci DEFAULT 'active',
   `google_auth_secret` varchar(32) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `password_reset_required` tinyint(1) NOT NULL DEFAULT 0,
   PRIMARY KEY (`id`),
   UNIQUE KEY `service_no` (`service_no`),
   UNIQUE KEY `email` (`email`)

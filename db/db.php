@@ -40,4 +40,15 @@ foreach ($new_cols as $col_name => $col_def) {
         mysqli_query($conn, "ALTER TABLE visa_applications ADD COLUMN $col_name $col_def");
     }
 }
+
+// Check if google_auth_secret and password_reset_required columns exist in users table, add if not
+$ga_check = mysqli_query($conn, "SHOW COLUMNS FROM users LIKE 'google_auth_secret'");
+if ($ga_check && mysqli_num_rows($ga_check) == 0) {
+    mysqli_query($conn, "ALTER TABLE users ADD COLUMN google_auth_secret VARCHAR(32) DEFAULT NULL");
+}
+
+$pwd_reset_check = mysqli_query($conn, "SHOW COLUMNS FROM users LIKE 'password_reset_required'");
+if ($pwd_reset_check && mysqli_num_rows($pwd_reset_check) == 0) {
+    mysqli_query($conn, "ALTER TABLE users ADD COLUMN password_reset_required TINYINT(1) NOT NULL DEFAULT 0");
+}
 ?>

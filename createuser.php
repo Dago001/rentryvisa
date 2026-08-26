@@ -108,8 +108,8 @@ if (isset($_POST['reset_password'])) {
     // Hash the default password password@123
     $default_password = password_hash('password@123', PASSWORD_DEFAULT);
     
-    // Update the password in database
-    $update_sql = "UPDATE users SET password = '$default_password' WHERE id = '$user_id'";
+    // Update the password in database and mark password reset required
+    $update_sql = "UPDATE users SET password = '$default_password', password_reset_required = 1 WHERE id = '$user_id'";
     
     if (mysqli_query($conn, $update_sql)) {
         // Log this action to activity_log (audit trail)
@@ -308,8 +308,8 @@ if (isset($_POST['regUser']) || isset($_POST['serviceNo'])) {
                         $error_msg = "Error: Email '$email' already exists!";
                     }
                 } else {
-                    $sql = "INSERT INTO users (service_no, role, fname, lname, email, password, photo) 
-                            VALUES ('$serviceNo', '$userRole', '$fname', '$lname', '$email', '$password', '$photo')";
+                    $sql = "INSERT INTO users (service_no, role, fname, lname, email, password, photo, password_reset_required) 
+                            VALUES ('$serviceNo', '$userRole', '$fname', '$lname', '$email', '$password', '$photo', 1)";
                     
                     if (mysqli_query($conn, $sql)) {
                         $_SESSION['success_msg'] = "User created successfully!";
@@ -1319,46 +1319,85 @@ $total_users = mysqli_num_rows($users_result);
             border: 1px solid #bbf7d0;
         }
 
-        /* User search input group */
+        /* Users Table Header & Search */
+        .users-table-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 14px 18px;
+            background: #ffffff;
+            border-bottom: 1px solid #e2e8f0;
+            flex-wrap: wrap;
+            gap: 12px;
+        }
+
+        .users-table-title {
+            margin: 0;
+            font-size: 1.05rem;
+            font-weight: 700;
+            color: #0f172a;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .user-count-pill {
+            background: #e2e8f0;
+            color: #334155;
+            font-size: 0.78rem;
+            font-weight: 700;
+            padding: 2px 8px;
+            border-radius: 12px;
+        }
+
+        /* User search input group - Professionally compact (290px max-width) */
         .user-search-wrapper {
             position: relative;
             display: flex;
             align-items: center;
-            min-width: 280px;
+            width: 100%;
+            max-width: 290px;
+            margin-left: auto;
         }
 
         .user-search-wrapper .form-control {
-            padding-left: 36px;
-            padding-right: 75px;
-            height: 38px;
-            border-radius: 8px;
-            font-size: 0.85rem;
-            border-color: #cbd5e1;
+            padding-left: 34px;
+            padding-right: 78px;
+            height: 36px;
+            border-radius: 6px;
+            font-size: 0.82rem;
+            border: 1px solid #cbd5e1;
+            box-shadow: none;
+        }
+
+        .user-search-wrapper .form-control:focus {
+            border-color: var(--primary);
+            box-shadow: 0 0 0 2px rgba(26, 92, 46, 0.15);
         }
 
         .user-search-wrapper .search-icon {
             position: absolute;
-            left: 12px;
+            left: 11px;
             top: 50%;
             transform: translateY(-50%);
             color: #94a3b8;
-            font-size: 0.85rem;
+            font-size: 0.82rem;
             pointer-events: none;
         }
 
         .user-search-wrapper .btn-search-trigger {
             position: absolute;
-            right: 4px;
+            right: 3px;
             top: 50%;
             transform: translateY(-50%);
             height: 30px;
-            padding: 0 12px;
-            font-size: 0.78rem;
+            padding: 0 10px;
+            font-size: 0.76rem;
             font-weight: 600;
-            border-radius: 6px;
+            border-radius: 5px;
             display: flex;
             align-items: center;
-            gap: 5px;
+            gap: 4px;
             background: linear-gradient(135deg, var(--secondary), #219a52);
             border: none;
             color: white;
@@ -1781,20 +1820,18 @@ $total_users = mysqli_num_rows($users_result);
                                 <table class="custom-users-table" id="usersTable">
                                     <thead>
                                         <tr>
-                                            <th style="width: 45px; text-align: center;">S/No</th>
-                                            <th style="width: 100px; text-align: center;">Service No</th>
+                                            <th style="width: 110px; text-align: center;">Service No</th>
                                             <th style="text-align: left;">User Profile</th>
                                             <th style="text-align: left;">Email</th>
-                                            <th style="width: 110px; text-align: center;">Role</th>
-                                            <th style="width: 90px; text-align: center;">Status</th>
-                                            <th style="width: 105px; text-align: center;">Joined Date</th>
+                                            <th style="width: 115px; text-align: center;">Role</th>
+                                            <th style="width: 95px; text-align: center;">Status</th>
+                                            <th style="width: 110px; text-align: center;">Joined Date</th>
                                             <th style="width: 235px; text-align: right; padding-right: 14px;">Actions</th>
                                         </tr>
                                     </thead>
                                     <tbody id="usersTableBody">
                                         <?php 
                                          mysqli_data_seek($users_result, 0);
-                                         $u_sno = 1;
                                          while ($user = mysqli_fetch_assoc($users_result)): 
                                              $raw_role = trim($user['role'] ?? '');
                                              $role_clean = str_replace([' ', '_', '-'], '', strtolower($raw_role));
@@ -1826,9 +1863,6 @@ $total_users = mysqli_num_rows($users_result);
                                              }
                                          ?>
                                          <tr>
-                                             <td style="text-align: center; color: #94a3b8; font-weight: 600; font-size: 0.8rem;">
-                                                 <?php echo $u_sno++; ?>
-                                             </td>
                                              <td style="text-align: center;">
                                                  <span class="service-badge">
                                                      <?php echo htmlspecialchars($user['service_no']); ?>
@@ -2156,7 +2190,7 @@ $total_users = mysqli_num_rows($users_result);
                     if (!noResultRow) {
                         noResultRow = document.createElement('tr');
                         noResultRow.className = 'no-search-results';
-                        noResultRow.innerHTML = `<td colspan="8" class="text-center py-4 text-muted">
+                        noResultRow.innerHTML = `<td colspan="7" class="text-center py-4 text-muted">
                             <i class="fa fa-search fa-2x mb-2 text-secondary opacity-50"></i>
                             <div>No users found matching "<strong>${escapeHtml(query)}</strong>"</div>
                         </td>`;
