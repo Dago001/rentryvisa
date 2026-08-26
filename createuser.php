@@ -140,6 +140,48 @@ if (isset($_POST['reset_password'])) {
     exit();
 }
 
+// Handle Google Authenticator (MFA) reset
+if (isset($_POST['reset_mfa'])) {
+    if (!isset($_POST['csrf_token']) || $_POST['csrf_token'] !== $_SESSION['csrf_token']) {
+        echo "Security validation failed. Please refresh the page.";
+        exit();
+    }
+    $user_id = intval($_POST['user_id']);
+    
+    // Clear the google_auth_secret in database
+    $stmt = mysqli_prepare($conn, "UPDATE users SET google_auth_secret = NULL WHERE id = ?");
+    mysqli_stmt_bind_param($stmt, "i", $user_id);
+    
+    if (mysqli_stmt_execute($stmt)) {
+        // Log this action to activity_log (audit trail)
+        $username_who_did = $_SESSION['username'] ?? '';
+        
+        $user_q = mysqli_query($conn, "SELECT service_no FROM users WHERE id = '$user_id'");
+        $reset_username = '';
+        if ($user_q && mysqli_num_rows($user_q) > 0) {
+            $user_r = mysqli_fetch_assoc($user_q);
+            $reset_username = $user_r['service_no'];
+        }
+        
+        $log_action = "RESET_GOOGLE_AUTH";
+        $log_desc = "Reset Google Authenticator barcode for user: " . $reset_username;
+        $ip = $_SERVER['REMOTE_ADDR'] ?? '';
+        $log_sql = "INSERT INTO activity_log (user_id, action, description, ip_address) VALUES (?, ?, ?, ?)";
+        $log_stmt = mysqli_prepare($conn, $log_sql);
+        if ($log_stmt) {
+            mysqli_stmt_bind_param($log_stmt, "ssss", $username_who_did, $log_action, $log_desc, $ip);
+            mysqli_stmt_execute($log_stmt);
+            mysqli_stmt_close($log_stmt);
+        }
+        
+        echo "Google Authenticator barcode has been reset successfully!\n\nThe user will be prompted to scan a new barcode on their next login.";
+    } else {
+        echo "Error resetting Google Authenticator: " . mysqli_error($conn);
+    }
+    mysqli_stmt_close($stmt);
+    exit();
+}
+
 // Handle user role update
 if (isset($_POST['update_role'])) {
     if (!isset($_POST['csrf_token']) || $_POST['csrf_token'] !== $_SESSION['csrf_token']) {
@@ -1038,36 +1080,50 @@ $total_users = mysqli_num_rows($users_result);
             border-top: 1px solid #e2e8f0;
         }
         
-        /* Professional User Table Action Buttons */
-        .user-actions-group {
+        /* Professional User Table Action Buttons - Two-Row Layout */
+        .user-actions-container {
             display: inline-flex !important;
+            flex-direction: column !important;
+            gap: 4px !important;
+            align-items: flex-end !important;
+            width: 100% !important;
+            min-width: 215px !important;
+            max-width: 235px !important;
+        }
+        
+        .user-actions-row {
+            display: flex !important;
             align-items: center !important;
             justify-content: flex-end !important;
-            gap: 6px !important;
-            flex-wrap: nowrap !important;
+            gap: 4px !important;
+            width: 100% !important;
             white-space: nowrap !important;
         }
         
         .btn-action-user {
             display: inline-flex !important;
             align-items: center !important;
-            gap: 5px !important;
-            padding: 5px 10px !important;
-            font-size: 0.78rem !important;
+            justify-content: center !important;
+            gap: 4px !important;
+            padding: 4px 6px !important;
+            font-size: 0.73rem !important;
             font-weight: 600 !important;
-            line-height: 1.35 !important;
-            border-radius: 6px !important;
+            line-height: 1.3 !important;
+            border-radius: 5px !important;
             border: 1px solid transparent !important;
             cursor: pointer !important;
             text-decoration: none !important;
             transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
             white-space: nowrap !important;
             outline: none !important;
-            box-shadow: 0 1px 2px rgba(0,0,0,0.04) !important;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.03) !important;
+            flex: 1 1 50% !important;
+            text-align: center !important;
         }
         
         .btn-action-user i {
-            font-size: 0.8rem !important;
+            font-size: 0.75rem !important;
+            flex-shrink: 0 !important;
         }
         
         /* Deactivate Button (Rose) */
@@ -1080,7 +1136,7 @@ $total_users = mysqli_num_rows($users_result);
             background-color: #e11d48 !important;
             color: #ffffff !important;
             border-color: #e11d48 !important;
-            box-shadow: 0 3px 8px rgba(225, 29, 72, 0.28) !important;
+            box-shadow: 0 2px 6px rgba(225, 29, 72, 0.28) !important;
             transform: translateY(-1px);
         }
         
@@ -1094,7 +1150,7 @@ $total_users = mysqli_num_rows($users_result);
             background-color: #059669 !important;
             color: #ffffff !important;
             border-color: #059669 !important;
-            box-shadow: 0 3px 8px rgba(5, 150, 105, 0.28) !important;
+            box-shadow: 0 2px 6px rgba(5, 150, 105, 0.28) !important;
             transform: translateY(-1px);
         }
         
@@ -1108,7 +1164,7 @@ $total_users = mysqli_num_rows($users_result);
             background-color: #2563eb !important;
             color: #ffffff !important;
             border-color: #2563eb !important;
-            box-shadow: 0 3px 8px rgba(37, 99, 235, 0.28) !important;
+            box-shadow: 0 2px 6px rgba(37, 99, 235, 0.28) !important;
             transform: translateY(-1px);
         }
         
@@ -1122,7 +1178,21 @@ $total_users = mysqli_num_rows($users_result);
             background-color: #d97706 !important;
             color: #ffffff !important;
             border-color: #d97706 !important;
-            box-shadow: 0 3px 8px rgba(217, 119, 6, 0.28) !important;
+            box-shadow: 0 2px 6px rgba(217, 119, 6, 0.28) !important;
+            transform: translateY(-1px);
+        }
+
+        /* Reset Google Authenticator 2FA Button (Purple) */
+        .btn-action-mfa {
+            background-color: #f5f3ff !important;
+            color: #7c3aed !important;
+            border-color: #ddd6fe !important;
+        }
+        .btn-action-mfa:hover {
+            background-color: #7c3aed !important;
+            color: #ffffff !important;
+            border-color: #7c3aed !important;
+            box-shadow: 0 2px 6px rgba(124, 58, 237, 0.28) !important;
             transform: translateY(-1px);
         }
         
@@ -1712,13 +1782,13 @@ $total_users = mysqli_num_rows($users_result);
                                     <thead>
                                         <tr>
                                             <th style="width: 45px; text-align: center;">S/No</th>
-                                            <th style="width: 105px; text-align: center;">Service No</th>
+                                            <th style="width: 100px; text-align: center;">Service No</th>
                                             <th style="text-align: left;">User Profile</th>
                                             <th style="text-align: left;">Email</th>
-                                            <th style="width: 115px; text-align: center;">Role</th>
-                                            <th style="width: 95px; text-align: center;">Status</th>
-                                            <th style="width: 110px; text-align: center;">Joined Date</th>
-                                            <th style="width: 270px; text-align: right; padding-right: 18px;">Actions</th>
+                                            <th style="width: 110px; text-align: center;">Role</th>
+                                            <th style="width: 90px; text-align: center;">Status</th>
+                                            <th style="width: 105px; text-align: center;">Joined Date</th>
+                                            <th style="width: 235px; text-align: right; padding-right: 14px;">Actions</th>
                                         </tr>
                                     </thead>
                                     <tbody id="usersTableBody">
@@ -1809,41 +1879,53 @@ $total_users = mysqli_num_rows($users_result);
                                                      <?php echo date('M d, Y', strtotime($user['created_at'])); ?>
                                                  </span>
                                              </td>
-                                             <td style="text-align: right; padding-right: 18px; white-space: nowrap;">
-                                                 <div class="user-actions-group">
-                                                     <?php if ($user['service_no'] != $username): ?>
-                                                         <?php if ($user['status'] == 'active'): ?>
-                                                             <button class="btn-action-user btn-action-deactivate deactivate-user" 
+                                             <td style="text-align: right; padding-right: 14px; white-space: nowrap; width: 235px;">
+                                                 <?php if ($user['service_no'] != $username): ?>
+                                                     <div class="user-actions-container">
+                                                         <!-- Row 1: Deactivate/Activate & Edit Role -->
+                                                         <div class="user-actions-row">
+                                                             <?php if ($user['status'] == 'active'): ?>
+                                                                 <button class="btn-action-user btn-action-deactivate deactivate-user" 
+                                                                         data-id="<?php echo $user['id']; ?>" 
+                                                                         data-name="<?php echo htmlspecialchars($user['fname'] . ' ' . $user['lname']); ?>"
+                                                                         title="Deactivate Account">
+                                                                     <i class="fa fa-ban"></i> Deactivate
+                                                                 </button>
+                                                             <?php else: ?>
+                                                                 <button class="btn-action-user btn-action-activate activate-user" 
+                                                                         data-id="<?php echo $user['id']; ?>" 
+                                                                         data-name="<?php echo htmlspecialchars($user['fname'] . ' ' . $user['lname']); ?>"
+                                                                         title="Activate Account">
+                                                                     <i class="fa fa-check"></i> Activate
+                                                                 </button>
+                                                             <?php endif; ?>
+                                                             <button class="btn-action-user btn-action-role edit-role-btn" 
                                                                      data-id="<?php echo $user['id']; ?>" 
                                                                      data-name="<?php echo htmlspecialchars($user['fname'] . ' ' . $user['lname']); ?>"
-                                                                     title="Deactivate Account">
-                                                                 <i class="fa fa-ban"></i> Deactivate
+                                                                     data-role="<?php echo htmlspecialchars($role_val); ?>"
+                                                                     title="Change User Role">
+                                                                 <i class="fa fa-user-circle"></i> Edit Role
                                                              </button>
-                                                         <?php else: ?>
-                                                             <button class="btn-action-user btn-action-activate activate-user" 
+                                                         </div>
+                                                         <!-- Row 2: Reset Password & Reset Google Authenticator -->
+                                                         <div class="user-actions-row">
+                                                             <button class="btn-action-user btn-action-reset reset-password-btn" 
                                                                      data-id="<?php echo $user['id']; ?>" 
                                                                      data-name="<?php echo htmlspecialchars($user['fname'] . ' ' . $user['lname']); ?>"
-                                                                     title="Activate Account">
-                                                                 <i class="fa fa-check"></i> Activate
+                                                                     title="Reset Password to default (password@123)">
+                                                                 <i class="fa fa-key"></i> Reset Password
                                                              </button>
-                                                         <?php endif; ?>
-                                                         <button class="btn-action-user btn-action-role edit-role-btn" 
-                                                                 data-id="<?php echo $user['id']; ?>" 
-                                                                 data-name="<?php echo htmlspecialchars($user['fname'] . ' ' . $user['lname']); ?>"
-                                                                 data-role="<?php echo htmlspecialchars($role_val); ?>"
-                                                                 title="Change User Role">
-                                                             <i class="fa fa-user-circle"></i> Edit Role
-                                                         </button>
-                                                         <button class="btn-action-user btn-action-reset reset-password-btn" 
-                                                                 data-id="<?php echo $user['id']; ?>" 
-                                                                 data-name="<?php echo htmlspecialchars($user['fname'] . ' ' . $user['lname']); ?>"
-                                                                 title="Reset Password">
-                                                             <i class="fa fa-key"></i> Reset Password
-                                                         </button>
-                                                     <?php else: ?>
-                                                         <span class="badge bg-light text-muted border" style="font-size: 0.75rem; padding: 5px 10px;">Current User</span>
-                                                     <?php endif; ?>
-                                                 </div>
+                                                             <button class="btn-action-user btn-action-mfa reset-mfa-btn" 
+                                                                     data-id="<?php echo $user['id']; ?>" 
+                                                                     data-name="<?php echo htmlspecialchars($user['fname'] . ' ' . $user['lname']); ?>"
+                                                                     title="Reset Google Authenticator Barcode">
+                                                                 <i class="fa fa-qrcode"></i> Reset Authenticator
+                                                             </button>
+                                                         </div>
+                                                     </div>
+                                                 <?php else: ?>
+                                                     <span class="badge bg-light text-muted border" style="font-size: 0.75rem; padding: 5px 10px;">Current User</span>
+                                                 <?php endif; ?>
                                              </td>
                                          </tr>
                                          <?php endwhile; ?>
@@ -2154,6 +2236,17 @@ $total_users = mysqli_num_rows($users_result);
                 });
             });
 
+            document.querySelectorAll('.reset-mfa-btn').forEach(button => {
+                button.addEventListener('click', function() {
+                    const userId = this.getAttribute('data-id');
+                    const userName = this.getAttribute('data-name');
+                    
+                    if (confirm(`Are you sure you want to reset the Google Authenticator barcode for ${userName}?\n\nThis will clear their current setup so they can scan a fresh new barcode on their next login.`)) {
+                        resetUserMfa(userId);
+                    }
+                });
+            });
+
             // Modal open/close helpers
             function openRoleModal(userId, userName, currentRole) {
                 const modalOverlay = document.getElementById('editRoleModalOverlay');
@@ -2316,6 +2409,27 @@ $total_users = mysqli_num_rows($users_result);
             .catch(error => {
                 console.error('Error:', error);
                 alert('An error occurred while resetting the password.');
+            });
+        }
+
+        function resetUserMfa(userId) {
+            const formData = new FormData();
+            formData.append('user_id', userId);
+            formData.append('reset_mfa', true);
+            formData.append('csrf_token', '<?php echo $_SESSION['csrf_token']; ?>');
+            
+            fetch(window.location.href, {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.text())
+            .then(data => {
+                alert(data);
+                location.reload();
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('An error occurred while resetting Google Authenticator.');
             });
         }
     </script>
