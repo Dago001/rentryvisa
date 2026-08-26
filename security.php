@@ -1,11 +1,24 @@
 <?php
+// Ensure dedicated, writable application session storage directory
+$session_dir = __DIR__ . '/storage/sessions';
+if (!is_dir($session_dir)) {
+    @mkdir($session_dir, 0777, true);
+}
+if (is_dir($session_dir) && is_writable($session_dir)) {
+    session_save_path($session_dir);
+}
+
 // Secure Session settings
 ini_set('session.cookie_httponly', 1);
 ini_set('session.use_only_cookies', 1);
 ini_set('session.cookie_samesite', 'Strict');
 
 if (session_status() === PHP_SESSION_NONE) {
-    session_start();
+    if (!@session_start()) {
+        // Recover cleanly if browser sent an invalid or locked session cookie
+        session_id(bin2hex(random_bytes(16)));
+        @session_start();
+    }
 }
 
 // Session Hijacking Protection
