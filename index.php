@@ -79,18 +79,10 @@ function showLoginForm() {
                 if (mysqli_stmt_execute($stmt)) {
                     mysqli_stmt_close($stmt);
 
-                    // Audit log
+                    // Audit log password reset
                     $username_who_did = $_SESSION['temp_user']['username'];
-                    $log_action = "PASSWORD_RESET_ON_LOGIN";
-                    $log_desc = "User reset default password upon login";
-                    $ip = $_SERVER['REMOTE_ADDR'] ?? '';
-                    $log_sql = "INSERT INTO activity_log (user_id, action, description, ip_address) VALUES (?, ?, ?, ?)";
-                    $log_stmt = mysqli_prepare($conn, $log_sql);
-                    if ($log_stmt) {
-                        mysqli_stmt_bind_param($log_stmt, "ssss", $username_who_did, $log_action, $log_desc, $ip);
-                        mysqli_stmt_execute($log_stmt);
-                        mysqli_stmt_close($log_stmt);
-                    }
+                    logActivity($conn, "PASSWORD_RESET_ON_LOGIN", "User reset default password upon login", $username_who_did);
+                    logActivity($conn, "LOGIN_SUCCESS", "User {$_SESSION['temp_user']['full_name']} ({$username_who_did}) logged in successfully as {$_SESSION['temp_user']['role']}", $username_who_did);
 
                     // Complete login
                     $_SESSION['username'] = $_SESSION['temp_user']['username'];
@@ -159,6 +151,11 @@ function showLoginForm() {
                     }
 
                     // Complete the normal login
+                    $loggedUser = $_SESSION['temp_user']['username'];
+                    $loggedName = $_SESSION['temp_user']['full_name'];
+                    $loggedRole = $_SESSION['temp_user']['role'];
+                    logActivity($conn, "LOGIN_SUCCESS", "User $loggedName ($loggedUser) logged in successfully as $loggedRole", $loggedUser);
+
                     $_SESSION['username'] = $_SESSION['temp_user']['username'];
                     $_SESSION['user_id'] = $_SESSION['temp_user']['id'];
                     $_SESSION['full_name'] = $_SESSION['temp_user']['full_name'];
@@ -179,6 +176,8 @@ function showLoginForm() {
                     }
                     exit();
                 } else {
+                    $mfaFailUser = $_SESSION['temp_user']['username'] ?? 'UNKNOWN';
+                    logActivity($conn, "LOGIN_MFA_FAILED", "Failed Google Authenticator 2FA code attempt for user: $mfaFailUser", $mfaFailUser);
                     $error_message = "Invalid Google Authenticator code. Please try again.";
                 }
             }
@@ -230,9 +229,11 @@ function showLoginForm() {
                         header("Location: index");
                         exit();
                     } else {
+                        logActivity($conn, "LOGIN_FAILED", "Failed login attempt (invalid password) for user: $username", $username);
                         $error_message = "Invalid login credentials";
                     }
                 } else {
+                    logActivity($conn, "LOGIN_FAILED", "Failed login attempt (user not found or account deactivated): $username", $username);
                     $error_message = "Invalid login credentials or account is deactivated";
                 }
                 mysqli_stmt_close($stmt);

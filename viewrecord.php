@@ -123,20 +123,12 @@ if(isset($_GET['id'])) {
         
         $status = $foundk['status'] ?? 'N/A';
         
-        // Log this viewing/printing action in the activity_log for audit trail
-        $log_action = "VIEW/PRINT";
-        $log_desc = "Viewed/Printed visa application details for Visa No: " . $visa_number;
+        // Log this viewing action in the activity_log for audit trail
+        $log_desc = "Viewed visa application details for " . $surname . ", " . $given_name . " (Visa No: " . $visa_number . ", Passport: " . $passport_number . ")";
         if (isset($_GET['ref']) && $_GET['ref'] === 'globalsearch') {
-            $log_desc = "Viewed/Printed visa application details for Visa No: " . $visa_number . " via Global Search";
+            $log_desc .= " via Global Search";
         }
-        $ip = $_SERVER['REMOTE_ADDR'] ?? '';
-        $log_sql = "INSERT INTO activity_log (user_id, action, description, ip_address) VALUES (?, ?, ?, ?)";
-        $log_stmt = mysqli_prepare($conn, $log_sql);
-        if ($log_stmt) {
-            mysqli_stmt_bind_param($log_stmt, "ssss", $username, $log_action, $log_desc, $ip);
-            mysqli_stmt_execute($log_stmt);
-            mysqli_stmt_close($log_stmt);
-        }
+        logActivity($conn, "VIEW", $log_desc);
     } else {
         // No record found
         header("Location: re-entry-visa?error=Record not found");

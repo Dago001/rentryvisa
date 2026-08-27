@@ -143,14 +143,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_profile'])) {
                             if (mysqli_stmt_execute($stmt_update)) {
                                 if ($update_password) {
                                     // Insert activity log
-                                    $log_action = "UPDATE";
-                                    $log_desc = "Updated password and profile details";
-                                    $log_query = "INSERT INTO activity_log (user_id, action, description, ip_address) VALUES (?, ?, ?, ?)";
-                                    $stmt_log = mysqli_prepare($conn, $log_query);
-                                    $ip = $_SERVER['REMOTE_ADDR'] ?? '';
-                                    mysqli_stmt_bind_param($stmt_log, "ssss", $username, $log_action, $log_desc, $ip);
-                                    mysqli_stmt_execute($stmt_log);
-                                    mysqli_stmt_close($stmt_log);
+                                    logActivity($conn, "UPDATE_PROFILE", "Updated password and profile details", $username);
                                     mysqli_stmt_close($stmt_update);
 
                                     // Unset user session variables to automatically log out user
@@ -181,14 +174,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_profile'])) {
                                 $fullName = $_SESSION['full_name'];
                                 
                                 // Insert activity log
-                                $log_action = "UPDATE";
-                                $log_desc = "Updated user profile details";
-                                $log_query = "INSERT INTO activity_log (user_id, action, description, ip_address) VALUES (?, ?, ?, ?)";
-                                $stmt_log = mysqli_prepare($conn, $log_query);
-                                $ip = $_SERVER['REMOTE_ADDR'] ?? '';
-                                mysqli_stmt_bind_param($stmt_log, "ssss", $username, $log_action, $log_desc, $ip);
-                                mysqli_stmt_execute($stmt_log);
-                                mysqli_stmt_close($stmt_log);
+                                logActivity($conn, "UPDATE_PROFILE", "Updated user profile details", $username);
                                 
                                 // Re-fetch user details for the form
                                 $user_query = "SELECT * FROM users WHERE id = ?";

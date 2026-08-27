@@ -153,12 +153,8 @@ $sql = "INSERT INTO visa_applications ($fields_str) VALUES ($vals_str)";
 
 if (mysqli_query($conn, $sql)) {
     // Log the sync action to activity_log (audit trail)
-    $log_sql = "INSERT INTO activity_log (user_id, action, description) VALUES (?, 'CREATE', ?)";
-    $log_stmt = mysqli_prepare($conn, $log_sql);
-    $log_description = "Created new visa application for $surname, $given_name (Visa: $visa_number) via Offline Sync";
-    mysqli_stmt_bind_param($log_stmt, "ss", $_SESSION['username'], $log_description);
-    mysqli_stmt_execute($log_stmt);
-    mysqli_stmt_close($log_stmt);
+    $log_description = "Created new visa application for $surname, $given_name (Visa: $visa_number, Passport: $passport_number) via Offline Sync";
+    logActivity($conn, "CREATE", $log_description);
     
     echo json_encode(['status' => 'success', 'message' => "Application for Passport: $passport_number successfully synced!"]);
 } else {

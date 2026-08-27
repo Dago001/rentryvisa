@@ -1,5 +1,14 @@
 <?php
 require_once('security.php');
+require_once('db/db.php');
+
+// Log the logout action if user was logged in
+if (isset($_SESSION['username'])) {
+    $logoutUser = $_SESSION['username'];
+    $logoutName = $_SESSION['full_name'] ?? $logoutUser;
+    $logoutRole = $_SESSION['role'] ?? 'User';
+    logActivity($conn, "LOGOUT", "User $logoutName ($logoutUser) logged out of the system", $logoutUser);
+}
 
 // Unset all session variables
 $_SESSION = array();

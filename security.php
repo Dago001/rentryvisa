@@ -65,4 +65,147 @@ function formatNISDate($dateStr) {
     $year = date('Y', $timestamp);
     return $day . $suffix . ' ' . $month . ' ' . $year;
 }
+
+/**
+ * Resolves the client's real IP address, handling proxies and normalizing IPv6 loopback to 127.0.0.1
+ */
+function getClientIP() {
+    $ipKeys = [
+        'HTTP_CF_CONNECTING_IP',
+        'HTTP_X_FORWARDED_FOR',
+        'HTTP_X_REAL_IP',
+        'HTTP_CLIENT_IP',
+        'REMOTE_ADDR'
+    ];
+    
+    foreach ($ipKeys as $key) {
+        if (!empty($_SERVER[$key])) {
+            $ipList = explode(',', $_SERVER[$key]);
+            $ip = trim($ipList[0]);
+            if (filter_var($ip, FILTER_VALIDATE_IP)) {
+                if ($ip === '::1' || $ip === '0:0:0:0:0:0:0:1') {
+                    return '127.0.0.1';
+                }
+                return $ip;
+            }
+        }
+    }
+    
+    $rem = $_SERVER['REMOTE_ADDR'] ?? '127.0.0.1';
+    if ($rem === '::1' || $rem === '0:0:0:0:0:0:0:1' || empty($rem)) {
+        return '127.0.0.1';
+    }
+    return $rem;
+}
+
+/**
+ * Standardized system activity logger recording operator, action, description, client IP, and browser agent
+ */
+function logActivity($conn, $action, $description, $userId = null) {
+    if (!$conn) {
+        return false;
+    }
+    
+    $user = $userId ?: ($_SESSION['username'] ?? 'SYSTEM');
+    $ip = getClientIP();
+    $userAgent = $_SERVER['HTTP_USER_AGENT'] ?? '';
+    
+    $stmt = mysqli_prepare($conn, "INSERT INTO activity_log (user_id, action, description, ip_address, user_agent) VALUES (?, ?, ?, ?, ?)");
+    if ($stmt) {
+        mysqli_stmt_bind_param($stmt, "sssss", $user, $action, $description, $ip, $userAgent);
+        $res = mysqli_stmt_execute($stmt);
+        mysqli_stmt_close($stmt);
+        return $res;
+    }
+    return false;
+}
+
+/**
+ * Parses user agent string into friendly browser and operating system summary
+ */
+function parseUserAgent($userAgent) {
+    if (empty($userAgent)) {
+        return [
+            'browser' => 'System/CLI',
+            'os' => 'Server',
+            'device' => 'Server',
+            'icon' => 'fa-server',
+            'summary' => 'System Server'
+        ];
+    }
+    
+    $os = 'Unknown OS';
+    if (preg_match('/windows nt 10/i', $userAgent)) $os = 'Windows 10/11';
+    elseif (preg_match('/windows nt 6\.3/i', $userAgent)) $os = 'Windows 8.1';
+    elseif (preg_match('/windows nt 6\.2/i', $userAgent)) $os = 'Windows 8';
+    elseif (preg_match('/windows nt 6\.1/i', $userAgent)) $os = 'Windows 7';
+    elseif (preg_match('/windows/i', $userAgent)) $os = 'Windows';
+    elseif (preg_match('/macintosh|mac os x/i', $userAgent)) $os = 'macOS';
+    elseif (preg_match('/android/i', $userAgent)) $os = 'Android';
+    elseif (preg_match('/iphone|ipad|ipod/i', $userAgent)) $os = 'iOS';
+    elseif (preg_match('/linux/i', $userAgent)) $os = 'Linux';
+    
+    $browser = 'Unknown Browser';
+    if (preg_match('/edg/i', $userAgent)) $browser = 'Edge';
+    elseif (preg_match('/chrome|crios/i', $userAgent)) $browser = 'Chrome';
+    elseif (preg_match('/firefox|fxios/i', $userAgent)) $browser = 'Firefox';
+    elseif (preg_match('/safari/i', $userAgent) && !preg_match('/chrome/i', $userAgent)) $browser = 'Safari';
+    elseif (preg_match('/opera|opr/i', $userAgent)) $browser = 'Opera';
+    
+    $device = 'Desktop';
+    $icon = 'fa-desktop';
+    if (preg_match('/mobile|iphone|ipod|android.*mobile/i', $userAgent)) {
+        $device = 'Mobile';
+        $icon = 'fa-mobile';
+    } elseif (preg_match('/tablet|ipad|android(?!.*mobile)/i', $userAgent)) {
+        $device = 'Tablet';
+        $icon = 'fa-tablet';
+    }
+    
+    return [
+        'browser' => $browser,
+        'os' => $os,
+        'device' => $device,
+        'icon' => $icon,
+        'summary' => "$browser on $os"
+    ];
+}
+
+/**
+ * Return appropriate CSS badge class and icon for audit trail actions
+ */
+function getAuditBadgeClass($action) {
+    $act = strtoupper(trim((string)$action));
+    if (strpos($act, 'CREATE') !== false) {
+        return ['class' => 'badge-create', 'icon' => 'fa-plus-circle'];
+    }
+    if (strpos($act, 'UPDATE') !== false || strpos($act, 'EDIT') !== false) {
+        return ['class' => 'badge-update', 'icon' => 'fa-pencil'];
+    }
+    if (strpos($act, 'DELETE') !== false || strpos($act, 'REMOVE') !== false) {
+        return ['class' => 'badge-delete', 'icon' => 'fa-trash'];
+    }
+    if (strpos($act, 'LOGIN_FAILED') !== false || strpos($act, 'FAILED') !== false) {
+        return ['class' => 'badge-login-failed', 'icon' => 'fa-exclamation-triangle'];
+    }
+    if (strpos($act, 'LOGIN') !== false) {
+        return ['class' => 'badge-login', 'icon' => 'fa-sign-in'];
+    }
+    if (strpos($act, 'LOGOUT') !== false) {
+        return ['class' => 'badge-logout', 'icon' => 'fa-sign-out'];
+    }
+    if (strpos($act, 'RESET') !== false || strpos($act, 'PASSWORD') !== false || strpos($act, 'MFA') !== false || strpos($act, 'AUTH') !== false) {
+        return ['class' => 'badge-security', 'icon' => 'fa-shield'];
+    }
+    if (strpos($act, 'PRINT') !== false) {
+        return ['class' => 'badge-print', 'icon' => 'fa-print'];
+    }
+    if (strpos($act, 'VIEW') !== false || strpos($act, 'SEARCH') !== false) {
+        return ['class' => 'badge-view', 'icon' => 'fa-eye'];
+    }
+    if (strpos($act, 'EMAIL') !== false) {
+        return ['class' => 'badge-email', 'icon' => 'fa-envelope'];
+    }
+    return ['class' => 'badge-other', 'icon' => 'fa-circle-o'];
+}
 ?>

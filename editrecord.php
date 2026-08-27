@@ -220,19 +220,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_record'])) {
                     $success_message = "Record updated successfully!";
                     
                     // Log the edit action to activity_log
-                    $log_action = "EDIT";
                     $log_desc = "Edited visa application record for Visa No: " . $current_visa_number;
                     if (isset($_POST['ref']) && $_POST['ref'] === 'globalsearch') {
                         $log_desc = "Edited visa application record for Visa No: " . $current_visa_number . " via Global Search";
                     }
-                    $ip = $_SERVER['REMOTE_ADDR'] ?? '';
-                    $log_sql = "INSERT INTO activity_log (user_id, action, description, ip_address) VALUES (?, ?, ?, ?)";
-                    $log_stmt = mysqli_prepare($conn, $log_sql);
-                    if ($log_stmt) {
-                        mysqli_stmt_bind_param($log_stmt, "ssss", $username, $log_action, $log_desc, $ip);
-                        mysqli_stmt_execute($log_stmt);
-                        mysqli_stmt_close($log_stmt);
-                    }
+                    logActivity($conn, "EDIT", $log_desc);
                     
                     $visa_number = $final_visa_number;
                     
@@ -307,19 +299,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_record'])) {
                 $success_message = "Record updated successfully!";
                 
                 // Log the edit action to activity_log
-                $log_action = "EDIT";
                 $log_desc = "Edited visa application record for Visa No: " . $current_visa_number;
                 if (isset($_POST['ref']) && $_POST['ref'] === 'globalsearch') {
                     $log_desc = "Edited visa application record for Visa No: " . $current_visa_number . " via Global Search";
                 }
-                $ip = $_SERVER['REMOTE_ADDR'] ?? '';
-                $log_sql = "INSERT INTO activity_log (user_id, action, description, ip_address) VALUES (?, ?, ?, ?)";
-                $log_stmt = mysqli_prepare($conn, $log_sql);
-                if ($log_stmt) {
-                    mysqli_stmt_bind_param($log_stmt, "ssss", $username, $log_action, $log_desc, $ip);
-                    mysqli_stmt_execute($log_stmt);
-                    mysqli_stmt_close($log_stmt);
-                }
+                logActivity($conn, "EDIT", $log_desc);
                 
                 // Fetch updated record
                 $sql = "SELECT " . implode(', ', $selectColumns) . " FROM visa_applications WHERE visa_number = '$current_visa_number'";

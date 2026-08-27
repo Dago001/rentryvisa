@@ -21,6 +21,7 @@ if ($currentUserRole !== 'Admin' && $currentUserRole !== 'Supervisor') {
 }
 
 require_once('db/db.php');
+require_once('mailer.php');
 
 // Sync current user's profile photo from database to ensure it's always up to date
 if (isset($_SESSION['user_id'])) {
@@ -53,11 +54,16 @@ if (mysqli_num_rows($table_check) == 0) {
     }
 }
 
+$user_created_detail = null;
+if (isset($_SESSION['user_created_detail'])) {
+    $user_created_detail = $_SESSION['user_created_detail'];
+    unset($_SESSION['user_created_detail']);
+}
 $success_msg = null;
 if (isset($_SESSION['success_msg'])) {
     $success_msg = $_SESSION['success_msg'];
     unset($_SESSION['success_msg']);
-} elseif (isset($_GET['success'])) {
+} elseif (isset($_GET['success']) && !$user_created_detail) {
     $success_msg = "User created successfully!";
 }
 $error_msg = null;
@@ -74,6 +80,82 @@ $current_user_query = mysqli_query($conn, "SELECT id FROM users WHERE service_no
 $current_user = mysqli_fetch_assoc($current_user_query);
 $current_user_id = $current_user ? $current_user['id'] : 0;
 
+// Handle SMTP Settings Save (Admin Only)
+if (isset($_POST['save_smtp_settings'])) {
+    header('Content-Type: application/json');
+    if (!isset($_POST['csrf_token']) || $_POST['csrf_token'] !== $_SESSION['csrf_token']) {
+        echo json_encode(['success' => false, 'message' => 'Security token mismatch. Please refresh the page.']);
+        exit();
+    }
+    if ($currentUserRole !== 'Admin') {
+        echo json_encode(['success' => false, 'message' => 'Only Administrators can configure email settings.']);
+        exit();
+    }
+    
+    $smtpHost = mysqli_real_escape_string($conn, trim($_POST['smtp_host'] ?? 'mail.nisapps.com.ng'));
+    $smtpPort = intval($_POST['smtp_port'] ?? 587);
+    $smtpUser = mysqli_real_escape_string($conn, trim($_POST['smtp_user'] ?? ''));
+    $smtpPass = mysqli_real_escape_string($conn, trim($_POST['smtp_pass'] ?? ''));
+    $smtpEnc = mysqli_real_escape_string($conn, trim($_POST['smtp_encryption'] ?? 'tls'));
+    $fromAddr = mysqli_real_escape_string($conn, trim($_POST['from_address'] ?? 'noreply@nisapps.com.ng'));
+    $fromName = mysqli_real_escape_string($conn, trim($_POST['from_name'] ?? 'Nigeria Immigration Service (NISREV)'));
+    
+    $check = mysqli_query($conn, "SELECT id FROM email_settings LIMIT 1");
+    if ($check && mysqli_num_rows($check) > 0) {
+        $row = mysqli_fetch_assoc($check);
+        $id = $row['id'];
+        $saveSql = "UPDATE email_settings SET smtp_host = '$smtpHost', smtp_port = $smtpPort, smtp_user = '$smtpUser', smtp_pass = '$smtpPass', smtp_encryption = '$smtpEnc', from_address = '$fromAddr', from_name = '$fromName' WHERE id = $id";
+    } else {
+        $saveSql = "INSERT INTO email_settings (smtp_host, smtp_port, smtp_user, smtp_pass, smtp_encryption, from_address, from_name) VALUES ('$smtpHost', $smtpPort, '$smtpUser', '$smtpPass', '$smtpEnc', '$fromAddr', '$fromName')";
+    }
+    
+    if (mysqli_query($conn, $saveSql)) {
+        logActivity($conn, "UPDATE_EMAIL_SETTINGS", "Updated SMTP mail configuration settings ($smtpHost:$smtpPort)");
+        echo json_encode(['success' => true, 'message' => 'SMTP settings saved successfully!']);
+    } else {
+        echo json_encode(['success' => false, 'message' => 'Database error: ' . mysqli_error($conn)]);
+    }
+    exit();
+}
+
+// Handle SMTP Test Email Dispatch (Admin Only)
+if (isset($_POST['test_smtp_email'])) {
+    header('Content-Type: application/json');
+    if (!isset($_POST['csrf_token']) || $_POST['csrf_token'] !== $_SESSION['csrf_token']) {
+        echo json_encode(['success' => false, 'message' => 'Security token mismatch. Please refresh the page.']);
+        exit();
+    }
+    if ($currentUserRole !== 'Admin') {
+        echo json_encode(['success' => false, 'message' => 'Only Administrators can test email settings.']);
+        exit();
+    }
+    
+    $testTo = filter_var(trim($_POST['test_email'] ?? ''), FILTER_VALIDATE_EMAIL);
+    if (!$testTo) {
+        echo json_encode(['success' => false, 'message' => 'Please provide a valid destination email address (e.g. mmaluv22@gmail.com).']);
+        exit();
+    }
+    
+    $smtpHost = trim($_POST['smtp_host'] ?? 'mail.nisapps.com.ng');
+    $smtpPort = intval($_POST['smtp_port'] ?? 587);
+    $smtpUser = trim($_POST['smtp_user'] ?? '');
+    $smtpPass = trim($_POST['smtp_pass'] ?? '');
+    $smtpEnc = trim($_POST['smtp_encryption'] ?? 'tls');
+    $fromAddr = trim($_POST['from_address'] ?? 'noreply@nisapps.com.ng');
+    $fromName = trim($_POST['from_name'] ?? 'Nigeria Immigration Service (NISREV)');
+    
+    $testRes = NISMailer::testSmtpConnection($testTo, $smtpHost, $smtpPort, $smtpUser, $smtpPass, $smtpEnc, $fromAddr, $fromName);
+    
+    if ($testRes['success']) {
+        logActivity($conn, "TEST_EMAIL_SUCCESS", "Successfully sent test email to {$testTo} via {$smtpHost}:{$smtpPort}");
+    } else {
+        logActivity($conn, "TEST_EMAIL_FAILED", "Failed test email to {$testTo}: " . $testRes['message']);
+    }
+    
+    echo json_encode($testRes);
+    exit();
+}
+
 // Handle user status update
 if (isset($_POST['update_status'])) {
     if (!isset($_POST['csrf_token']) || $_POST['csrf_token'] !== $_SESSION['csrf_token']) {
@@ -87,6 +169,14 @@ if (isset($_POST['update_status'])) {
         $update_sql = "UPDATE users SET status = '$status' WHERE id = '$user_id'";
         
         if (mysqli_query($conn, $update_sql)) {
+            $user_q = mysqli_query($conn, "SELECT service_no, fname, lname FROM users WHERE id = '$user_id'");
+            $target_user = '';
+            if ($user_q && $r = mysqli_fetch_assoc($user_q)) {
+                $target_user = $r['service_no'] . ' (' . trim($r['fname'] . ' ' . $r['lname']) . ')';
+            } else {
+                $target_user = $user_id;
+            }
+            logActivity($conn, "UPDATE_USER_STATUS", "Changed status to '" . strtoupper($status) . "' for user: " . $target_user);
             echo "User status updated successfully!";
         } else {
             echo "Error updating user status: " . mysqli_error($conn);
@@ -112,28 +202,25 @@ if (isset($_POST['reset_password'])) {
     $update_sql = "UPDATE users SET password = '$default_password', password_reset_required = 1 WHERE id = '$user_id'";
     
     if (mysqli_query($conn, $update_sql)) {
-        // Log this action to activity_log (audit trail)
-        $username_who_did = $_SESSION['username'] ?? '';
-        
-        $user_q = mysqli_query($conn, "SELECT service_no FROM users WHERE id = '$user_id'");
+        $user_q = mysqli_query($conn, "SELECT service_no, email, fname, lname FROM users WHERE id = '$user_id'");
         $reset_username = '';
+        $reset_email = '';
+        $reset_name = '';
         if ($user_q && mysqli_num_rows($user_q) > 0) {
             $user_r = mysqli_fetch_assoc($user_q);
             $reset_username = $user_r['service_no'];
+            $reset_email = $user_r['email'];
+            $reset_name = trim(($user_r['fname'] ?? '') . ' ' . ($user_r['lname'] ?? ''));
+            
+            // Dispatch password reset email notification
+            if (!empty($reset_email)) {
+                NISMailer::sendPasswordResetNotification($conn, $reset_email, $reset_name, $reset_username, 'password@123');
+            }
         }
         
-        $log_action = "RESET_PASSWORD";
-        $log_desc = "Reset password to default 'password@123' for user: " . $reset_username;
-        $ip = $_SERVER['REMOTE_ADDR'] ?? '';
-        $log_sql = "INSERT INTO activity_log (user_id, action, description, ip_address) VALUES (?, ?, ?, ?)";
-        $log_stmt = mysqli_prepare($conn, $log_sql);
-        if ($log_stmt) {
-            mysqli_stmt_bind_param($log_stmt, "ssss", $username_who_did, $log_action, $log_desc, $ip);
-            mysqli_stmt_execute($log_stmt);
-            mysqli_stmt_close($log_stmt);
-        }
+        logActivity($conn, "RESET_PASSWORD", "Reset password to default 'password@123' for user: " . $reset_username);
         
-        echo "Password reset to default 'password@123' successfully!";
+        echo "Password reset to default 'password@123' successfully!\n\nA notification email has been dispatched to the user ($reset_username).";
     } else {
         echo "Error resetting password: " . mysqli_error($conn);
     }
@@ -153,9 +240,6 @@ if (isset($_POST['reset_mfa'])) {
     mysqli_stmt_bind_param($stmt, "i", $user_id);
     
     if (mysqli_stmt_execute($stmt)) {
-        // Log this action to activity_log (audit trail)
-        $username_who_did = $_SESSION['username'] ?? '';
-        
         $user_q = mysqli_query($conn, "SELECT service_no FROM users WHERE id = '$user_id'");
         $reset_username = '';
         if ($user_q && mysqli_num_rows($user_q) > 0) {
@@ -163,16 +247,7 @@ if (isset($_POST['reset_mfa'])) {
             $reset_username = $user_r['service_no'];
         }
         
-        $log_action = "RESET_GOOGLE_AUTH";
-        $log_desc = "Reset Google Authenticator barcode for user: " . $reset_username;
-        $ip = $_SERVER['REMOTE_ADDR'] ?? '';
-        $log_sql = "INSERT INTO activity_log (user_id, action, description, ip_address) VALUES (?, ?, ?, ?)";
-        $log_stmt = mysqli_prepare($conn, $log_sql);
-        if ($log_stmt) {
-            mysqli_stmt_bind_param($log_stmt, "ssss", $username_who_did, $log_action, $log_desc, $ip);
-            mysqli_stmt_execute($log_stmt);
-            mysqli_stmt_close($log_stmt);
-        }
+        logActivity($conn, "RESET_GOOGLE_AUTH", "Reset Google Authenticator barcode for user: " . $reset_username);
         
         echo "Google Authenticator barcode has been reset successfully!\n\nThe user will be prompted to scan a new barcode on their next login.";
     } else {
@@ -204,6 +279,14 @@ if (isset($_POST['update_role'])) {
     $stmt = mysqli_prepare($conn, "UPDATE users SET role = ? WHERE id = ?");
     mysqli_stmt_bind_param($stmt, "si", $new_role, $user_id);
     if (mysqli_stmt_execute($stmt)) {
+        $user_q = mysqli_query($conn, "SELECT service_no, fname, lname FROM users WHERE id = '$user_id'");
+        $target_user = '';
+        if ($user_q && $r = mysqli_fetch_assoc($user_q)) {
+            $target_user = $r['service_no'] . ' (' . trim($r['fname'] . ' ' . $r['lname']) . ')';
+        } else {
+            $target_user = $user_id;
+        }
+        logActivity($conn, "UPDATE_USER_ROLE", "Updated role to '$new_role' for user: " . $target_user);
         echo "User role updated successfully!";
     } else {
         echo "Error updating user role: " . mysqli_error($conn);
@@ -222,7 +305,12 @@ if (isset($_POST['regUser']) || isset($_POST['serviceNo'])) {
         $fname = trim($_POST['fname'] ?? '');
         $lname = trim($_POST['lname'] ?? '');
         $email = trim($_POST['email'] ?? '');
-        $password_raw = $_POST['password'] ?? '';
+        $password_raw = trim($_POST['password'] ?? '');
+        
+        // Auto-assign default password if not provided
+        if (empty($password_raw)) {
+            $password_raw = 'password@123';
+        }
         
         if (empty($serviceNo)) {
             $error_msg = "Error: Service Number is required.";
@@ -239,9 +327,7 @@ if (isset($_POST['regUser']) || isset($_POST['serviceNo'])) {
         } elseif (empty($email)) {
             $error_msg = "Error: Email is required.";
         } elseif (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
-            $error_msg = "Error: Invalid email format.";
-        } elseif (empty($password_raw)) {
-            $error_msg = "Error: Password is required.";
+            $error_msg = "Error: Invalid email format. Please enter a valid email address (e.g. ezeab@gmail.com).";
         } elseif (strlen($password_raw) < 6) {
             $error_msg = "Error: Password must be at least 6 characters long.";
         } else {
@@ -312,7 +398,22 @@ if (isset($_POST['regUser']) || isset($_POST['serviceNo'])) {
                             VALUES ('$serviceNo', '$userRole', '$fname', '$lname', '$email', '$password', '$photo', 1)";
                     
                     if (mysqli_query($conn, $sql)) {
-                        $_SESSION['success_msg'] = "User created successfully!";
+                        // Audit Log user creation
+                        logActivity($conn, "CREATE_USER", "Created user: $serviceNo ($fname $lname), Role: $userRole, Email: $email");
+
+                        // Send welcome email with login instructions and default password
+                        $mailRes = NISMailer::sendWelcomeEmail($conn, $email, $fname . ' ' . $lname, $serviceNo, $password_raw, $userRole);
+
+                        $_SESSION['user_created_detail'] = [
+                            'name' => trim($fname . ' ' . $lname),
+                            'service_no' => $serviceNo,
+                            'password' => $password_raw,
+                            'role' => $userRole,
+                            'email' => $email,
+                            'email_sent' => !empty($mailRes['success']),
+                            'email_msg' => $mailRes['message'] ?? ''
+                        ];
+                        
                         session_write_close();
                         header("Location: createuser?success=1");
                         exit();
@@ -323,6 +424,21 @@ if (isset($_POST['regUser']) || isset($_POST['serviceNo'])) {
             }
         }
     }
+}
+
+// Fetch current email configuration settings
+$email_settings = [
+    'smtp_host' => 'mail.nisapps.com.ng',
+    'smtp_port' => 587,
+    'smtp_user' => '',
+    'smtp_pass' => '',
+    'smtp_encryption' => 'tls',
+    'from_address' => 'noreply@nisapps.com.ng',
+    'from_name' => 'Nigeria Immigration Service (NISREV)'
+];
+$es_query = mysqli_query($conn, "SELECT * FROM email_settings LIMIT 1");
+if ($es_query && $es_data = mysqli_fetch_assoc($es_query)) {
+    $email_settings = array_merge($email_settings, $es_data);
 }
 
 // Fetch existing users for display
@@ -441,24 +557,31 @@ $total_users = mysqli_num_rows($users_result);
         }
         
         .user-avatar {
-            width: 38px;
-            height: 38px;
+            width: 44px;
+            height: 44px;
+            min-width: 44px;
             border-radius: 50%;
             background: linear-gradient(135deg, var(--primary), var(--secondary));
+            border: 2.5px solid var(--primary);
             color: white;
             display: flex;
             align-items: center;
             justify-content: center;
-            font-weight: 600;
+            font-weight: 800;
             font-size: 1rem;
-            box-shadow: 0 2px 8px rgba(26, 92, 46, 0.2);
+            box-shadow: 0 3px 10px rgba(26, 92, 46, 0.28);
             overflow: hidden;
+            flex-shrink: 0;
+            image-rendering: -webkit-optimize-contrast;
         }
         
         .user-avatar img {
             width: 100%;
             height: 100%;
             object-fit: cover;
+            display: block;
+            image-rendering: -webkit-optimize-contrast;
+            filter: contrast(1.05);
         }
         
         .user-details {
@@ -611,7 +734,7 @@ $total_users = mysqli_num_rows($users_result);
             outline: none;
         }
         
-        /* Password Toggle Wrapper & Button */
+        /* Password Field Wrapper & Action Buttons Group */
         .password-field-wrapper {
             position: relative;
             display: flex;
@@ -619,30 +742,45 @@ $total_users = mysqli_num_rows($users_result);
         }
         
         .password-field-wrapper .form-control {
-            padding-right: 42px;
+            padding-right: 120px;
             width: 100%;
         }
         
-        .password-field-wrapper .toggle-password-btn {
+        .password-actions-group {
             position: absolute;
-            right: 8px;
+            right: 4px;
             top: 50%;
             transform: translateY(-50%);
+            display: flex;
+            align-items: center;
+            gap: 2px;
+            z-index: 4;
+        }
+        
+        .pwd-action-btn {
             background: transparent;
             border: none;
-            color: #6c757d;
+            color: #64748b;
             cursor: pointer;
-            padding: 8px 10px;
-            z-index: 4;
-            transition: color 0.2s ease;
+            padding: 5px 6px;
+            border-radius: 4px;
+            transition: all 0.2s ease;
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 1rem;
+            font-size: 0.88rem;
+            line-height: 1;
         }
         
-        .password-field-wrapper .toggle-password-btn:hover {
+        .pwd-action-btn:hover {
             color: var(--primary);
+            background: rgba(26, 92, 46, 0.08);
+        }
+        
+        .password-field-wrapper .toggle-password-btn {
+            position: static;
+            transform: none;
+            padding: 5px 6px;
         }
 
         /* Button Styles */
@@ -678,29 +816,230 @@ $total_users = mysqli_num_rows($users_result);
             box-shadow: 0 4px 12px rgba(243, 156, 18, 0.3);
         }
         
-        /* Alert/Status Message Styles matching new-record.php */
+        /* Professional User Created Notification Alert */
+        .user-created-alert {
+            background: #f0fdf4;
+            border: 1.5px solid #86efac;
+            border-left: 6px solid #16a34a;
+            border-radius: 12px;
+            padding: 18px 22px;
+            margin-bottom: 25px;
+            box-shadow: 0 4px 16px rgba(22, 163, 74, 0.08);
+            animation: slideDownAlert 0.35s ease-out;
+        }
+
+        @keyframes slideDownAlert {
+            from {
+                opacity: 0;
+                transform: translateY(-8px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .user-created-alert.simple-alert {
+            padding: 14px 20px;
+        }
+
+        .alert-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            gap: 15px;
+            margin-bottom: 14px;
+        }
+
+        .alert-title-group {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .alert-icon-badge {
+            width: 38px;
+            height: 38px;
+            min-width: 38px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #16a34a, #15803d);
+            color: #ffffff;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.1rem;
+            box-shadow: 0 2px 6px rgba(22, 163, 74, 0.3);
+        }
+
+        .alert-main-title {
+            margin: 0;
+            font-size: 1.12rem;
+            font-weight: 700;
+            color: #14532d;
+            letter-spacing: -0.2px;
+        }
+
+        .alert-subtitle {
+            margin: 3px 0 0 0;
+            font-size: 0.85rem;
+            color: #166534;
+        }
+
+        .alert-close-btn {
+            background: transparent;
+            border: none;
+            color: #166534;
+            opacity: 0.6;
+            font-size: 1.25rem;
+            cursor: pointer;
+            padding: 2px 6px;
+            border-radius: 4px;
+            transition: all 0.2s ease;
+            line-height: 1;
+        }
+
+        .alert-close-btn:hover {
+            opacity: 1;
+            background: rgba(22, 163, 74, 0.12);
+        }
+
+        .alert-credentials-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+            gap: 12px;
+            margin-bottom: 14px;
+        }
+
+        .cred-card {
+            background: #ffffff;
+            border: 1.5px solid #dcfce7;
+            border-radius: 9px;
+            padding: 11px 13px;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.02);
+            transition: border-color 0.2s ease;
+        }
+
+        .cred-card:hover {
+            border-color: #86efac;
+        }
+
+        .cred-label {
+            font-size: 0.74rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: #64748b;
+        }
+
+        .cred-value {
+            font-size: 0.92rem;
+            color: #0f172a;
+            word-break: break-all;
+        }
+
+        .cred-value.officer-name {
+            font-weight: 700;
+            color: #1e293b;
+        }
+
+        .cred-copy-box {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 8px;
+        }
+
+        .btn-copy-mini {
+            background: #f1f5f9;
+            border: 1px solid #cbd5e1;
+            color: #475569;
+            padding: 2px 7px;
+            border-radius: 5px;
+            font-size: 0.74rem;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            white-space: nowrap;
+        }
+
+        .btn-copy-mini:hover {
+            background: #1a5c2e;
+            color: #ffffff;
+            border-color: #1a5c2e;
+        }
+
+        .cred-email-status {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .badge-dispatch-success {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            padding: 2px 7px;
+            font-size: 0.74rem;
+            font-weight: 700;
+            color: #166534;
+            background: #dcfce7;
+            border: 1px solid #bbf7d0;
+            border-radius: 5px;
+            width: fit-content;
+        }
+
+        .badge-dispatch-warning {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            padding: 2px 7px;
+            font-size: 0.74rem;
+            font-weight: 700;
+            color: #92400e;
+            background: #fef3c7;
+            border: 1px solid #fde68a;
+            border-radius: 5px;
+            width: fit-content;
+            cursor: help;
+        }
+
+        .alert-footer-tip {
+            background: #ffffff;
+            border: 1px solid #bbf7d0;
+            border-radius: 8px;
+            padding: 10px 14px;
+            font-size: 0.84rem;
+            color: #166534;
+            line-height: 1.45;
+        }
+
+        /* Generic Alert/Status Message Styles */
         .status-message {
-            padding: 15px 20px;
+            padding: 14px 18px;
             margin-bottom: 20px;
             border-radius: 8px;
             font-weight: 500;
             font-size: 0.95rem;
             display: flex;
             align-items: center;
-            gap: 10px;
+            gap: 12px;
             box-shadow: 0 3px 10px rgba(0, 0, 0, 0.05);
         }
 
         .status-success {
-            background-color: rgba(39, 174, 96, 0.1);
-            color: #27ae60;
-            border: 1px solid #27ae60;
+            background-color: #f0fdf4;
+            color: #166534;
+            border: 1.5px solid #86efac;
+            border-left: 5px solid #16a34a;
         }
 
         .status-error {
-            background-color: rgba(220, 53, 69, 0.1);
-            color: #dc3545;
-            border: 1px solid #dc3545;
+            background-color: #fef2f2;
+            color: #991b1b;
+            border: 1.5px solid #fca5a5;
+            border-left: 5px solid #dc2626;
         }
         
         /* Table Styles */
@@ -852,16 +1191,17 @@ $total_users = mysqli_num_rows($users_result);
             white-space: nowrap;
         }
 
-        /* User Profile Info Cell */
+        /* User Profile Info Cell - Bolder & Clearer Avatars */
         .user-info-cell {
             display: flex;
             align-items: center;
-            gap: 10px;
+            gap: 12px;
         }
 
         .avatar-circle {
-            width: 34px;
-            height: 34px;
+            width: 48px;
+            height: 48px;
+            min-width: 48px;
             border-radius: 50%;
             overflow: hidden;
             flex-shrink: 0;
@@ -869,26 +1209,38 @@ $total_users = mysqli_num_rows($users_result);
             align-items: center;
             justify-content: center;
             background: linear-gradient(135deg, #1a5c2e, #2d8a4e);
-            box-shadow: 0 2px 4px rgba(26, 92, 46, 0.15);
+            border: 2.5px solid #1a5c2e;
+            box-shadow: 0 3px 8px rgba(0, 0, 0, 0.16);
+            image-rendering: -webkit-optimize-contrast;
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+
+        .avatar-circle:hover {
+            transform: scale(1.06);
+            box-shadow: 0 4px 12px rgba(26, 92, 46, 0.28);
         }
 
         .avatar-circle img {
             width: 100%;
             height: 100%;
             object-fit: cover;
+            display: block;
+            image-rendering: -webkit-optimize-contrast;
+            filter: contrast(1.05) brightness(1.02);
         }
 
         .avatar-initials-text {
             color: #ffffff;
-            font-weight: 700;
-            font-size: 0.78rem;
-            letter-spacing: 0.5px;
+            font-weight: 800;
+            font-size: 0.95rem;
+            letter-spacing: 0.8px;
+            text-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
         }
 
         .user-fullname {
-            font-weight: 600;
+            font-weight: 700;
             color: #0f172a;
-            font-size: 0.87rem;
+            font-size: 0.92rem;
             white-space: nowrap;
         }
 
@@ -1240,14 +1592,14 @@ $total_users = mysqli_num_rows($users_result);
         }
 
         .photo-preview-box {
-            width: 48px;
-            height: 48px;
-            min-width: 48px;
+            width: 60px;
+            height: 60px;
+            min-width: 60px;
             border-radius: 50%;
             overflow: hidden;
-            background: #e2e8f0;
-            border: 2px solid white;
-            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+            background: #ffffff;
+            border: 3px solid #1a5c2e;
+            box-shadow: 0 3px 10px rgba(0, 0, 0, 0.12);
             display: flex;
             align-items: center;
             justify-content: center;
@@ -1259,11 +1611,15 @@ $total_users = mysqli_num_rows($users_result);
             width: 100%;
             height: 100%;
             object-fit: cover;
+            display: block;
+            image-rendering: -webkit-optimize-contrast;
+            filter: contrast(1.05);
         }
 
         .photo-placeholder i {
-            font-size: 28px;
-            color: #94a3b8;
+            font-size: 32px;
+            color: #1a5c2e;
+            opacity: 0.7;
         }
 
         .photo-upload-controls {
@@ -1629,14 +1985,87 @@ $total_users = mysqli_num_rows($users_result);
         <div class="page-content">
 
             <!-- Page Title -->
-            <div class="page-title">
-                <h3>User Management</h3>
+            <div class="page-title d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
+                <h3 class="mb-0">User Management</h3>
+                <?php if ($currentUserRole === 'Admin'): ?>
+                    <button type="button" class="btn btn-outline-success btn-sm fw-bold shadow-sm" data-bs-toggle="modal" data-bs-target="#smtpConfigModal">
+                        <i class="fa fa-envelope-o me-1"></i> Email & SMTP Settings
+                    </button>
+                <?php endif; ?>
             </div>
             
-            <!-- Display success/error messages -->
-            <?php if (isset($success_msg)): ?>
-                <div class="status-message status-success">
-                    <i class="fa fa-check-circle"></i> <?php echo $success_msg; ?>
+            <!-- Display User Created Notification / Success Message -->
+            <?php if (isset($user_created_detail)): ?>
+                <div class="user-created-alert" role="alert">
+                    <div class="alert-header">
+                        <div class="alert-title-group">
+                            <span class="alert-icon-badge"><i class="fa fa-check"></i></span>
+                            <div>
+                                <h5 class="alert-main-title">User Account Created Successfully</h5>
+                                <p class="alert-subtitle">The officer account is active and ready for first-time sign in.</p>
+                            </div>
+                        </div>
+                        <button type="button" class="alert-close-btn" onclick="this.closest('.user-created-alert').style.display='none';" aria-label="Close">
+                            <i class="fa fa-times"></i>
+                        </button>
+                    </div>
+                    
+                    <div class="alert-credentials-grid">
+                        <div class="cred-card">
+                            <span class="cred-label">Officer Name</span>
+                            <span class="cred-value officer-name"><i class="fa fa-user-circle text-success me-1"></i> <?php echo htmlspecialchars($user_created_detail['name']); ?></span>
+                        </div>
+                        <div class="cred-card">
+                            <span class="cred-label">Service No. (Login Username)</span>
+                            <div class="cred-copy-box">
+                                <span class="cred-value text-success fw-bold font-monospace"><?php echo htmlspecialchars($user_created_detail['service_no']); ?></span>
+                                <button type="button" class="btn-copy-mini" onclick="copyCredText('<?php echo addslashes($user_created_detail['service_no']); ?>', this)" title="Copy Service Number">
+                                    <i class="fa fa-clone"></i> Copy
+                                </button>
+                            </div>
+                        </div>
+                        <div class="cred-card">
+                            <span class="cred-label">Default Password</span>
+                            <div class="cred-copy-box">
+                                <span class="cred-value text-dark fw-bold font-monospace"><?php echo htmlspecialchars($user_created_detail['password']); ?></span>
+                                <button type="button" class="btn-copy-mini" onclick="copyCredText('<?php echo addslashes($user_created_detail['password']); ?>', this)" title="Copy Default Password">
+                                    <i class="fa fa-clone"></i> Copy
+                                </button>
+                            </div>
+                        </div>
+                        <div class="cred-card">
+                            <span class="cred-label">Official Email Notification</span>
+                            <div class="cred-email-status">
+                                <span class="cred-value email-text fw-bold text-dark"><?php echo htmlspecialchars($user_created_detail['email']); ?></span>
+                                <?php if (!empty($user_created_detail['email_sent'])): ?>
+                                    <span class="badge-dispatch-success"><i class="fa fa-paper-plane"></i> Welcome Email Dispatched</span>
+                                <?php else: ?>
+                                    <span class="badge-dispatch-warning" title="<?php echo htmlspecialchars($user_created_detail['email_msg'] ?? ''); ?>">
+                                        <i class="fa fa-exclamation-triangle"></i> Email Not Sent (Check SMTP)
+                                    </span>
+                                <?php endif; ?>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="alert-footer-tip">
+                        <i class="fa fa-info-circle text-success me-1"></i>
+                        <strong>Login Username Notice:</strong> Please inform the officer to sign in using their <strong>Service Number (<?php echo htmlspecialchars($user_created_detail['service_no']); ?>)</strong> as their username, not their email. They will configure Two-Factor Authentication and update their password on first sign-in.
+                    </div>
+                </div>
+            <?php elseif (isset($success_msg)): ?>
+                <div class="user-created-alert simple-alert" role="alert">
+                    <div class="alert-header mb-0">
+                        <div class="alert-title-group">
+                            <span class="alert-icon-badge"><i class="fa fa-check"></i></span>
+                            <div>
+                                <h5 class="alert-main-title"><?php echo $success_msg; ?></h5>
+                            </div>
+                        </div>
+                        <button type="button" class="alert-close-btn" onclick="this.closest('.user-created-alert').style.display='none';" aria-label="Close">
+                            <i class="fa fa-times"></i>
+                        </button>
+                    </div>
                 </div>
             <?php endif; ?>
             
@@ -1694,16 +2123,45 @@ $total_users = mysqli_num_rows($users_result);
                                 
                                 <div class="row mb-3">
                                     <div class="col-md-6">
-                                        <label for="email" class="form-label">Email</label>
-                                        <input type="email" class="form-control" name="email" id="email" placeholder="Email Address here" 
+                                        <label for="email" class="form-label">Email Address</label>
+                                        <input type="email" class="form-control" name="email" id="email" 
+                                               placeholder="e.g. ezeab@gmail.com" 
                                                value="<?php echo isset($_POST['email']) ? htmlspecialchars($_POST['email']) : ''; ?>" required>
+                                        <div class="form-text text-muted" style="font-size: 0.77rem; margin-top: 4px;">
+                                            <i class="fa fa-envelope-o text-success me-1"></i> Email to receive login credentials & temporary password
+                                        </div>
                                     </div>
                                     <div class="col-md-6">
-                                        <label for="password" class="form-label">Password</label>
+                                        <label for="password" class="form-label d-flex justify-content-between align-items-center">
+                                            <span>Default Password</span>
+                                            <span class="badge" style="background: #e8f5e9; color: #1b5e20; font-size: 0.72rem; font-weight: 600; padding: 2px 6px; border-radius: 4px; border: 1px solid #c8e6c9;">
+                                                <i class="fa fa-magic"></i> Auto-Generated
+                                            </span>
+                                        </label>
                                         <div class="password-field-wrapper">
-                                            <input type="password" class="form-control no-uppercase" name="password" id="password" placeholder="Password" data-password-field="true" data-no-uppercase="true" style="text-transform: none !important;" required>
-                                            <button type="button" class="toggle-password-btn" onclick="togglePasswordVisibility('password', this)" aria-label="Toggle password visibility">
-                                                <i class="fa fa-eye"></i>
+                                            <input type="text" class="form-control no-uppercase" name="password" id="password" 
+                                                   value="<?php echo isset($_POST['password']) ? htmlspecialchars($_POST['password']) : 'password@123'; ?>" 
+                                                   placeholder="Auto-Generated Password" data-password-field="true" data-no-uppercase="true" 
+                                                   style="text-transform: none !important; font-family: 'SFMono-Regular', Consolas, monospace; font-weight: 600;" required>
+                                            <div class="password-actions-group">
+                                                <button type="button" class="pwd-action-btn" onclick="generateRandomPassword()" title="Generate New Random Password">
+                                                    <i class="fa fa-refresh"></i>
+                                                </button>
+                                                <button type="button" class="pwd-action-btn" onclick="resetToDefaultPassword()" title="Reset to standard 'password@123'">
+                                                    <i class="fa fa-undo"></i>
+                                                </button>
+                                                <button type="button" class="pwd-action-btn" onclick="copyPasswordValue()" title="Copy Password to Clipboard">
+                                                    <i class="fa fa-clone" id="copyPwdIcon"></i>
+                                                </button>
+                                                <button type="button" class="pwd-action-btn toggle-password-btn" onclick="togglePasswordVisibility('password', this)" title="Show/Hide Password">
+                                                    <i class="fa fa-eye-slash" id="pwdEyeIcon"></i>
+                                                </button>
+                                            </div>
+                                        </div>
+                                        <div class="d-flex justify-content-between align-items-center mt-1" style="font-size: 0.77rem;">
+                                            <span class="text-muted"><i class="fa fa-info-circle text-primary me-1"></i> Current: <strong id="pwdHint"><?php echo isset($_POST['password']) ? htmlspecialchars($_POST['password']) : 'password@123'; ?></strong> (User resets on 1st login)</span>
+                                            <button type="button" class="btn btn-link p-0 text-decoration-none" onclick="generateRandomPassword()" style="font-size: 0.77rem; color: #1a5c2e; font-weight: 600;">
+                                                <i class="fa fa-magic me-1"></i>New Random
                                             </button>
                                         </div>
                                     </div>
@@ -2414,12 +2872,74 @@ $total_users = mysqli_num_rows($users_result);
             });
         }
         
+        function generateRandomPassword() {
+            const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789!@#$%&*';
+            let newPwd = 'Nis@';
+            for (let i = 0; i < 6; i++) {
+                newPwd += chars.charAt(Math.floor(Math.random() * chars.length));
+            }
+            const pwdInput = document.getElementById('password');
+            if (pwdInput) {
+                pwdInput.value = newPwd;
+                if (pwdInput.type === 'password') {
+                    pwdInput.type = 'text';
+                    const eyeIcon = document.getElementById('pwdEyeIcon');
+                    if (eyeIcon) eyeIcon.className = 'fa fa-eye-slash';
+                }
+                const hint = document.getElementById('pwdHint');
+                if (hint) hint.textContent = newPwd;
+            }
+        }
+
+        function resetToDefaultPassword() {
+            const pwdInput = document.getElementById('password');
+            if (pwdInput) {
+                pwdInput.value = 'password@123';
+                const hint = document.getElementById('pwdHint');
+                if (hint) hint.textContent = 'password@123';
+            }
+        }
+
+        function copyPasswordValue() {
+            const pwdInput = document.getElementById('password');
+            if (!pwdInput || !pwdInput.value) return;
+            
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(pwdInput.value).then(function() {
+                    flashCopySuccess();
+                }).catch(function() {
+                    fallbackCopy(pwdInput);
+                });
+            } else {
+                fallbackCopy(pwdInput);
+            }
+        }
+
+        function fallbackCopy(inputEl) {
+            inputEl.select();
+            inputEl.setSelectionRange(0, 99999);
+            try {
+                document.execCommand('copy');
+                flashCopySuccess();
+            } catch (err) {}
+        }
+
+        function flashCopySuccess() {
+            const copyIcon = document.getElementById('copyPwdIcon');
+            if (copyIcon) {
+                copyIcon.className = 'fa fa-check text-success';
+                setTimeout(function() {
+                    copyIcon.className = 'fa fa-clone';
+                }, 1800);
+            }
+        }
+        
         function togglePasswordVisibility(fieldId, btn) {
             const field = document.getElementById(fieldId);
             if (!field) return;
             const isPassword = field.type === 'password';
             field.type = isPassword ? 'text' : 'password';
-            const icon = btn.querySelector('i');
+            const icon = (btn && btn.querySelector('i')) || document.getElementById('pwdEyeIcon');
             if (icon) {
                 icon.className = isPassword ? 'fa fa-eye-slash' : 'fa fa-eye';
             }
@@ -2465,8 +2985,222 @@ $total_users = mysqli_num_rows($users_result);
                 console.error('Error:', error);
                 alert('An error occurred while resetting Google Authenticator.');
             });
+        function copyCredText(text, btnElement) {
+            if (!navigator.clipboard) {
+                const tempInput = document.createElement('input');
+                tempInput.value = text;
+                document.body.appendChild(tempInput);
+                tempInput.select();
+                document.execCommand('copy');
+                document.body.removeChild(tempInput);
+            } else {
+                navigator.clipboard.writeText(text);
+            }
+            if (btnElement) {
+                const origHtml = btnElement.innerHTML;
+                btnElement.innerHTML = '<i class="fa fa-check text-success"></i> Copied!';
+                setTimeout(() => {
+                    btnElement.innerHTML = origHtml;
+                }, 1800);
+            }
+        }
+
+        function saveSmtpSettings(e) {
+            e.preventDefault();
+            const btn = document.getElementById('btnSaveSmtp');
+            const alertBox = document.getElementById('smtpSaveAlert');
+            const alertText = document.getElementById('smtpSaveAlertText');
+            
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fa fa-spinner fa-spin me-1"></i> Saving...';
+            
+            const formData = new FormData();
+            formData.append('save_smtp_settings', '1');
+            formData.append('csrf_token', '<?php echo $_SESSION['csrf_token']; ?>');
+            formData.append('smtp_host', document.getElementById('cfg_smtp_host').value);
+            formData.append('smtp_port', document.getElementById('cfg_smtp_port').value);
+            formData.append('smtp_encryption', document.getElementById('cfg_smtp_encryption').value);
+            formData.append('smtp_user', document.getElementById('cfg_smtp_user').value);
+            formData.append('smtp_pass', document.getElementById('cfg_smtp_pass').value);
+            formData.append('from_address', document.getElementById('cfg_from_address').value);
+            formData.append('from_name', document.getElementById('cfg_from_name').value);
+
+            fetch('createuser', {
+                method: 'POST',
+                body: formData
+            })
+            .then(res => res.json())
+            .then(data => {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fa fa-save me-1"></i> Save Configuration';
+                alertBox.style.display = 'block';
+                alertBox.className = 'alert alert-dismissible fade show ' + (data.success ? 'alert-success' : 'alert-danger');
+                alertText.innerText = data.message;
+            })
+            .catch(err => {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fa fa-save me-1"></i> Save Configuration';
+                alertBox.style.display = 'block';
+                alertBox.className = 'alert alert-danger';
+                alertText.innerText = 'Network error saving settings.';
+            });
+        }
+
+        function testSmtpSettings() {
+            const btn = document.getElementById('btnTestSmtp');
+            const feedback = document.getElementById('smtpTestFeedback');
+            const testEmail = document.getElementById('cfg_test_email').value;
+
+            if (!testEmail) {
+                feedback.style.display = 'block';
+                feedback.style.background = '#fee2e2';
+                feedback.style.color = '#991b1b';
+                feedback.innerHTML = '<i class="fa fa-exclamation-circle me-1"></i> Please enter a recipient email address.';
+                return;
+            }
+
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fa fa-spinner fa-spin me-1"></i> Testing...';
+            feedback.style.display = 'block';
+            feedback.style.background = '#e0f2fe';
+            feedback.style.color = '#0369a1';
+            feedback.innerHTML = '<i class="fa fa-info-circle me-1"></i> Connecting to SMTP server & sending test dispatch...';
+
+            const formData = new FormData();
+            formData.append('test_smtp_email', '1');
+            formData.append('csrf_token', '<?php echo $_SESSION['csrf_token']; ?>');
+            formData.append('test_email', testEmail);
+            formData.append('smtp_host', document.getElementById('cfg_smtp_host').value);
+            formData.append('smtp_port', document.getElementById('cfg_smtp_port').value);
+            formData.append('smtp_encryption', document.getElementById('cfg_smtp_encryption').value);
+            formData.append('smtp_user', document.getElementById('cfg_smtp_user').value);
+            formData.append('smtp_pass', document.getElementById('cfg_smtp_pass').value);
+            formData.append('from_address', document.getElementById('cfg_from_address').value);
+            formData.append('from_name', document.getElementById('cfg_from_name').value);
+
+            fetch('createuser', {
+                method: 'POST',
+                body: formData
+            })
+            .then(res => res.json())
+            .then(data => {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fa fa-send me-1"></i> Send Test Email';
+                feedback.style.display = 'block';
+                if (data.success) {
+                    feedback.style.background = '#dcfce7';
+                    feedback.style.color = '#166534';
+                    feedback.innerHTML = '<i class="fa fa-check-circle me-1"></i> <strong>Success!</strong> Test email was successfully delivered to ' + testEmail + '.';
+                } else {
+                    feedback.style.background = '#fee2e2';
+                    feedback.style.color = '#991b1b';
+                    feedback.innerHTML = '<i class="fa fa-exclamation-triangle me-1"></i> <strong>Error:</strong> ' + data.message;
+                }
+            })
+            .catch(err => {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fa fa-send me-1"></i> Send Test Email';
+                feedback.style.display = 'block';
+                feedback.style.background = '#fee2e2';
+                feedback.style.color = '#991b1b';
+                feedback.innerHTML = '<i class="fa fa-times-circle me-1"></i> Request failed: ' + err;
+            });
         }
     </script>
+
+    <?php if ($currentUserRole === 'Admin'): ?>
+    <!-- Email & SMTP Configuration Modal -->
+    <div class="modal fade" id="smtpConfigModal" tabindex="-1" aria-labelledby="smtpConfigModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-lg modal-dialog-centered">
+            <div class="modal-content border-0 shadow">
+                <div class="modal-header text-white" style="background: linear-gradient(135deg, #1a5c2e, #27ae60);">
+                    <h5 class="modal-title d-flex align-items-center gap-2" id="smtpConfigModalLabel">
+                        <i class="fa fa-envelope"></i> Email & SMTP Server Configuration
+                    </h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body p-4">
+                    <p class="text-muted small mb-3">
+                        Configure the outgoing SMTP mail server used by NISREV to send welcome emails, credentials, and password reset notifications to officers.
+                    </p>
+
+                    <div id="smtpSaveAlert" style="display: none;" class="alert alert-dismissible fade show" role="alert">
+                        <span id="smtpSaveAlertText"></span>
+                    </div>
+
+                    <form id="smtpSettingsForm" onsubmit="saveSmtpSettings(event)">
+                        <div class="row g-3">
+                            <div class="col-md-7">
+                                <label for="cfg_smtp_host" class="form-label fw-bold small text-dark">SMTP Host / Server</label>
+                                <input type="text" class="form-control" id="cfg_smtp_host" value="<?php echo htmlspecialchars($email_settings['smtp_host']); ?>" placeholder="e.g. mail.nisapps.com.ng or smtp.gmail.com" required>
+                                <div class="form-text small">e.g. <code>mail.nisapps.com.ng</code>, <code>smtp.gmail.com</code>, <code>smtp.office365.com</code></div>
+                            </div>
+                            <div class="col-md-3">
+                                <label for="cfg_smtp_port" class="form-label fw-bold small text-dark">SMTP Port</label>
+                                <input type="number" class="form-control" id="cfg_smtp_port" value="<?php echo htmlspecialchars($email_settings['smtp_port']); ?>" placeholder="587" required>
+                                <div class="form-text small">587 (TLS) or 465 (SSL)</div>
+                            </div>
+                            <div class="col-md-2">
+                                <label for="cfg_smtp_encryption" class="form-label fw-bold small text-dark">Encryption</label>
+                                <select class="form-select" id="cfg_smtp_encryption">
+                                    <option value="tls" <?php echo strtolower($email_settings['smtp_encryption']) === 'tls' ? 'selected' : ''; ?>>TLS</option>
+                                    <option value="ssl" <?php echo strtolower($email_settings['smtp_encryption']) === 'ssl' ? 'selected' : ''; ?>>SSL</option>
+                                    <option value="none" <?php echo strtolower($email_settings['smtp_encryption']) === 'none' ? 'selected' : ''; ?>>None</option>
+                                </select>
+                            </div>
+
+                            <div class="col-md-6">
+                                <label for="cfg_smtp_user" class="form-label fw-bold small text-dark">SMTP Username / Email</label>
+                                <input type="text" class="form-control" id="cfg_smtp_user" value="<?php echo htmlspecialchars($email_settings['smtp_user']); ?>" placeholder="e.g. noreply@nisapps.com.ng">
+                                <div class="form-text small">Full email address or username for SMTP authentication</div>
+                            </div>
+                            <div class="col-md-6">
+                                <label for="cfg_smtp_pass" class="form-label fw-bold small text-dark">SMTP Password / App Password</label>
+                                <div class="input-group">
+                                    <input type="password" class="form-control" id="cfg_smtp_pass" value="<?php echo htmlspecialchars($email_settings['smtp_pass']); ?>" placeholder="••••••••••••">
+                                    <button class="btn btn-outline-secondary" type="button" onclick="togglePasswordVisibility('cfg_smtp_pass', this)">
+                                        <i class="fa fa-eye"></i>
+                                    </button>
+                                </div>
+                                <div class="form-text small">Mailbox password or Google App Password</div>
+                            </div>
+
+                            <div class="col-md-6">
+                                <label for="cfg_from_address" class="form-label fw-bold small text-dark">From Email Address</label>
+                                <input type="email" class="form-control" id="cfg_from_address" value="<?php echo htmlspecialchars($email_settings['from_address']); ?>" placeholder="noreply@nisapps.com.ng" required>
+                            </div>
+                            <div class="col-md-6">
+                                <label for="cfg_from_name" class="form-label fw-bold small text-dark">Sender Display Name</label>
+                                <input type="text" class="form-control" id="cfg_from_name" value="<?php echo htmlspecialchars($email_settings['from_name']); ?>" placeholder="Nigeria Immigration Service (NISREV)" required>
+                            </div>
+                        </div>
+
+                        <div class="d-flex justify-content-end gap-2 mt-4 pt-3 border-top">
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                            <button type="submit" id="btnSaveSmtp" class="btn btn-success fw-bold">
+                                <i class="fa fa-save me-1"></i> Save Configuration
+                            </button>
+                        </div>
+                    </form>
+
+                    <!-- Real-Time SMTP Test Section -->
+                    <div class="mt-4 pt-3 border-top">
+                        <h6 class="fw-bold text-dark mb-2"><i class="fa fa-paper-plane text-primary me-1"></i> Test Live Email Delivery</h6>
+                        <p class="text-muted small mb-2">Send a real test email immediately to verify that your SMTP server delivers emails without error.</p>
+                        
+                        <div class="input-group mb-2">
+                            <input type="email" class="form-control" id="cfg_test_email" value="mmaluv22@gmail.com" placeholder="Recipient email address (e.g. mmaluv22@gmail.com)">
+                            <button class="btn btn-primary fw-bold" type="button" id="btnTestSmtp" onclick="testSmtpSettings()">
+                                <i class="fa fa-send me-1"></i> Send Test Email
+                            </button>
+                        </div>
+                        <div id="smtpTestFeedback" style="display: none;" class="small p-2 rounded"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <?php endif; ?>
 </body>
 </html>
 

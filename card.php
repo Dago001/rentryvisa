@@ -54,6 +54,8 @@ if (isset($_GET['id'])) {
         $embassy = isset($foundk['embassy']) ? strtoupper(htmlspecialchars($foundk['embassy'])) : '';
         $category = isset($foundk['category']) ? strtoupper(htmlspecialchars($foundk['category'])) : 'NONE';
         
+        // Log this card generation/printing activity in the audit trail
+        logActivity($conn, "PRINT_VISA_CARD", "Generated/Printed visa vignette card for $surname, $firstname (Visa: $profile, Passport: $passportnumber)");
 
     } else {
         die("No visa application found with the provided ID.");

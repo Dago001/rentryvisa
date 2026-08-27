@@ -30,16 +30,7 @@ $results = null;
 
 if (!empty($searchTerm)) {
     // Audit log: Log the global search action
-    $log_action = "SEARCH";
-    $log_desc = "Performed global database search for query: '" . $searchTerm . "'";
-    $ip = $_SERVER['REMOTE_ADDR'] ?? '';
-    $log_sql = "INSERT INTO activity_log (user_id, action, description, ip_address) VALUES (?, ?, ?, ?)";
-    $log_stmt = mysqli_prepare($conn, $log_sql);
-    if ($log_stmt) {
-        mysqli_stmt_bind_param($log_stmt, "ssss", $username, $log_action, $log_desc, $ip);
-        mysqli_stmt_execute($log_stmt);
-        mysqli_stmt_close($log_stmt);
-    }
+    logActivity($conn, "SEARCH", "Performed global database search for query: '" . $searchTerm . "'");
 
     // Perform global prepared statement search on passport number, visa number, surname, or given name
     $search_wildcard = '%' . $searchTerm . '%';

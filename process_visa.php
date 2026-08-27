@@ -271,13 +271,9 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     ];
     
             
-            // Log the activity
-            $log_sql = "INSERT INTO activity_log (user_id, action, description) VALUES (?, 'CREATE', ?)";
-            $log_stmt = mysqli_prepare($conn, $log_sql);
-            $log_description = "Created new visa application for " . $surname . ", " . $given_name . " (Visa: " . $visa_number . ")";
-            mysqli_stmt_bind_param($log_stmt, "ss", $_SESSION['username'], $log_description);
-            mysqli_stmt_execute($log_stmt);
-            mysqli_stmt_close($log_stmt);
+            // Log the activity with full IP and user agent
+            $log_description = "Created new visa application for " . $surname . ", " . $given_name . " (Visa: " . $visa_number . ", Passport: " . $passport_number . ")";
+            logActivity($conn, "CREATE", $log_description);
             
         } else {
             $_SESSION['message'] = [
