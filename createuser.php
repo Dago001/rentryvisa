@@ -21,7 +21,6 @@ if ($currentUserRole !== 'Admin' && $currentUserRole !== 'Supervisor') {
 }
 
 require_once('db/db.php');
-require_once('mailer.php');
 
 // Sync current user's profile photo from database to ensure it's always up to date
 if (isset($_SESSION['user_id'])) {
@@ -80,82 +79,6 @@ $current_user_query = mysqli_query($conn, "SELECT id FROM users WHERE service_no
 $current_user = mysqli_fetch_assoc($current_user_query);
 $current_user_id = $current_user ? $current_user['id'] : 0;
 
-// Handle SMTP Settings Save (Admin Only)
-if (isset($_POST['save_smtp_settings'])) {
-    header('Content-Type: application/json');
-    if (!isset($_POST['csrf_token']) || $_POST['csrf_token'] !== $_SESSION['csrf_token']) {
-        echo json_encode(['success' => false, 'message' => 'Security token mismatch. Please refresh the page.']);
-        exit();
-    }
-    if ($currentUserRole !== 'Admin') {
-        echo json_encode(['success' => false, 'message' => 'Only Administrators can configure email settings.']);
-        exit();
-    }
-    
-    $smtpHost = mysqli_real_escape_string($conn, trim($_POST['smtp_host'] ?? 'mail.nisapps.com.ng'));
-    $smtpPort = intval($_POST['smtp_port'] ?? 587);
-    $smtpUser = mysqli_real_escape_string($conn, trim($_POST['smtp_user'] ?? ''));
-    $smtpPass = mysqli_real_escape_string($conn, trim($_POST['smtp_pass'] ?? ''));
-    $smtpEnc = mysqli_real_escape_string($conn, trim($_POST['smtp_encryption'] ?? 'tls'));
-    $fromAddr = mysqli_real_escape_string($conn, trim($_POST['from_address'] ?? 'noreply@nisapps.com.ng'));
-    $fromName = mysqli_real_escape_string($conn, trim($_POST['from_name'] ?? 'Nigeria Immigration Service (NISREV)'));
-    
-    $check = mysqli_query($conn, "SELECT id FROM email_settings LIMIT 1");
-    if ($check && mysqli_num_rows($check) > 0) {
-        $row = mysqli_fetch_assoc($check);
-        $id = $row['id'];
-        $saveSql = "UPDATE email_settings SET smtp_host = '$smtpHost', smtp_port = $smtpPort, smtp_user = '$smtpUser', smtp_pass = '$smtpPass', smtp_encryption = '$smtpEnc', from_address = '$fromAddr', from_name = '$fromName' WHERE id = $id";
-    } else {
-        $saveSql = "INSERT INTO email_settings (smtp_host, smtp_port, smtp_user, smtp_pass, smtp_encryption, from_address, from_name) VALUES ('$smtpHost', $smtpPort, '$smtpUser', '$smtpPass', '$smtpEnc', '$fromAddr', '$fromName')";
-    }
-    
-    if (mysqli_query($conn, $saveSql)) {
-        logActivity($conn, "UPDATE_EMAIL_SETTINGS", "Updated SMTP mail configuration settings ($smtpHost:$smtpPort)");
-        echo json_encode(['success' => true, 'message' => 'SMTP settings saved successfully!']);
-    } else {
-        echo json_encode(['success' => false, 'message' => 'Database error: ' . mysqli_error($conn)]);
-    }
-    exit();
-}
-
-// Handle SMTP Test Email Dispatch (Admin Only)
-if (isset($_POST['test_smtp_email'])) {
-    header('Content-Type: application/json');
-    if (!isset($_POST['csrf_token']) || $_POST['csrf_token'] !== $_SESSION['csrf_token']) {
-        echo json_encode(['success' => false, 'message' => 'Security token mismatch. Please refresh the page.']);
-        exit();
-    }
-    if ($currentUserRole !== 'Admin') {
-        echo json_encode(['success' => false, 'message' => 'Only Administrators can test email settings.']);
-        exit();
-    }
-    
-    $testTo = filter_var(trim($_POST['test_email'] ?? ''), FILTER_VALIDATE_EMAIL);
-    if (!$testTo) {
-        echo json_encode(['success' => false, 'message' => 'Please provide a valid destination email address (e.g. mmaluv22@gmail.com).']);
-        exit();
-    }
-    
-    $smtpHost = trim($_POST['smtp_host'] ?? 'mail.nisapps.com.ng');
-    $smtpPort = intval($_POST['smtp_port'] ?? 587);
-    $smtpUser = trim($_POST['smtp_user'] ?? '');
-    $smtpPass = trim($_POST['smtp_pass'] ?? '');
-    $smtpEnc = trim($_POST['smtp_encryption'] ?? 'tls');
-    $fromAddr = trim($_POST['from_address'] ?? 'noreply@nisapps.com.ng');
-    $fromName = trim($_POST['from_name'] ?? 'Nigeria Immigration Service (NISREV)');
-    
-    $testRes = NISMailer::testSmtpConnection($testTo, $smtpHost, $smtpPort, $smtpUser, $smtpPass, $smtpEnc, $fromAddr, $fromName);
-    
-    if ($testRes['success']) {
-        logActivity($conn, "TEST_EMAIL_SUCCESS", "Successfully sent test email to {$testTo} via {$smtpHost}:{$smtpPort}");
-    } else {
-        logActivity($conn, "TEST_EMAIL_FAILED", "Failed test email to {$testTo}: " . $testRes['message']);
-    }
-    
-    echo json_encode($testRes);
-    exit();
-}
-
 // Handle user status update
 if (isset($_POST['update_status'])) {
     if (!isset($_POST['csrf_token']) || $_POST['csrf_token'] !== $_SESSION['csrf_token']) {
@@ -204,23 +127,14 @@ if (isset($_POST['reset_password'])) {
     if (mysqli_query($conn, $update_sql)) {
         $user_q = mysqli_query($conn, "SELECT service_no, email, fname, lname FROM users WHERE id = '$user_id'");
         $reset_username = '';
-        $reset_email = '';
-        $reset_name = '';
         if ($user_q && mysqli_num_rows($user_q) > 0) {
             $user_r = mysqli_fetch_assoc($user_q);
             $reset_username = $user_r['service_no'];
-            $reset_email = $user_r['email'];
-            $reset_name = trim(($user_r['fname'] ?? '') . ' ' . ($user_r['lname'] ?? ''));
-            
-            // Dispatch password reset email notification
-            if (!empty($reset_email)) {
-                NISMailer::sendPasswordResetNotification($conn, $reset_email, $reset_name, $reset_username, 'password@123');
-            }
         }
         
         logActivity($conn, "RESET_PASSWORD", "Reset password to default 'password@123' for user: " . $reset_username);
         
-        echo "Password reset to default 'password@123' successfully!\n\nA notification email has been dispatched to the user ($reset_username).";
+        echo "Password reset to default 'password@123' successfully for ($reset_username)!";
     } else {
         echo "Error resetting password: " . mysqli_error($conn);
     }
@@ -401,17 +315,12 @@ if (isset($_POST['regUser']) || isset($_POST['serviceNo'])) {
                         // Audit Log user creation
                         logActivity($conn, "CREATE_USER", "Created user: $serviceNo ($fname $lname), Role: $userRole, Email: $email");
 
-                        // Send welcome email with login instructions and default password
-                        $mailRes = NISMailer::sendWelcomeEmail($conn, $email, $fname . ' ' . $lname, $serviceNo, $password_raw, $userRole);
-
                         $_SESSION['user_created_detail'] = [
                             'name' => trim($fname . ' ' . $lname),
                             'service_no' => $serviceNo,
                             'password' => $password_raw,
                             'role' => $userRole,
-                            'email' => $email,
-                            'email_sent' => !empty($mailRes['success']),
-                            'email_msg' => $mailRes['message'] ?? ''
+                            'email' => $email
                         ];
                         
                         session_write_close();
@@ -424,21 +333,6 @@ if (isset($_POST['regUser']) || isset($_POST['serviceNo'])) {
             }
         }
     }
-}
-
-// Fetch current email configuration settings
-$email_settings = [
-    'smtp_host' => 'mail.nisapps.com.ng',
-    'smtp_port' => 587,
-    'smtp_user' => '',
-    'smtp_pass' => '',
-    'smtp_encryption' => 'tls',
-    'from_address' => 'noreply@nisapps.com.ng',
-    'from_name' => 'Nigeria Immigration Service (NISREV)'
-];
-$es_query = mysqli_query($conn, "SELECT * FROM email_settings LIMIT 1");
-if ($es_query && $es_data = mysqli_fetch_assoc($es_query)) {
-    $email_settings = array_merge($email_settings, $es_data);
 }
 
 // Fetch existing users for display
@@ -557,31 +451,40 @@ $total_users = mysqli_num_rows($users_result);
         }
         
         .user-avatar {
-            width: 44px;
-            height: 44px;
-            min-width: 44px;
+            width: 48px;
+            height: 48px;
+            min-width: 48px;
+            max-width: 48px;
             border-radius: 50%;
-            background: linear-gradient(135deg, var(--primary), var(--secondary));
-            border: 2.5px solid var(--primary);
-            color: white;
-            display: flex;
+            background: #ffffff;
+            border: 2.5px solid #1a5c2e;
+            color: #1a5c2e;
+            display: inline-flex;
             align-items: center;
             justify-content: center;
             font-weight: 800;
-            font-size: 1rem;
-            box-shadow: 0 3px 10px rgba(26, 92, 46, 0.28);
+            font-size: 1.15rem;
+            box-shadow: 0 0 0 1px #ffffff, 0 3px 8px rgba(26, 92, 46, 0.35);
             overflow: hidden;
             flex-shrink: 0;
-            image-rendering: -webkit-optimize-contrast;
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+        
+        .user-avatar:hover {
+            transform: scale(1.06);
+            border-color: #27ae60;
+            box-shadow: 0 0 0 2px #ffffff, 0 5px 14px rgba(26, 92, 46, 0.45);
         }
         
         .user-avatar img {
             width: 100%;
             height: 100%;
             object-fit: cover;
+            object-position: center top;
             display: block;
             image-rendering: -webkit-optimize-contrast;
-            filter: contrast(1.05);
+            image-rendering: crisp-edges;
+            filter: contrast(1.08) saturate(1.06) brightness(1.02);
         }
         
         .user-details {
@@ -816,22 +719,22 @@ $total_users = mysqli_num_rows($users_result);
             box-shadow: 0 4px 12px rgba(243, 156, 18, 0.3);
         }
         
-        /* Professional User Created Notification Alert */
-        .user-created-alert {
+        /* Ultra-Compact User Created Notification Alert */
+        .user-created-alert-mini {
             background: #f0fdf4;
             border: 1.5px solid #86efac;
-            border-left: 6px solid #16a34a;
-            border-radius: 12px;
-            padding: 18px 22px;
-            margin-bottom: 25px;
-            box-shadow: 0 4px 16px rgba(22, 163, 74, 0.08);
-            animation: slideDownAlert 0.35s ease-out;
+            border-left: 5px solid #16a34a;
+            border-radius: 8px;
+            padding: 8px 14px;
+            margin-bottom: 18px;
+            box-shadow: 0 2px 8px rgba(22, 163, 74, 0.08);
+            animation: slideDownAlert 0.25s ease-out;
         }
 
         @keyframes slideDownAlert {
             from {
                 opacity: 0;
-                transform: translateY(-8px);
+                transform: translateY(-6px);
             }
             to {
                 opacity: 1;
@@ -839,180 +742,107 @@ $total_users = mysqli_num_rows($users_result);
             }
         }
 
-        .user-created-alert.simple-alert {
-            padding: 14px 20px;
-        }
-
-        .alert-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: flex-start;
-            gap: 15px;
-            margin-bottom: 14px;
-        }
-
-        .alert-title-group {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-        }
-
-        .alert-icon-badge {
-            width: 38px;
-            height: 38px;
-            min-width: 38px;
-            border-radius: 50%;
-            background: linear-gradient(135deg, #16a34a, #15803d);
-            color: #ffffff;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 1.1rem;
-            box-shadow: 0 2px 6px rgba(22, 163, 74, 0.3);
-        }
-
-        .alert-main-title {
-            margin: 0;
-            font-size: 1.12rem;
-            font-weight: 700;
-            color: #14532d;
-            letter-spacing: -0.2px;
-        }
-
-        .alert-subtitle {
-            margin: 3px 0 0 0;
-            font-size: 0.85rem;
-            color: #166534;
-        }
-
-        .alert-close-btn {
-            background: transparent;
-            border: none;
-            color: #166534;
-            opacity: 0.6;
-            font-size: 1.25rem;
-            cursor: pointer;
-            padding: 2px 6px;
-            border-radius: 4px;
-            transition: all 0.2s ease;
-            line-height: 1;
-        }
-
-        .alert-close-btn:hover {
-            opacity: 1;
-            background: rgba(22, 163, 74, 0.12);
-        }
-
-        .alert-credentials-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
-            gap: 12px;
-            margin-bottom: 14px;
-        }
-
-        .cred-card {
-            background: #ffffff;
-            border: 1.5px solid #dcfce7;
-            border-radius: 9px;
-            padding: 11px 13px;
-            display: flex;
-            flex-direction: column;
-            gap: 4px;
-            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.02);
-            transition: border-color 0.2s ease;
-        }
-
-        .cred-card:hover {
-            border-color: #86efac;
-        }
-
-        .cred-label {
-            font-size: 0.74rem;
-            font-weight: 700;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-            color: #64748b;
-        }
-
-        .cred-value {
-            font-size: 0.92rem;
-            color: #0f172a;
-            word-break: break-all;
-        }
-
-        .cred-value.officer-name {
-            font-weight: 700;
-            color: #1e293b;
-        }
-
-        .cred-copy-box {
+        .alert-mini-flex {
             display: flex;
             align-items: center;
             justify-content: space-between;
+            flex-wrap: wrap;
             gap: 8px;
         }
 
-        .btn-copy-mini {
-            background: #f1f5f9;
-            border: 1px solid #cbd5e1;
-            color: #475569;
-            padding: 2px 7px;
-            border-radius: 5px;
-            font-size: 0.74rem;
-            cursor: pointer;
-            transition: all 0.2s ease;
-            white-space: nowrap;
+        .alert-mini-lead {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 0.88rem;
+            flex-wrap: wrap;
         }
 
-        .btn-copy-mini:hover {
+        .alert-mini-badge {
+            width: 22px;
+            height: 22px;
+            min-width: 22px;
+            border-radius: 50%;
+            background: #16a34a;
+            color: #ffffff;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.75rem;
+            font-weight: 700;
+        }
+
+        .alert-mini-heading {
+            font-weight: 700;
+            color: #14532d;
+            font-size: 0.9rem;
+        }
+
+        .alert-mini-officer {
+            font-weight: 700;
+            color: #0f172a;
+            font-size: 0.9rem;
+        }
+
+        .alert-mini-details {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 0.84rem;
+            background: #ffffff;
+            border: 1px solid #dcfce7;
+            padding: 3px 10px;
+            border-radius: 6px;
+            flex-wrap: wrap;
+        }
+
+        .alert-mini-tag {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            color: #475569;
+        }
+
+        .alert-mini-divider {
+            color: #cbd5e1;
+            font-weight: 300;
+        }
+
+        .btn-copy-micro {
+            background: #f8fafc;
+            border: 1px solid #cbd5e1;
+            color: #475569;
+            padding: 1px 6px;
+            border-radius: 4px;
+            font-size: 0.72rem;
+            cursor: pointer;
+            line-height: 1.2;
+            transition: all 0.15s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 3px;
+        }
+
+        .btn-copy-micro:hover {
             background: #1a5c2e;
             color: #ffffff;
             border-color: #1a5c2e;
         }
 
-        .cred-email-status {
-            display: flex;
-            flex-direction: column;
-            gap: 4px;
-        }
-
-        .badge-dispatch-success {
-            display: inline-flex;
-            align-items: center;
-            gap: 5px;
-            padding: 2px 7px;
-            font-size: 0.74rem;
-            font-weight: 700;
+        .alert-mini-close {
+            background: transparent;
+            border: none;
             color: #166534;
-            background: #dcfce7;
-            border: 1px solid #bbf7d0;
-            border-radius: 5px;
-            width: fit-content;
+            opacity: 0.6;
+            font-size: 1.15rem;
+            cursor: pointer;
+            padding: 0 4px;
+            line-height: 1;
+            transition: opacity 0.15s ease;
         }
 
-        .badge-dispatch-warning {
-            display: inline-flex;
-            align-items: center;
-            gap: 5px;
-            padding: 2px 7px;
-            font-size: 0.74rem;
-            font-weight: 700;
-            color: #92400e;
-            background: #fef3c7;
-            border: 1px solid #fde68a;
-            border-radius: 5px;
-            width: fit-content;
-            cursor: help;
-        }
-
-        .alert-footer-tip {
-            background: #ffffff;
-            border: 1px solid #bbf7d0;
-            border-radius: 8px;
-            padding: 10px 14px;
-            font-size: 0.84rem;
-            color: #166534;
-            line-height: 1.45;
+        .alert-mini-close:hover {
+            opacity: 1;
         }
 
         /* Generic Alert/Status Message Styles */
@@ -1208,25 +1038,28 @@ $total_users = mysqli_num_rows($users_result);
             display: flex;
             align-items: center;
             justify-content: center;
-            background: linear-gradient(135deg, #1a5c2e, #2d8a4e);
+            background: #ffffff;
             border: 2.5px solid #1a5c2e;
-            box-shadow: 0 3px 8px rgba(0, 0, 0, 0.16);
+            box-shadow: 0 0 0 1px #ffffff, 0 3px 8px rgba(26, 92, 46, 0.3);
             image-rendering: -webkit-optimize-contrast;
             transition: transform 0.2s ease, box-shadow 0.2s ease;
         }
 
         .avatar-circle:hover {
             transform: scale(1.06);
-            box-shadow: 0 4px 12px rgba(26, 92, 46, 0.28);
+            border-color: #27ae60;
+            box-shadow: 0 0 0 2px #ffffff, 0 5px 14px rgba(26, 92, 46, 0.4);
         }
 
         .avatar-circle img {
             width: 100%;
             height: 100%;
             object-fit: cover;
+            object-position: center top;
             display: block;
             image-rendering: -webkit-optimize-contrast;
-            filter: contrast(1.05) brightness(1.02);
+            image-rendering: crisp-edges;
+            filter: contrast(1.08) saturate(1.06) brightness(1.02);
         }
 
         .avatar-initials-text {
@@ -1545,6 +1378,22 @@ $total_users = mysqli_num_rows($users_result);
             color: #ffffff !important;
             border-color: #7c3aed !important;
             box-shadow: 0 2px 6px rgba(124, 58, 237, 0.28) !important;
+            transform: translateY(-1px);
+        }
+
+        /* Resend Welcome Email Button (Teal / Forest Green) */
+        .btn-action-email {
+            background-color: #f0fdf4 !important;
+            color: #166534 !important;
+            border-color: #bbf7d0 !important;
+            width: 100% !important;
+            flex: 1 1 100% !important;
+        }
+        .btn-action-email:hover {
+            background-color: #166534 !important;
+            color: #ffffff !important;
+            border-color: #166534 !important;
+            box-shadow: 0 2px 6px rgba(22, 101, 52, 0.28) !important;
             transform: translateY(-1px);
         }
         
@@ -1918,6 +1767,52 @@ $total_users = mysqli_num_rows($users_result);
             color: #7c6e60 !important;
             opacity: 1 !important;
         }
+
+        /* Users Table Pagination */
+        .users-pagination-footer {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px 18px;
+            background: #ffffff;
+            border-top: 1px solid #e2e8f0;
+            border-radius: 0 0 10px 10px;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+        .users-pagination-info {
+            font-size: 0.84rem;
+            color: #64748b;
+            font-weight: 500;
+        }
+        .pagination .page-item .page-link {
+            color: #334155;
+            border: 1px solid #cbd5e1;
+            border-radius: 5px;
+            padding: 4px 10px;
+            font-size: 0.82rem;
+            font-weight: 600;
+            min-width: 32px;
+            text-align: center;
+            transition: all 0.15s ease;
+        }
+        .pagination .page-item.active .page-link {
+            background-color: #1a5c2e !important;
+            border-color: #1a5c2e !important;
+            color: #ffffff !important;
+            box-shadow: 0 2px 4px rgba(26, 92, 46, 0.25);
+        }
+        .pagination .page-item.disabled .page-link {
+            color: #94a3b8;
+            background-color: #f8fafc;
+            border-color: #e2e8f0;
+            cursor: not-allowed;
+        }
+        .pagination .page-item:not(.active):not(.disabled) .page-link:hover {
+            background-color: #f1f5f9;
+            color: #1a5c2e;
+            border-color: #94a3b8;
+        }
 </style>
 </head>
 <body>
@@ -1985,84 +1880,51 @@ $total_users = mysqli_num_rows($users_result);
         <div class="page-content">
 
             <!-- Page Title -->
-            <div class="page-title d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
+            <div class="page-title mb-3">
                 <h3 class="mb-0">User Management</h3>
-                <?php if ($currentUserRole === 'Admin'): ?>
-                    <button type="button" class="btn btn-outline-success btn-sm fw-bold shadow-sm" data-bs-toggle="modal" data-bs-target="#smtpConfigModal">
-                        <i class="fa fa-envelope-o me-1"></i> Email & SMTP Settings
-                    </button>
-                <?php endif; ?>
             </div>
-            
-            <!-- Display User Created Notification / Success Message -->
+
+            <!-- Display User Created Notification / Success Message (Ultra-Compact & Actionable) -->
             <?php if (isset($user_created_detail)): ?>
-                <div class="user-created-alert" role="alert">
-                    <div class="alert-header">
-                        <div class="alert-title-group">
-                            <span class="alert-icon-badge"><i class="fa fa-check"></i></span>
-                            <div>
-                                <h5 class="alert-main-title">User Account Created Successfully</h5>
-                                <p class="alert-subtitle">The officer account is active and ready for first-time sign in.</p>
-                            </div>
+                <div class="user-created-alert-mini" role="alert">
+                    <div class="alert-mini-flex">
+                        <div class="alert-mini-lead">
+                            <span class="alert-mini-badge"><i class="fa fa-check"></i></span>
+                            <span class="alert-mini-heading">Account Created:</span>
+                            <span class="alert-mini-officer"><?php echo htmlspecialchars($user_created_detail['name']); ?></span>
                         </div>
-                        <button type="button" class="alert-close-btn" onclick="this.closest('.user-created-alert').style.display='none';" aria-label="Close">
+                        <div class="alert-mini-details">
+                            <span class="alert-mini-tag">
+                                Service No: <strong class="text-success font-monospace"><?php echo htmlspecialchars($user_created_detail['service_no']); ?></strong>
+                                <button type="button" class="btn-copy-micro" onclick="copyCredText('<?php echo addslashes($user_created_detail['service_no']); ?>', this)" title="Copy Service Number">
+                                    <i class="fa fa-clone"></i> Copy
+                                </button>
+                            </span>
+                            <span class="alert-mini-divider">|</span>
+                            <span class="alert-mini-tag">
+                                Password: <strong class="text-dark font-monospace"><?php echo htmlspecialchars($user_created_detail['password']); ?></strong>
+                                <button type="button" class="btn-copy-micro" onclick="copyCredText('<?php echo addslashes($user_created_detail['password']); ?>', this)" title="Copy Default Password">
+                                    <i class="fa fa-clone"></i> Copy
+                                </button>
+                            </span>
+                            <span class="alert-mini-divider">|</span>
+                            <span class="alert-mini-tag">
+                                Role: <span class="badge bg-light text-dark border" style="font-size: 0.74rem;"><?php echo htmlspecialchars($user_created_detail['role']); ?></span>
+                            </span>
+                        </div>
+                        <button type="button" class="alert-mini-close" onclick="this.closest('.user-created-alert-mini').style.display='none';" aria-label="Close">
                             <i class="fa fa-times"></i>
                         </button>
                     </div>
-                    
-                    <div class="alert-credentials-grid">
-                        <div class="cred-card">
-                            <span class="cred-label">Officer Name</span>
-                            <span class="cred-value officer-name"><i class="fa fa-user-circle text-success me-1"></i> <?php echo htmlspecialchars($user_created_detail['name']); ?></span>
-                        </div>
-                        <div class="cred-card">
-                            <span class="cred-label">Service No. (Login Username)</span>
-                            <div class="cred-copy-box">
-                                <span class="cred-value text-success fw-bold font-monospace"><?php echo htmlspecialchars($user_created_detail['service_no']); ?></span>
-                                <button type="button" class="btn-copy-mini" onclick="copyCredText('<?php echo addslashes($user_created_detail['service_no']); ?>', this)" title="Copy Service Number">
-                                    <i class="fa fa-clone"></i> Copy
-                                </button>
-                            </div>
-                        </div>
-                        <div class="cred-card">
-                            <span class="cred-label">Default Password</span>
-                            <div class="cred-copy-box">
-                                <span class="cred-value text-dark fw-bold font-monospace"><?php echo htmlspecialchars($user_created_detail['password']); ?></span>
-                                <button type="button" class="btn-copy-mini" onclick="copyCredText('<?php echo addslashes($user_created_detail['password']); ?>', this)" title="Copy Default Password">
-                                    <i class="fa fa-clone"></i> Copy
-                                </button>
-                            </div>
-                        </div>
-                        <div class="cred-card">
-                            <span class="cred-label">Official Email Notification</span>
-                            <div class="cred-email-status">
-                                <span class="cred-value email-text fw-bold text-dark"><?php echo htmlspecialchars($user_created_detail['email']); ?></span>
-                                <?php if (!empty($user_created_detail['email_sent'])): ?>
-                                    <span class="badge-dispatch-success"><i class="fa fa-paper-plane"></i> Welcome Email Dispatched</span>
-                                <?php else: ?>
-                                    <span class="badge-dispatch-warning" title="<?php echo htmlspecialchars($user_created_detail['email_msg'] ?? ''); ?>">
-                                        <i class="fa fa-exclamation-triangle"></i> Email Not Sent (Check SMTP)
-                                    </span>
-                                <?php endif; ?>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="alert-footer-tip">
-                        <i class="fa fa-info-circle text-success me-1"></i>
-                        <strong>Login Username Notice:</strong> Please inform the officer to sign in using their <strong>Service Number (<?php echo htmlspecialchars($user_created_detail['service_no']); ?>)</strong> as their username, not their email. They will configure Two-Factor Authentication and update their password on first sign-in.
-                    </div>
                 </div>
             <?php elseif (isset($success_msg)): ?>
-                <div class="user-created-alert simple-alert" role="alert">
-                    <div class="alert-header mb-0">
-                        <div class="alert-title-group">
-                            <span class="alert-icon-badge"><i class="fa fa-check"></i></span>
-                            <div>
-                                <h5 class="alert-main-title"><?php echo $success_msg; ?></h5>
-                            </div>
+                <div class="user-created-alert-mini" role="alert">
+                    <div class="alert-mini-flex">
+                        <div class="alert-mini-lead">
+                            <span class="alert-mini-badge"><i class="fa fa-check"></i></span>
+                            <span class="alert-mini-heading"><?php echo $success_msg; ?></span>
                         </div>
-                        <button type="button" class="alert-close-btn" onclick="this.closest('.user-created-alert').style.display='none';" aria-label="Close">
+                        <button type="button" class="alert-mini-close" onclick="this.closest('.user-created-alert-mini').style.display='none';" aria-label="Close">
                             <i class="fa fa-times"></i>
                         </button>
                     </div>
@@ -2399,22 +2261,22 @@ $total_users = mysqli_num_rows($users_result);
                                                                  <i class="fa fa-user-circle"></i> Edit Role
                                                              </button>
                                                          </div>
-                                                         <!-- Row 2: Reset Password & Reset Google Authenticator -->
-                                                         <div class="user-actions-row">
-                                                             <button class="btn-action-user btn-action-reset reset-password-btn" 
-                                                                     data-id="<?php echo $user['id']; ?>" 
-                                                                     data-name="<?php echo htmlspecialchars($user['fname'] . ' ' . $user['lname']); ?>"
-                                                                     title="Reset Password to default (password@123)">
-                                                                 <i class="fa fa-key"></i> Reset Password
-                                                             </button>
-                                                             <button class="btn-action-user btn-action-mfa reset-mfa-btn" 
-                                                                     data-id="<?php echo $user['id']; ?>" 
-                                                                     data-name="<?php echo htmlspecialchars($user['fname'] . ' ' . $user['lname']); ?>"
-                                                                     title="Reset Google Authenticator Barcode">
-                                                                 <i class="fa fa-qrcode"></i> Reset Authenticator
-                                                             </button>
-                                                         </div>
-                                                     </div>
+                                                          <!-- Row 2: Reset Password & Reset Google Authenticator -->
+                                                          <div class="user-actions-row">
+                                                              <button class="btn-action-user btn-action-reset reset-password-btn" 
+                                                                      data-id="<?php echo $user['id']; ?>" 
+                                                                      data-name="<?php echo htmlspecialchars($user['fname'] . ' ' . $user['lname']); ?>"
+                                                                      title="Reset Password to default (password@123)">
+                                                                  <i class="fa fa-key"></i> Reset Pwd
+                                                              </button>
+                                                              <button class="btn-action-user btn-action-mfa reset-mfa-btn" 
+                                                                      data-id="<?php echo $user['id']; ?>" 
+                                                                      data-name="<?php echo htmlspecialchars($user['fname'] . ' ' . $user['lname']); ?>"
+                                                                      title="Reset Google Authenticator Barcode">
+                                                                  <i class="fa fa-qrcode"></i> Reset 2FA
+                                                              </button>
+                                                          </div>
+                                                      </div>
                                                  <?php else: ?>
                                                      <span class="badge bg-light text-muted border" style="font-size: 0.75rem; padding: 5px 10px;">Current User</span>
                                                  <?php endif; ?>
@@ -2423,6 +2285,18 @@ $total_users = mysqli_num_rows($users_result);
                                          <?php endwhile; ?>
                                     </tbody>
                                 </table>
+                            </div>
+                            
+                            <!-- Users Pagination Footer (10 records per page) -->
+                            <div class="users-pagination-footer" id="usersPaginationFooter">
+                                <div class="users-pagination-info" id="usersPaginationInfo">
+                                    Showing <strong id="userPageStart" class="text-dark">1</strong> to <strong id="userPageEnd" class="text-dark">10</strong> of <strong id="userTotalItems" class="text-dark"><?php echo $total_users; ?></strong> users
+                                </div>
+                                <nav aria-label="Users Records Pagination">
+                                    <ul class="pagination pagination-sm mb-0 gap-1" id="usersPaginationNav">
+                                        <!-- Dynamically generated by JS -->
+                                    </ul>
+                                </nav>
                             </div>
                         <?php else: ?>
                             <div class="text-center py-5">
@@ -2463,9 +2337,9 @@ $total_users = mysqli_num_rows($users_result);
                     <select class="form-select" id="modalUserRoleSelect" style="border: 1.5px solid #cbd5e1; border-radius: 8px; padding: 10px 14px; font-size: 0.92rem; width: 100%;" required>
                         <option value="">-- Choose Role --</option>
                         <?php if ($currentUserRole === 'Admin'): ?>
-                            <option value="Admin">Administrator (Full Access)</option>
+                            <!-- <option value="Admin">Administrator (Full Access)</option> -->
                         <?php endif; ?>
-                        <option value="Supervisor">Supervisor</option>
+                        <option value="Supervisor">Administrator</option>
                         <option value="DataEntry">Data Entry</option>
                         <option value="ViewOnly">View only</option>
                     </select>
@@ -2612,7 +2486,9 @@ $total_users = mysqli_num_rows($users_result);
                 });
             }
 
-            // Existing Users Real-Time Search & Search Button
+            // Existing Users Real-Time Search & 10-per-page Pagination Engine
+            const USERS_PER_PAGE = 10;
+            let currentUsersPage = 1;
             const userSearchInput = document.getElementById('userSearchInput');
             const userSearchBtn = document.getElementById('userSearchBtn');
             const clearUserSearch = document.getElementById('clearUserSearch');
@@ -2620,31 +2496,56 @@ $total_users = mysqli_num_rows($users_result);
             const userCountSpan = document.getElementById('userCount');
             const initialUserCount = <?php echo $total_users; ?>;
 
-            function filterUsersTable() {
-                if (!usersTableBody || !userSearchInput) return;
-                const query = userSearchInput.value.trim().toLowerCase();
-                const rows = usersTableBody.querySelectorAll('tr:not(.no-search-results)');
-                let matchedCount = 0;
+            function getAllUserRows() {
+                if (!usersTableBody) return [];
+                return Array.from(usersTableBody.querySelectorAll('tr:not(.no-search-results)'));
+            }
+
+            function escapeHtml(str) {
+                return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
+            }
+
+            function applyUsersFilterAndPagination(targetPage = 1) {
+                if (!usersTableBody) return;
+                const rows = getAllUserRows();
+                const query = userSearchInput ? userSearchInput.value.trim().toLowerCase() : '';
 
                 // Toggle clear button
                 if (clearUserSearch) {
                     clearUserSearch.style.display = query.length > 0 ? 'inline-block' : 'none';
                 }
 
-                rows.forEach(row => {
-                    // Extract text content of searchable cells
+                // Match rows
+                const matchedRows = rows.filter(row => {
                     const text = row.innerText.toLowerCase();
-                    if (!query || text.includes(query)) {
+                    return !query || text.includes(query);
+                });
+
+                const totalMatched = matchedRows.length;
+                const totalPages = Math.max(1, Math.ceil(totalMatched / USERS_PER_PAGE));
+
+                if (targetPage > totalPages) targetPage = totalPages;
+                if (targetPage < 1) targetPage = 1;
+                currentUsersPage = targetPage;
+
+                const startIndex = (currentUsersPage - 1) * USERS_PER_PAGE;
+                const endIndex = Math.min(startIndex + USERS_PER_PAGE, totalMatched);
+
+                // Hide all rows
+                rows.forEach(r => r.style.display = 'none');
+
+                // Display current page slice
+                matchedRows.forEach((row, idx) => {
+                    if (idx >= startIndex && idx < endIndex) {
                         row.style.display = '';
-                        matchedCount++;
                     } else {
                         row.style.display = 'none';
                     }
                 });
 
-                // Handle no results message
+                // No results message
                 let noResultRow = usersTableBody.querySelector('.no-search-results');
-                if (matchedCount === 0 && query.length > 0) {
+                if (totalMatched === 0 && query.length > 0) {
                     if (!noResultRow) {
                         noResultRow = document.createElement('tr');
                         noResultRow.className = 'no-search-results';
@@ -2661,38 +2562,93 @@ $total_users = mysqli_num_rows($users_result);
                     noResultRow.style.display = 'none';
                 }
 
+                // Update count and footer
                 if (userCountSpan) {
-                    userCountSpan.textContent = query.length > 0 ? `${matchedCount} of ${initialUserCount}` : initialUserCount;
+                    userCountSpan.textContent = query.length > 0 ? `${totalMatched} of ${initialUserCount}` : initialUserCount;
                 }
+
+                const pageStartEl = document.getElementById('userPageStart');
+                const pageEndEl = document.getElementById('userPageEnd');
+                const totalItemsEl = document.getElementById('userTotalItems');
+                const footerEl = document.getElementById('usersPaginationFooter');
+
+                if (pageStartEl) pageStartEl.textContent = totalMatched === 0 ? 0 : startIndex + 1;
+                if (pageEndEl) pageEndEl.textContent = endIndex;
+                if (totalItemsEl) totalItemsEl.textContent = totalMatched;
+                if (footerEl) footerEl.style.display = totalMatched === 0 ? 'none' : 'flex';
+
+                renderUsersPaginationNav(totalPages, currentUsersPage);
             }
 
-            function escapeHtml(str) {
-                return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
+            function renderUsersPaginationNav(totalPages, activePage) {
+                const navEl = document.getElementById('usersPaginationNav');
+                if (!navEl) return;
+
+                if (totalPages <= 1) {
+                    navEl.innerHTML = '';
+                    return;
+                }
+
+                let html = '';
+                // Prev button
+                if (activePage > 1) {
+                    html += `<li class="page-item"><a class="page-link" href="#" onclick="applyUsersFilterAndPagination(${activePage - 1}); return false;">&laquo; Prev</a></li>`;
+                } else {
+                    html += `<li class="page-item disabled"><span class="page-link">&laquo; Prev</span></li>`;
+                }
+
+                // Numbers
+                for (let p = 1; p <= totalPages; p++) {
+                    if (p === 1 || p === totalPages || (p >= activePage - 2 && p <= activePage + 2)) {
+                        if (p === activePage) {
+                            html += `<li class="page-item active"><span class="page-link">${p}</span></li>`;
+                        } else {
+                            html += `<li class="page-item"><a class="page-link" href="#" onclick="applyUsersFilterAndPagination(${p}); return false;">${p}</a></li>`;
+                        }
+                    } else if (p === activePage - 3 || p === activePage + 3) {
+                        html += `<li class="page-item disabled"><span class="page-link">&hellip;</span></li>`;
+                    }
+                }
+
+                // Next button
+                if (activePage < totalPages) {
+                    html += `<li class="page-item"><a class="page-link" href="#" onclick="applyUsersFilterAndPagination(${activePage + 1}); return false;">Next &raquo;</a></li>`;
+                } else {
+                    html += `<li class="page-item disabled"><span class="page-link">Next &raquo;</span></li>`;
+                }
+
+                navEl.innerHTML = html;
             }
+
+            // Expose pagination globally for onclick
+            window.applyUsersFilterAndPagination = applyUsersFilterAndPagination;
 
             if (userSearchInput) {
-                userSearchInput.addEventListener('input', filterUsersTable);
+                userSearchInput.addEventListener('input', () => applyUsersFilterAndPagination(1));
                 userSearchInput.addEventListener('keydown', function(e) {
                     if (e.key === 'Enter') {
                         e.preventDefault();
-                        filterUsersTable();
+                        applyUsersFilterAndPagination(1);
                     }
                 });
             }
 
             if (userSearchBtn) {
-                userSearchBtn.addEventListener('click', filterUsersTable);
+                userSearchBtn.addEventListener('click', () => applyUsersFilterAndPagination(1));
             }
 
             if (clearUserSearch) {
                 clearUserSearch.addEventListener('click', function() {
                     if (userSearchInput) {
                         userSearchInput.value = '';
-                        filterUsersTable();
+                        applyUsersFilterAndPagination(1);
                         userSearchInput.focus();
                     }
                 });
             }
+
+            // Initial pagination render
+            applyUsersFilterAndPagination(1);
 
             // Handle user activation/deactivation
             document.querySelectorAll('.deactivate-user').forEach(button => {
@@ -2771,7 +2727,7 @@ $total_users = mysqli_num_rows($users_result);
                 }, 200);
             }
 
-            // Handle Edit Role button clicks
+            // Handle Edit Role button clicks (Modal Trigger)
             document.querySelectorAll('.edit-role-btn').forEach(button => {
                 button.addEventListener('click', function(e) {
                     e.preventDefault();
@@ -2823,20 +2779,157 @@ $total_users = mysqli_num_rows($users_result);
                     formData.append('update_role', '1');
                     formData.append('csrf_token', '<?php echo $_SESSION['csrf_token']; ?>');
                     
-                    fetch(window.location.href, {
+                    fetch('createuser', {
                         method: 'POST',
                         body: formData
                     })
                     .then(response => response.text())
                     .then(data => {
                         alert(data);
-                        location.reload();
+                        window.location.href = 'createuser';
                     })
                     .catch(error => {
                         console.error('Error:', error);
                         alert('An error occurred while updating the role.');
                         saveRoleBtn.disabled = false;
                         saveRoleBtn.innerHTML = '<i class="fa fa-save me-1"></i> Update Role';
+                    });
+                });
+            }
+            
+            // SMTP Settings Modal Controls
+            const openSmtpBtn = document.getElementById('openSmtpConfigBtn');
+            const smtpModal = document.getElementById('smtpModalOverlay');
+            const closeSmtpBtn = document.getElementById('closeSmtpModalBtn');
+            const cancelSmtpBtn = document.getElementById('cancelSmtpModalBtn');
+            const saveSmtpBtn = document.getElementById('saveSmtpBtn');
+            const sendSmtpTestBtn = document.getElementById('sendSmtpTestBtn');
+
+            function openSmtpModal() {
+                if (!smtpModal) return;
+                smtpModal.style.display = 'flex';
+                setTimeout(() => smtpModal.classList.add('active'), 10);
+            }
+
+            function closeSmtpModal() {
+                if (!smtpModal) return;
+                smtpModal.classList.remove('active');
+                setTimeout(() => smtpModal.style.display = 'none', 200);
+            }
+
+            if (openSmtpBtn) openSmtpBtn.addEventListener('click', openSmtpModal);
+            if (closeSmtpBtn) closeSmtpBtn.addEventListener('click', closeSmtpModal);
+            if (cancelSmtpBtn) cancelSmtpBtn.addEventListener('click', closeSmtpModal);
+            if (smtpModal) {
+                smtpModal.addEventListener('click', function(e) {
+                    if (e.target === smtpModal) closeSmtpModal();
+                });
+            }
+
+            if (saveSmtpBtn) {
+                saveSmtpBtn.addEventListener('click', function() {
+                    const host = document.getElementById('smtpHostInput').value.trim();
+                    const port = document.getElementById('smtpPortInput').value.trim();
+                    const enc = document.getElementById('smtpEncInput').value;
+                    const user = document.getElementById('smtpUserInput').value.trim();
+                    const pass = document.getElementById('smtpPassInput').value.trim();
+                    const fromAddr = document.getElementById('smtpFromAddrInput').value.trim();
+                    const fromName = document.getElementById('smtpFromNameInput').value.trim();
+                    const feedback = document.getElementById('smtpSaveFeedback');
+
+                    saveSmtpBtn.disabled = true;
+                    saveSmtpBtn.innerHTML = '<i class="fa fa-spinner fa-spin me-1"></i> Saving...';
+                    if (feedback) feedback.innerHTML = '';
+
+                    const fd = new FormData();
+                    fd.append('save_smtp_settings', '1');
+                    fd.append('smtp_host', host);
+                    fd.append('smtp_port', port);
+                    fd.append('smtp_encryption', enc);
+                    fd.append('smtp_user', user);
+                    fd.append('smtp_pass', pass);
+                    fd.append('from_address', fromAddr);
+                    fd.append('from_name', fromName);
+                    fd.append('csrf_token', '<?php echo $_SESSION['csrf_token']; ?>');
+
+                    fetch('createuser', {
+                        method: 'POST',
+                        body: fd
+                    })
+                    .then(res => res.json())
+                    .then(data => {
+                        saveSmtpBtn.disabled = false;
+                        saveSmtpBtn.innerHTML = '<i class="fa fa-save me-1"></i> Save Settings';
+                        if (feedback) {
+                            if (data.success) {
+                                feedback.innerHTML = '<span class="text-success fw-bold"><i class="fa fa-check-circle"></i> ' + data.message + '</span>';
+                                setTimeout(() => { window.location.href = 'createuser'; }, 1200);
+                            } else {
+                                feedback.innerHTML = '<span class="text-danger fw-bold"><i class="fa fa-times-circle"></i> ' + data.message + '</span>';
+                            }
+                        }
+                    })
+                    .catch(err => {
+                        saveSmtpBtn.disabled = false;
+                        saveSmtpBtn.innerHTML = '<i class="fa fa-save me-1"></i> Save Settings';
+                        if (feedback) feedback.innerHTML = '<span class="text-danger fw-bold">An error occurred while saving.</span>';
+                    });
+                });
+            }
+
+            if (sendSmtpTestBtn) {
+                sendSmtpTestBtn.addEventListener('click', function() {
+                    const testEmail = document.getElementById('smtpTestEmailInput').value.trim();
+                    const host = document.getElementById('smtpHostInput').value.trim();
+                    const port = document.getElementById('smtpPortInput').value.trim();
+                    const enc = document.getElementById('smtpEncInput').value;
+                    const user = document.getElementById('smtpUserInput').value.trim();
+                    const pass = document.getElementById('smtpPassInput').value.trim();
+                    const fromAddr = document.getElementById('smtpFromAddrInput').value.trim();
+                    const fromName = document.getElementById('smtpFromNameInput').value.trim();
+                    const feedback = document.getElementById('smtpTestFeedback');
+
+                    if (!testEmail) {
+                        alert('Please enter a destination email address to receive the test email.');
+                        return;
+                    }
+
+                    sendSmtpTestBtn.disabled = true;
+                    sendSmtpTestBtn.innerHTML = '<i class="fa fa-spinner fa-spin me-1"></i> Testing...';
+                    if (feedback) feedback.innerHTML = '<span class="text-muted"><i class="fa fa-spinner fa-spin me-1"></i> Connecting to ' + host + ':' + port + ' via ' + enc.toUpperCase() + '...</span>';
+
+                    const fd = new FormData();
+                    fd.append('test_smtp_email', '1');
+                    fd.append('test_email', testEmail);
+                    fd.append('smtp_host', host);
+                    fd.append('smtp_port', port);
+                    fd.append('smtp_encryption', enc);
+                    fd.append('smtp_user', user);
+                    fd.append('smtp_pass', pass);
+                    fd.append('from_address', fromAddr);
+                    fd.append('from_name', fromName);
+                    fd.append('csrf_token', '<?php echo $_SESSION['csrf_token']; ?>');
+
+                    fetch('createuser', {
+                        method: 'POST',
+                        body: fd
+                    })
+                    .then(res => res.json())
+                    .then(data => {
+                        sendSmtpTestBtn.disabled = false;
+                        sendSmtpTestBtn.innerHTML = '<i class="fa fa-send me-1"></i> Send Test Email';
+                        if (feedback) {
+                            if (data.success) {
+                                feedback.innerHTML = '<div class="alert alert-success py-2 px-3 mb-0 mt-2"><i class="fa fa-check-circle me-1"></i> ' + data.message + '</div>';
+                            } else {
+                                feedback.innerHTML = '<div class="alert alert-danger py-2 px-3 mb-0 mt-2"><i class="fa fa-exclamation-circle me-1"></i> ' + data.message + '</div>';
+                            }
+                        }
+                    })
+                    .catch(err => {
+                        sendSmtpTestBtn.disabled = false;
+                        sendSmtpTestBtn.innerHTML = '<i class="fa fa-send me-1"></i> Send Test Email';
+                        if (feedback) feedback.innerHTML = '<div class="alert alert-danger py-2 px-3 mb-0 mt-2">Connection or server error during SMTP test.</div>';
                     });
                 });
             }
@@ -2850,28 +2943,30 @@ $total_users = mysqli_num_rows($users_result);
             <?php endif; ?>
         });
 
+        // Action: Activate / Deactivate User
         function updateUserStatus(userId, status) {
             const formData = new FormData();
             formData.append('user_id', userId);
             formData.append('status', status);
-            formData.append('update_status', true);
+            formData.append('update_status', '1');
             formData.append('csrf_token', '<?php echo $_SESSION['csrf_token']; ?>');
             
-            fetch(window.location.href, {
+            fetch('createuser', {
                 method: 'POST',
                 body: formData
             })
             .then(response => response.text())
             .then(data => {
                 alert(data);
-                location.reload();
+                window.location.href = 'createuser';
             })
             .catch(error => {
                 console.error('Error:', error);
-                alert('An error occurred.');
+                alert('An error occurred while updating user status.');
             });
         }
         
+        // Helper: Generate Random Password
         function generateRandomPassword() {
             const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789!@#$%&*';
             let newPwd = 'Nis@';
@@ -2891,6 +2986,7 @@ $total_users = mysqli_num_rows($users_result);
             }
         }
 
+        // Helper: Reset to Default Password in Form
         function resetToDefaultPassword() {
             const pwdInput = document.getElementById('password');
             if (pwdInput) {
@@ -2900,6 +2996,7 @@ $total_users = mysqli_num_rows($users_result);
             }
         }
 
+        // Helper: Copy Password Value in Form
         function copyPasswordValue() {
             const pwdInput = document.getElementById('password');
             if (!pwdInput || !pwdInput.value) return;
@@ -2945,20 +3042,21 @@ $total_users = mysqli_num_rows($users_result);
             }
         }
 
+        // Action: Reset User Password to default
         function resetUserPassword(userId) {
             const formData = new FormData();
             formData.append('user_id', userId);
-            formData.append('reset_password', true);
+            formData.append('reset_password', '1');
             formData.append('csrf_token', '<?php echo $_SESSION['csrf_token']; ?>');
             
-            fetch(window.location.href, {
+            fetch('createuser', {
                 method: 'POST',
                 body: formData
             })
             .then(response => response.text())
             .then(data => {
                 alert(data);
-                location.reload();
+                window.location.href = 'createuser';
             })
             .catch(error => {
                 console.error('Error:', error);
@@ -2966,25 +3064,31 @@ $total_users = mysqli_num_rows($users_result);
             });
         }
 
+        // Action: Reset Google Authenticator MFA
         function resetUserMfa(userId) {
             const formData = new FormData();
             formData.append('user_id', userId);
-            formData.append('reset_mfa', true);
+            formData.append('reset_mfa', '1');
             formData.append('csrf_token', '<?php echo $_SESSION['csrf_token']; ?>');
             
-            fetch(window.location.href, {
+            fetch('createuser', {
                 method: 'POST',
                 body: formData
             })
             .then(response => response.text())
             .then(data => {
                 alert(data);
-                location.reload();
+                window.location.href = 'createuser';
             })
             .catch(error => {
                 console.error('Error:', error);
                 alert('An error occurred while resetting Google Authenticator.');
             });
+        }
+
+
+
+        // Helper: Copy Credentials in Success Alert
         function copyCredText(text, btnElement) {
             if (!navigator.clipboard) {
                 const tempInput = document.createElement('input');
@@ -2998,209 +3102,13 @@ $total_users = mysqli_num_rows($users_result);
             }
             if (btnElement) {
                 const origHtml = btnElement.innerHTML;
-                btnElement.innerHTML = '<i class="fa fa-check text-success"></i> Copied!';
+                btnElement.innerHTML = '<i class="fa fa-check text-success"></i>';
                 setTimeout(() => {
                     btnElement.innerHTML = origHtml;
                 }, 1800);
             }
         }
-
-        function saveSmtpSettings(e) {
-            e.preventDefault();
-            const btn = document.getElementById('btnSaveSmtp');
-            const alertBox = document.getElementById('smtpSaveAlert');
-            const alertText = document.getElementById('smtpSaveAlertText');
-            
-            btn.disabled = true;
-            btn.innerHTML = '<i class="fa fa-spinner fa-spin me-1"></i> Saving...';
-            
-            const formData = new FormData();
-            formData.append('save_smtp_settings', '1');
-            formData.append('csrf_token', '<?php echo $_SESSION['csrf_token']; ?>');
-            formData.append('smtp_host', document.getElementById('cfg_smtp_host').value);
-            formData.append('smtp_port', document.getElementById('cfg_smtp_port').value);
-            formData.append('smtp_encryption', document.getElementById('cfg_smtp_encryption').value);
-            formData.append('smtp_user', document.getElementById('cfg_smtp_user').value);
-            formData.append('smtp_pass', document.getElementById('cfg_smtp_pass').value);
-            formData.append('from_address', document.getElementById('cfg_from_address').value);
-            formData.append('from_name', document.getElementById('cfg_from_name').value);
-
-            fetch('createuser', {
-                method: 'POST',
-                body: formData
-            })
-            .then(res => res.json())
-            .then(data => {
-                btn.disabled = false;
-                btn.innerHTML = '<i class="fa fa-save me-1"></i> Save Configuration';
-                alertBox.style.display = 'block';
-                alertBox.className = 'alert alert-dismissible fade show ' + (data.success ? 'alert-success' : 'alert-danger');
-                alertText.innerText = data.message;
-            })
-            .catch(err => {
-                btn.disabled = false;
-                btn.innerHTML = '<i class="fa fa-save me-1"></i> Save Configuration';
-                alertBox.style.display = 'block';
-                alertBox.className = 'alert alert-danger';
-                alertText.innerText = 'Network error saving settings.';
-            });
-        }
-
-        function testSmtpSettings() {
-            const btn = document.getElementById('btnTestSmtp');
-            const feedback = document.getElementById('smtpTestFeedback');
-            const testEmail = document.getElementById('cfg_test_email').value;
-
-            if (!testEmail) {
-                feedback.style.display = 'block';
-                feedback.style.background = '#fee2e2';
-                feedback.style.color = '#991b1b';
-                feedback.innerHTML = '<i class="fa fa-exclamation-circle me-1"></i> Please enter a recipient email address.';
-                return;
-            }
-
-            btn.disabled = true;
-            btn.innerHTML = '<i class="fa fa-spinner fa-spin me-1"></i> Testing...';
-            feedback.style.display = 'block';
-            feedback.style.background = '#e0f2fe';
-            feedback.style.color = '#0369a1';
-            feedback.innerHTML = '<i class="fa fa-info-circle me-1"></i> Connecting to SMTP server & sending test dispatch...';
-
-            const formData = new FormData();
-            formData.append('test_smtp_email', '1');
-            formData.append('csrf_token', '<?php echo $_SESSION['csrf_token']; ?>');
-            formData.append('test_email', testEmail);
-            formData.append('smtp_host', document.getElementById('cfg_smtp_host').value);
-            formData.append('smtp_port', document.getElementById('cfg_smtp_port').value);
-            formData.append('smtp_encryption', document.getElementById('cfg_smtp_encryption').value);
-            formData.append('smtp_user', document.getElementById('cfg_smtp_user').value);
-            formData.append('smtp_pass', document.getElementById('cfg_smtp_pass').value);
-            formData.append('from_address', document.getElementById('cfg_from_address').value);
-            formData.append('from_name', document.getElementById('cfg_from_name').value);
-
-            fetch('createuser', {
-                method: 'POST',
-                body: formData
-            })
-            .then(res => res.json())
-            .then(data => {
-                btn.disabled = false;
-                btn.innerHTML = '<i class="fa fa-send me-1"></i> Send Test Email';
-                feedback.style.display = 'block';
-                if (data.success) {
-                    feedback.style.background = '#dcfce7';
-                    feedback.style.color = '#166534';
-                    feedback.innerHTML = '<i class="fa fa-check-circle me-1"></i> <strong>Success!</strong> Test email was successfully delivered to ' + testEmail + '.';
-                } else {
-                    feedback.style.background = '#fee2e2';
-                    feedback.style.color = '#991b1b';
-                    feedback.innerHTML = '<i class="fa fa-exclamation-triangle me-1"></i> <strong>Error:</strong> ' + data.message;
-                }
-            })
-            .catch(err => {
-                btn.disabled = false;
-                btn.innerHTML = '<i class="fa fa-send me-1"></i> Send Test Email';
-                feedback.style.display = 'block';
-                feedback.style.background = '#fee2e2';
-                feedback.style.color = '#991b1b';
-                feedback.innerHTML = '<i class="fa fa-times-circle me-1"></i> Request failed: ' + err;
-            });
-        }
     </script>
-
-    <?php if ($currentUserRole === 'Admin'): ?>
-    <!-- Email & SMTP Configuration Modal -->
-    <div class="modal fade" id="smtpConfigModal" tabindex="-1" aria-labelledby="smtpConfigModalLabel" aria-hidden="true">
-        <div class="modal-dialog modal-lg modal-dialog-centered">
-            <div class="modal-content border-0 shadow">
-                <div class="modal-header text-white" style="background: linear-gradient(135deg, #1a5c2e, #27ae60);">
-                    <h5 class="modal-title d-flex align-items-center gap-2" id="smtpConfigModalLabel">
-                        <i class="fa fa-envelope"></i> Email & SMTP Server Configuration
-                    </h5>
-                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
-                </div>
-                <div class="modal-body p-4">
-                    <p class="text-muted small mb-3">
-                        Configure the outgoing SMTP mail server used by NISREV to send welcome emails, credentials, and password reset notifications to officers.
-                    </p>
-
-                    <div id="smtpSaveAlert" style="display: none;" class="alert alert-dismissible fade show" role="alert">
-                        <span id="smtpSaveAlertText"></span>
-                    </div>
-
-                    <form id="smtpSettingsForm" onsubmit="saveSmtpSettings(event)">
-                        <div class="row g-3">
-                            <div class="col-md-7">
-                                <label for="cfg_smtp_host" class="form-label fw-bold small text-dark">SMTP Host / Server</label>
-                                <input type="text" class="form-control" id="cfg_smtp_host" value="<?php echo htmlspecialchars($email_settings['smtp_host']); ?>" placeholder="e.g. mail.nisapps.com.ng or smtp.gmail.com" required>
-                                <div class="form-text small">e.g. <code>mail.nisapps.com.ng</code>, <code>smtp.gmail.com</code>, <code>smtp.office365.com</code></div>
-                            </div>
-                            <div class="col-md-3">
-                                <label for="cfg_smtp_port" class="form-label fw-bold small text-dark">SMTP Port</label>
-                                <input type="number" class="form-control" id="cfg_smtp_port" value="<?php echo htmlspecialchars($email_settings['smtp_port']); ?>" placeholder="587" required>
-                                <div class="form-text small">587 (TLS) or 465 (SSL)</div>
-                            </div>
-                            <div class="col-md-2">
-                                <label for="cfg_smtp_encryption" class="form-label fw-bold small text-dark">Encryption</label>
-                                <select class="form-select" id="cfg_smtp_encryption">
-                                    <option value="tls" <?php echo strtolower($email_settings['smtp_encryption']) === 'tls' ? 'selected' : ''; ?>>TLS</option>
-                                    <option value="ssl" <?php echo strtolower($email_settings['smtp_encryption']) === 'ssl' ? 'selected' : ''; ?>>SSL</option>
-                                    <option value="none" <?php echo strtolower($email_settings['smtp_encryption']) === 'none' ? 'selected' : ''; ?>>None</option>
-                                </select>
-                            </div>
-
-                            <div class="col-md-6">
-                                <label for="cfg_smtp_user" class="form-label fw-bold small text-dark">SMTP Username / Email</label>
-                                <input type="text" class="form-control" id="cfg_smtp_user" value="<?php echo htmlspecialchars($email_settings['smtp_user']); ?>" placeholder="e.g. noreply@nisapps.com.ng">
-                                <div class="form-text small">Full email address or username for SMTP authentication</div>
-                            </div>
-                            <div class="col-md-6">
-                                <label for="cfg_smtp_pass" class="form-label fw-bold small text-dark">SMTP Password / App Password</label>
-                                <div class="input-group">
-                                    <input type="password" class="form-control" id="cfg_smtp_pass" value="<?php echo htmlspecialchars($email_settings['smtp_pass']); ?>" placeholder="••••••••••••">
-                                    <button class="btn btn-outline-secondary" type="button" onclick="togglePasswordVisibility('cfg_smtp_pass', this)">
-                                        <i class="fa fa-eye"></i>
-                                    </button>
-                                </div>
-                                <div class="form-text small">Mailbox password or Google App Password</div>
-                            </div>
-
-                            <div class="col-md-6">
-                                <label for="cfg_from_address" class="form-label fw-bold small text-dark">From Email Address</label>
-                                <input type="email" class="form-control" id="cfg_from_address" value="<?php echo htmlspecialchars($email_settings['from_address']); ?>" placeholder="noreply@nisapps.com.ng" required>
-                            </div>
-                            <div class="col-md-6">
-                                <label for="cfg_from_name" class="form-label fw-bold small text-dark">Sender Display Name</label>
-                                <input type="text" class="form-control" id="cfg_from_name" value="<?php echo htmlspecialchars($email_settings['from_name']); ?>" placeholder="Nigeria Immigration Service (NISREV)" required>
-                            </div>
-                        </div>
-
-                        <div class="d-flex justify-content-end gap-2 mt-4 pt-3 border-top">
-                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
-                            <button type="submit" id="btnSaveSmtp" class="btn btn-success fw-bold">
-                                <i class="fa fa-save me-1"></i> Save Configuration
-                            </button>
-                        </div>
-                    </form>
-
-                    <!-- Real-Time SMTP Test Section -->
-                    <div class="mt-4 pt-3 border-top">
-                        <h6 class="fw-bold text-dark mb-2"><i class="fa fa-paper-plane text-primary me-1"></i> Test Live Email Delivery</h6>
-                        <p class="text-muted small mb-2">Send a real test email immediately to verify that your SMTP server delivers emails without error.</p>
-                        
-                        <div class="input-group mb-2">
-                            <input type="email" class="form-control" id="cfg_test_email" value="mmaluv22@gmail.com" placeholder="Recipient email address (e.g. mmaluv22@gmail.com)">
-                            <button class="btn btn-primary fw-bold" type="button" id="btnTestSmtp" onclick="testSmtpSettings()">
-                                <i class="fa fa-send me-1"></i> Send Test Email
-                            </button>
-                        </div>
-                        <div id="smtpTestFeedback" style="display: none;" class="small p-2 rounded"></div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-    <?php endif; ?>
 </body>
 </html>
 

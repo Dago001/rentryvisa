@@ -23,6 +23,9 @@ $start_date = $_GET['start_date'] ?? date('Y-m-01'); // Default to start of curr
 $end_date = $_GET['end_date'] ?? date('Y-m-t'); // Default to end of current month
 $report_type = $_GET['report_type'] ?? 'monthly';
 
+$sd = $start_date . ' 00:00:00';
+$ed = $end_date . ' 23:59:59';
+
 // Static stats that are not affected by filter
 $static_total = 0;
 $static_active = 0;
@@ -57,11 +60,11 @@ try {
         if ($q_current_month && $row = mysqli_fetch_assoc($q_current_month)) {
             $static_current_month = (int)$row['count'];
         }
-        $q_fresh = mysqli_query($conn, "SELECT COUNT(*) as count FROM visa_applications WHERE application_type = 'fresh'");
+        $q_fresh = mysqli_query($conn, "SELECT COUNT(*) as count FROM visa_applications WHERE LOWER(application_type) = 'fresh'");
         if ($q_fresh && $row = mysqli_fetch_assoc($q_fresh)) {
             $static_fresh = (int)$row['count'];
         }
-        $q_renewal = mysqli_query($conn, "SELECT COUNT(*) as count FROM visa_applications WHERE application_type = 'renewal'");
+        $q_renewal = mysqli_query($conn, "SELECT COUNT(*) as count FROM visa_applications WHERE LOWER(application_type) = 'renewal'");
         if ($q_renewal && $row = mysqli_fetch_assoc($q_renewal)) {
             $static_renewal = (int)$row['count'];
         }
@@ -72,8 +75,6 @@ try {
                          WHERE application_date BETWEEN ? AND ? 
                          ORDER BY application_date DESC";
         if ($stmt_filter = mysqli_prepare($conn, $filter_query)) {
-            $sd = $start_date . ' 00:00:00';
-            $ed = $end_date . ' 23:59:59';
             mysqli_stmt_bind_param($stmt_filter, "ss", $sd, $ed);
             mysqli_stmt_execute($stmt_filter);
             $filter_result = mysqli_stmt_get_result($stmt_filter);
@@ -87,45 +88,53 @@ try {
             }
             mysqli_stmt_close($stmt_filter);
         }
-        // Status distribution data - using the actual statuses from process_visa.php
+        // Status distribution data
         $status_query = "SELECT status, COUNT(*) as count FROM visa_applications 
                         WHERE application_date BETWEEN ? AND ? 
                         GROUP BY status";
-        $stmt = mysqli_prepare($conn, $status_query);
-        mysqli_stmt_bind_param($stmt, "ss", $start_date, $end_date);
-        mysqli_stmt_execute($stmt);
-        $status_result = mysqli_stmt_get_result($stmt);
-        
-        // Initialize all possible statuses
-        $all_statuses = ['active', 'pending']; // Add other statuses if they exist
-        foreach ($all_statuses as $status) {
-            $status_data[$status] = 0;
-        }
-        
-        while ($row = mysqli_fetch_assoc($status_result)) {
-            $status_data[$row['status']] = $row['count'];
+        if ($stmt = mysqli_prepare($conn, $status_query)) {
+            mysqli_stmt_bind_param($stmt, "ss", $sd, $ed);
+            mysqli_stmt_execute($stmt);
+            $status_result = mysqli_stmt_get_result($stmt);
+            
+            $all_statuses = ['active', 'pending'];
+            foreach ($all_statuses as $status) {
+                $status_data[$status] = 0;
+            }
+            
+            while ($row = mysqli_fetch_assoc($status_result)) {
+                $status_data[$row['status']] = (int)$row['count'];
+            }
+            mysqli_stmt_close($stmt);
         }
 
-        // Monthly application data (unaffected by filters)
+        // Monthly application data for the selected report year
+        $report_year = (int)date('Y', strtotime($start_date));
         $monthly_query = "SELECT 
                             MONTH(application_date) as month, 
                             COUNT(*) as count 
                           FROM visa_applications 
+                          WHERE YEAR(application_date) = ?
                           GROUP BY MONTH(application_date) 
                           ORDER BY month";
-        $monthly_result = mysqli_query($conn, $monthly_query);
-        
-        $months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-        foreach ($months as $index => $month) {
-            $monthly_data[$month] = 0;
-        }
-        
-        while ($row = mysqli_fetch_assoc($monthly_result)) {
-            $month_name = $months[$row['month'] - 1];
-            $monthly_data[$month_name] = $row['count'];
+        if ($stmt_m = mysqli_prepare($conn, $monthly_query)) {
+            mysqli_stmt_bind_param($stmt_m, "i", $report_year);
+            mysqli_stmt_execute($stmt_m);
+            $monthly_result = mysqli_stmt_get_result($stmt_m);
+            
+            $months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+            foreach ($months as $month) {
+                $monthly_data[$month] = 0;
+            }
+            
+            while ($row = mysqli_fetch_assoc($monthly_result)) {
+                $month_name = $months[$row['month'] - 1];
+                $monthly_data[$month_name] = (int)$row['count'];
+            }
+            mysqli_stmt_close($stmt_m);
         }
 
-        // User statistics - using created_by field directly
+        // User statistics
         $user_query = "SELECT 
                         created_by as username,
                         COUNT(id) as applications,
@@ -135,16 +144,17 @@ try {
                       GROUP BY created_by 
                       ORDER BY applications DESC 
                       LIMIT 10";
-        $stmt = mysqli_prepare($conn, $user_query);
-        mysqli_stmt_bind_param($stmt, "ss", $start_date, $end_date);
-        mysqli_stmt_execute($stmt);
-        $user_result = mysqli_stmt_get_result($stmt);
-        
-        while ($row = mysqli_fetch_assoc($user_result)) {
-            $user_stats[] = $row;
+        if ($stmt = mysqli_prepare($conn, $user_query)) {
+            mysqli_stmt_bind_param($stmt, "ss", $sd, $ed);
+            mysqli_stmt_execute($stmt);
+            $user_result = mysqli_stmt_get_result($stmt);
+            while ($row = mysqli_fetch_assoc($user_result)) {
+                $user_stats[] = $row;
+            }
+            mysqli_stmt_close($stmt);
         }
 
-        // Applications by gender
+        // Applications by gender in the filtered date range
         $gender_field = 'gender';
         $cols_query = mysqli_query($conn, "SHOW COLUMNS FROM visa_applications");
         if ($cols_query) {
@@ -163,49 +173,53 @@ try {
                             CASE 
                                 WHEN UPPER(TRIM($gender_field)) IN ('M', 'MALE') THEN 'Male'
                                 WHEN UPPER(TRIM($gender_field)) IN ('F', 'FEMALE') THEN 'Female'
+                                ELSE 'Other'
                             END as gender,
                             COUNT(*) as count 
                           FROM visa_applications 
-                          WHERE $gender_field IS NOT NULL 
+                          WHERE application_date BETWEEN ? AND ?
+                            AND $gender_field IS NOT NULL 
                             AND TRIM($gender_field) != ''
                             AND UPPER(TRIM($gender_field)) IN ('M', 'MALE', 'F', 'FEMALE')
                           GROUP BY gender 
                           ORDER BY count DESC";
-        $stmt = mysqli_prepare($conn, $gender_query);
-        mysqli_stmt_execute($stmt);
-        $gender_result = mysqli_stmt_get_result($stmt);
-        
-        while ($row = mysqli_fetch_assoc($gender_result)) {
-            $gender_stats[] = $row;
+        if ($stmt = mysqli_prepare($conn, $gender_query)) {
+            mysqli_stmt_bind_param($stmt, "ss", $sd, $ed);
+            mysqli_stmt_execute($stmt);
+            $gender_result = mysqli_stmt_get_result($stmt);
+            
+            while ($row = mysqli_fetch_assoc($gender_result)) {
+                $gender_stats[] = $row;
+            }
+            mysqli_stmt_close($stmt);
         }
 
-        // Overall statistics - adjusted for actual statuses
+        // Overall statistics
         $total_query = "SELECT 
                         COUNT(*) as total,
                         SUM(CASE WHEN status = 'active' THEN 1 ELSE 0 END) as approved,
                         SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END) as pending
                       FROM visa_applications 
                       WHERE application_date BETWEEN ? AND ?";
-        $stmt = mysqli_prepare($conn, $total_query);
-        mysqli_stmt_bind_param($stmt, "ss", $start_date, $end_date);
-        mysqli_stmt_execute($stmt);
-        $total_result = mysqli_stmt_get_result($stmt);
-        $overall_stats = mysqli_fetch_assoc($total_result);
-        $overall_stats['rejected'] = 0; // Add rejected count if you have this status
+        if ($stmt = mysqli_prepare($conn, $total_query)) {
+            mysqli_stmt_bind_param($stmt, "ss", $sd, $ed);
+            mysqli_stmt_execute($stmt);
+            $total_result = mysqli_stmt_get_result($stmt);
+            $overall_stats = mysqli_fetch_assoc($total_result);
+            $overall_stats['rejected'] = 0;
+            mysqli_stmt_close($stmt);
+        }
 
         // Fetch Audit Logs (Activity Trail) if table exists
         $log_table_check = mysqli_query($conn, "SHOW TABLES LIKE 'activity_log'");
         if (mysqli_num_rows($log_table_check) > 0) {
-            $start_date_ts = $start_date . ' 00:00:00';
-            $end_date_ts = $end_date . ' 23:59:59';
-            
             $audit_query = "SELECT id, user_id, action, description, ip_address, user_agent, created_at 
                             FROM activity_log 
                             WHERE created_at BETWEEN ? AND ? 
                             ORDER BY id DESC 
-                            LIMIT 1000";
+                            LIMIT 50000";
             if ($stmt_audit = mysqli_prepare($conn, $audit_query)) {
-                mysqli_stmt_bind_param($stmt_audit, "ss", $start_date_ts, $end_date_ts);
+                mysqli_stmt_bind_param($stmt_audit, "ss", $sd, $ed);
                 mysqli_stmt_execute($stmt_audit);
                 $audit_result = mysqli_stmt_get_result($stmt_audit);
                 while ($row = mysqli_fetch_assoc($audit_result)) {
@@ -232,7 +246,6 @@ try {
         $audit_security_count = 0;
         $audit_visa_ops_count = 0;
         $distinct_ips = [];
-        $officer_activity_summary = [];
 
         foreach ($audit_logs as $log) {
             $act = strtoupper($log['action'] ?? '');
@@ -242,14 +255,74 @@ try {
             if (strpos($act, 'RESET') !== false || strpos($act, 'PASSWORD') !== false || strpos($act, 'MFA') !== false || strpos($act, 'FAILED') !== false) {
                 $audit_security_count++;
             }
-            if (strpos($act, 'CREATE') !== false || strpos($act, 'EDIT') !== false || strpos($act, 'VIEW') !== false || strpos($act, 'PRINT') !== false) {
+            if ($act === 'CREATE' || strpos($act, 'EDIT') !== false || strpos($act, 'UPDATE') !== false || strpos($act, 'VIEW') !== false || strpos($act, 'PRINT') !== false) {
                 $audit_visa_ops_count++;
             }
             if (!empty($log['display_ip'])) {
                 $distinct_ips[$log['display_ip']] = true;
             }
-            
+        }
+
+        // Compute exact ground-truth Officer Productivity from visa_applications and activity_log
+        $officer_activity_summary = [];
+
+        // 1. Applications created per user in date range
+        $q_created = mysqli_query($conn, "SELECT created_by, COUNT(*) as cnt, MAX(application_date) as last_created 
+                                          FROM visa_applications 
+                                          WHERE application_date BETWEEN '$sd' AND '$ed' 
+                                            AND created_by IS NOT NULL AND created_by != '' 
+                                          GROUP BY created_by");
+        if ($q_created) {
+            while ($r = mysqli_fetch_assoc($q_created)) {
+                $op = $r['created_by'];
+                if (!isset($officer_activity_summary[$op])) {
+                    $officer_activity_summary[$op] = [
+                        'operator' => $op,
+                        'total' => 0,
+                        'creates' => 0,
+                        'edits' => 0,
+                        'prints' => 0,
+                        'logins' => 0,
+                        'last_seen' => $r['last_created']
+                    ];
+                }
+                $officer_activity_summary[$op]['creates'] = (int)$r['cnt'];
+            }
+        }
+
+        // 2. Visas printed per user in date range (matching print_visas.php ground truth)
+        $q_printed = mysqli_query($conn, "SELECT printed_by, COUNT(*) as cnt, MAX(printed_at) as last_printed 
+                                          FROM visa_applications 
+                                          WHERE print_status = 1 
+                                            AND printed_by IS NOT NULL AND printed_by != '' 
+                                            AND printed_at BETWEEN '$sd' AND '$ed' 
+                                          GROUP BY printed_by");
+        if ($q_printed) {
+            while ($r = mysqli_fetch_assoc($q_printed)) {
+                $op = $r['printed_by'];
+                if (!isset($officer_activity_summary[$op])) {
+                    $officer_activity_summary[$op] = [
+                        'operator' => $op,
+                        'total' => 0,
+                        'creates' => 0,
+                        'edits' => 0,
+                        'prints' => 0,
+                        'logins' => 0,
+                        'last_seen' => $r['last_printed']
+                    ];
+                }
+                $officer_activity_summary[$op]['prints'] = (int)$r['cnt'];
+                if (!empty($r['last_printed']) && (empty($officer_activity_summary[$op]['last_seen']) || $r['last_printed'] > $officer_activity_summary[$op]['last_seen'])) {
+                    $officer_activity_summary[$op]['last_seen'] = $r['last_printed'];
+                }
+            }
+        }
+
+        // 3. Edits, Logins and latest activity from activity_log
+        foreach ($audit_logs as $log) {
             $op = $log['user_id'] ?: 'SYSTEM';
+            $act = strtoupper($log['action'] ?? '');
+            
             if (!isset($officer_activity_summary[$op])) {
                 $officer_activity_summary[$op] = [
                     'operator' => $op,
@@ -261,12 +334,23 @@ try {
                     'last_seen' => $log['created_at']
                 ];
             }
-            $officer_activity_summary[$op]['total']++;
-            if (strpos($act, 'CREATE') !== false) $officer_activity_summary[$op]['creates']++;
-            elseif (strpos($act, 'EDIT') !== false || strpos($act, 'UPDATE') !== false) $officer_activity_summary[$op]['edits']++;
-            elseif (strpos($act, 'PRINT') !== false) $officer_activity_summary[$op]['prints']++;
-            elseif (strpos($act, 'LOGIN') !== false) $officer_activity_summary[$op]['logins']++;
+
+            if (strpos($act, 'EDIT') !== false || (strpos($act, 'UPDATE') !== false && strpos($act, 'USER') === false)) {
+                $officer_activity_summary[$op]['edits']++;
+            } elseif (strpos($act, 'LOGIN') !== false) {
+                $officer_activity_summary[$op]['logins']++;
+            }
+
+            if (!empty($log['created_at']) && (empty($officer_activity_summary[$op]['last_seen']) || $log['created_at'] > $officer_activity_summary[$op]['last_seen'])) {
+                $officer_activity_summary[$op]['last_seen'] = $log['created_at'];
+            }
         }
+
+        // Calculate total actions for each officer
+        foreach ($officer_activity_summary as $op => &$stats_item) {
+            $stats_item['total'] = $stats_item['creates'] + $stats_item['edits'] + $stats_item['prints'] + $stats_item['logins'];
+        }
+        unset($stats_item);
 
         uasort($officer_activity_summary, function($a, $b) {
             return $b['total'] <=> $a['total'];
@@ -388,31 +472,40 @@ try {
         }
         
         .user-avatar {
-            width: 44px;
-            height: 44px;
-            min-width: 44px;
+            width: 48px;
+            height: 48px;
+            min-width: 48px;
+            max-width: 48px;
             border-radius: 50%;
-            background: linear-gradient(135deg, var(--primary), var(--secondary));
-            border: 2.5px solid var(--primary);
-            color: white;
-            display: flex;
+            background: #ffffff;
+            border: 2.5px solid #1a5c2e;
+            color: #1a5c2e;
+            display: inline-flex;
             align-items: center;
             justify-content: center;
             font-weight: 800;
-            font-size: 1rem;
-            box-shadow: 0 3px 10px rgba(26, 92, 46, 0.28);
+            font-size: 1.15rem;
+            box-shadow: 0 0 0 1px #ffffff, 0 3px 8px rgba(26, 92, 46, 0.35);
             overflow: hidden;
             flex-shrink: 0;
-            image-rendering: -webkit-optimize-contrast;
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+        
+        .user-avatar:hover {
+            transform: scale(1.06);
+            border-color: #27ae60;
+            box-shadow: 0 0 0 2px #ffffff, 0 5px 14px rgba(26, 92, 46, 0.45);
         }
         
         .user-avatar img {
             width: 100%;
             height: 100%;
             object-fit: cover;
+            object-position: center top;
             display: block;
             image-rendering: -webkit-optimize-contrast;
-            filter: contrast(1.05);
+            image-rendering: crisp-edges;
+            filter: contrast(1.08) saturate(1.06) brightness(1.02);
         }
         
         .user-details {
@@ -423,81 +516,144 @@ try {
         .user-name {
             font-weight: 600;
             color: var(--dark);
-            font-size: 0.9rem;
+            font-size: 0.95rem;
+            line-height: 1.2;
         }
         
         .user-role {
             font-size: 0.75rem;
             color: var(--gray);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            font-weight: 500;
         }
         
         .logout-btn {
-            background: transparent;
-            border: 2px solid var(--danger);
+            background: rgba(220, 53, 69, 0.1);
             color: var(--danger);
-            padding: 5px 12px;
-            border-radius: 6px;
+            border: 1px solid rgba(220, 53, 69, 0.2);
+            padding: 8px 16px;
+            border-radius: 8px;
             text-decoration: none;
-            font-size: 0.8rem;
+            font-size: 0.85rem;
             font-weight: 500;
-            transition: all 0.3s ease;
+            transition: all 0.3s;
             display: flex;
             align-items: center;
-            gap: 5px;
-            white-space: nowrap;
+            gap: 6px;
         }
         
         .logout-btn:hover {
             background: var(--danger);
             color: white;
-            text-decoration: none;
             transform: translateY(-1px);
-            box-shadow: 0 4px 12px rgba(220, 53, 69, 0.3);
         }
         
-        /* Page Content */
         .page-content {
             padding: 20px;
             min-height: calc(100vh - 64px);
         }
 
-        /* Report Header with Filters */
+        /* Professional Compact Filter Header */
         .report-header {
-            background: white;
-            padding: 20px;
-            border-radius: 12px;
-            box-shadow: 0 3px 15px rgba(0,0,0,0.08);
-            margin-bottom: 20px;
+            background: #ffffff;
+            padding: 16px 20px;
+            border-radius: 10px;
+            border: 1px solid #e2e8f0;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+            margin-bottom: 22px;
         }
-        
-        .report-header h4 {
-            color: var(--primary);
-            font-weight: 600;
-            margin-bottom: 8px;
+
+        .report-header-flex {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 14px;
         }
-        
-        .report-header p {
-            color: var(--gray);
-            font-size: 0.9rem;
+
+        .report-header-title-box h4 {
+            color: #1a5c2e;
+            font-weight: 700;
+            font-size: 1.12rem;
+            margin-bottom: 3px;
+            display: flex;
+            align-items: center;
+        }
+
+        .report-header-title-box p {
+            color: #64748b;
+            font-size: 0.82rem;
             margin-bottom: 0;
         }
-        
-        /* Filter Form */
-        .filter-form .form-group {
-            margin-bottom: 0;
+
+        .filter-compact-form {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-end;
+            gap: 8px;
         }
-        
-        .filter-form .form-control {
-            border: 1.5px solid #e1e5e9;
+
+        .filter-inputs-row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            flex-wrap: nowrap;
+        }
+
+        .filter-date-field {
+            display: flex;
+            align-items: center;
+            background: #ffffff;
+            border: 1.5px solid #cbd5e1;
             border-radius: 6px;
-            padding: 8px 12px;
-            font-size: 0.9rem;
-            transition: all 0.3s;
+            overflow: hidden;
+            transition: border-color 0.2s ease, box-shadow 0.2s ease;
         }
-        
-        .filter-form .form-control:focus {
-            border-color: var(--primary);
-            box-shadow: 0 0 0 3px rgba(26, 92, 46, 0.1);
+
+        .filter-date-field:focus-within {
+            border-color: #1a5c2e;
+            box-shadow: 0 0 0 3px rgba(26, 92, 46, 0.12);
+        }
+
+        .filter-date-tag {
+            background: #f1f5f9;
+            color: #475569;
+            font-size: 0.76rem;
+            font-weight: 700;
+            padding: 6px 9px;
+            border-right: 1px solid #cbd5e1;
+            user-select: none;
+            white-space: nowrap;
+            text-transform: uppercase;
+        }
+
+        .filter-date-control {
+            border: none !important;
+            box-shadow: none !important;
+            padding: 4px 10px !important;
+            font-size: 0.86rem !important;
+            font-weight: 600 !important;
+            color: #1e293b !important;
+            background: transparent !important;
+            height: 34px !important;
+            outline: none !important;
+            width: 140px;
+        }
+
+        .btn-filter-compact {
+            height: 34px !important;
+            padding: 0 16px !important;
+            font-size: 0.84rem !important;
+            font-weight: 700 !important;
+            border-radius: 6px !important;
+            display: inline-flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+            gap: 6px !important;
+            white-space: nowrap !important;
+            cursor: pointer;
+            box-shadow: 0 2px 6px rgba(26, 92, 46, 0.2);
         }
         
         /* Stats Cards */
@@ -818,23 +974,28 @@ try {
             .report-header,
             .export-section,
             .btn,
+            .btn-minimize,
+            .audit-filter-section,
+            .pagination-container,
+            .table-pagination-nav,
             .main-footer {
                 display: none !important;
             }
             
             .main-content {
-                margin-left: 0;
+                margin-left: 0 !important;
+                padding: 0 !important;
             }
             
             .page-content {
-                padding: 20px 0;
+                padding: 10px 0 !important;
             }
             
             .chart-card,
             .data-card,
             .stat-card {
-                box-shadow: none;
-                border: 1px solid #ddd;
+                box-shadow: none !important;
+                border: 1px solid #cbd5e1 !important;
                 page-break-inside: avoid;
             }
             
@@ -845,15 +1006,27 @@ try {
             
             body {
                 background: white !important;
-                font-size: 12pt;
+                font-size: 11pt;
             }
             
             .table {
-                font-size: 10pt;
+                font-size: 9pt;
+                width: 100% !important;
+            }
+            
+            /* Unhide all matching paginated records across all pages during printing */
+            #filteredTable tbody tr,
+            #officerTable tbody tr,
+            #auditTable tbody tr:not([data-filter-match="0"]) {
+                display: table-row !important;
+            }
+            
+            #auditTable tbody tr[data-filter-match="0"] {
+                display: none !important;
             }
             
             .table th {
-                background-color: #f8f9fa !important;
+                background-color: #f8fafc !important;
                 color: black !important;
                 border: 1px solid #ddd !important;
             }
@@ -1086,39 +1259,6 @@ try {
             border-color: var(--primary);
         }
 
-        /* Audit Filter Quick Chips */
-        .audit-chips-bar {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 6px;
-            margin-top: 12px;
-            padding-top: 12px;
-            border-top: 1px dashed #e2e8f0;
-        }
-        .audit-chip {
-            background: white;
-            border: 1px solid #cbd5e1;
-            color: #475569;
-            font-size: 0.76rem;
-            font-weight: 600;
-            padding: 4px 10px;
-            border-radius: 14px;
-            cursor: pointer;
-            transition: all 0.2s ease;
-            display: inline-flex;
-            align-items: center;
-            gap: 5px;
-        }
-        .audit-chip:hover, .audit-chip.active {
-            background: #1e293b;
-            color: white;
-            border-color: #1e293b;
-        }
-        .audit-chip .badge {
-            font-size: 0.68rem;
-            padding: 2px 5px;
-        }
-
         /* Summary Stat Pills for Audit Trail */
         .audit-summary-grid {
             display: grid;
@@ -1270,30 +1410,6 @@ try {
             cursor: not-allowed !important;
             pointer-events: none;
         }
-
-        .page-size-selector {
-            display: inline-flex;
-            align-items: center;
-            gap: 6px;
-            font-size: 0.84rem;
-            color: #64748b;
-        }
-
-        .page-size-select {
-            padding: 4px 8px;
-            font-size: 0.84rem;
-            border-radius: 6px;
-            border: 1.5px solid #cbd5e1;
-            background: white;
-            color: #1e293b;
-            font-weight: 600;
-            cursor: pointer;
-        }
-
-        .page-size-select:focus {
-            border-color: var(--primary);
-            outline: none;
-        }
     </style>
 </head>
 <body>
@@ -1386,44 +1502,37 @@ try {
                 </div>
             </div>
 
-            <!-- Report Header with Filters (Moved Below Stats Grid) -->
+            <!-- Report Header with Professional Compact Filter -->
             <div class="report-header" style="margin-bottom: 25px;">
-                <div class="row align-items-center">
-                    <div class="col-lg-5 col-md-12 mb-3 mb-lg-0">
-                        <h4>Filter Applications & Audit Report</h4>
-                        <p class="mb-0">Select custom dates or use quick preset periods</p>
+                <div class="report-header-flex">
+                    <div class="report-header-title-box">
+                        <h4><i class="fa fa-calendar-check-o text-success me-2"></i> Filter Applications & Audit Report</h4>
+                        <p class="mb-0">Select custom dates or click a quick preset period</p>
                     </div>
-                    <div class="col-lg-7 col-md-12">
-                        <form method="GET" class="filter-form" id="mainFilterForm">
-                            <div class="form-row">
-                                <div class="col-12 col-sm mb-2 mb-sm-0">
-                                    <input type="date" class="form-control" name="start_date" id="filterStartDate"
-                                           value="<?php echo htmlspecialchars($start_date); ?>">
+                    <div class="report-header-filter-box">
+                        <form method="GET" class="filter-compact-form" id="mainFilterForm">
+                            <div class="filter-inputs-row">
+                                <div class="filter-date-field">
+                                    <span class="filter-date-tag">From</span>
+                                    <input type="date" class="form-control filter-date-control" name="start_date" id="filterStartDate"
+                                           value="<?php echo htmlspecialchars($start_date); ?>" required>
                                 </div>
-                                <div class="col-12 col-sm mb-2 mb-sm-0">
-                                    <input type="date" class="form-control" name="end_date" id="filterEndDate"
-                                           value="<?php echo htmlspecialchars($end_date); ?>">
+                                <div class="filter-date-field">
+                                    <span class="filter-date-tag">To</span>
+                                    <input type="date" class="form-control filter-date-control" name="end_date" id="filterEndDate"
+                                           value="<?php echo htmlspecialchars($end_date); ?>" required>
                                 </div>
-                                <div class="col-12 col-sm mb-2 mb-sm-0">
-                                    <select class="form-control" name="report_type" id="filterReportType">
-                                        <option value="monthly" <?php echo $report_type === 'monthly' ? 'selected' : ''; ?>>Monthly</option>
-                                        <option value="quarterly" <?php echo $report_type === 'quarterly' ? 'selected' : ''; ?>>Quarterly</option>
-                                        <option value="yearly" <?php echo $report_type === 'yearly' ? 'selected' : ''; ?>>Yearly</option>
-                                    </select>
-                                </div>
-                                <div class="col-12 col-sm">
-                                    <button type="submit" class="btn btn-filter-green btn-block">
-                                        <i class="fa fa-filter"></i> Filter
-                                    </button>
-                                </div>
+                                <button type="submit" class="btn btn-filter-green btn-filter-compact">
+                                    <i class="fa fa-filter"></i> Filter
+                                </button>
                             </div>
                             <!-- Date Range Quick Presets -->
                             <div class="quick-presets-bar">
-                                <span class="text-muted small fw-bold"><i class="fa fa-bolt text-warning"></i> Presets:</span>
-                                <button type="button" class="btn-preset" onclick="setFilterPreset('today')">Today</button>
-                                <button type="button" class="btn-preset" onclick="setFilterPreset('yesterday')">Yesterday</button>
+                                <span class="presets-label"><i class="fa fa-bolt text-warning"></i> Presets:</span>
+                                <button type="button" class="btn-preset <?php echo ($start_date === date('Y-m-d') && $end_date === date('Y-m-d')) ? 'active' : ''; ?>" onclick="setFilterPreset('today')">Today</button>
+                                <button type="button" class="btn-preset <?php echo ($start_date === date('Y-m-d', strtotime('-1 day')) && $end_date === date('Y-m-d', strtotime('-1 day'))) ? 'active' : ''; ?>" onclick="setFilterPreset('yesterday')">Yesterday</button>
                                 <button type="button" class="btn-preset" onclick="setFilterPreset('this_week')">This Week</button>
-                                <button type="button" class="btn-preset" onclick="setFilterPreset('this_month')">This Month</button>
+                                <button type="button" class="btn-preset <?php echo ($start_date === date('Y-m-01') && $end_date === date('Y-m-t')) ? 'active' : ''; ?>" onclick="setFilterPreset('this_month')">This Month</button>
                                 <button type="button" class="btn-preset" onclick="setFilterPreset('last_month')">Last Month</button>
                                 <button type="button" class="btn-preset" onclick="setFilterPreset('ytd')">Year to Date</button>
                             </div>
@@ -1439,9 +1548,6 @@ try {
                         <h5 class="d-flex align-items-center mb-3 flex-wrap gap-2">
                             <span><i class="fa fa-list-alt me-2" style="color: var(--primary);"></i> Filtered Application Records (<?php echo htmlspecialchars($start_date); ?> to <?php echo htmlspecialchars($end_date); ?>)</span>
                             <div class="ms-md-auto d-flex gap-2 align-items-center flex-wrap">
-                                <button type="button" class="btn btn-sm btn-success text-white" onclick="exportApplicationsToCSV()" title="Export Application Records to CSV / Excel">
-                                    <i class="fa fa-file-excel-o"></i> Export CSV
-                                </button>
                                 <button type="button" class="btn btn-sm btn-warning text-white" onclick="printTable('filteredTableContainer')" title="Print Table">
                                     <i class="fa fa-print"></i> Print Table
                                 </button>
@@ -1568,6 +1674,12 @@ try {
                         <h5 class="d-flex align-items-center mb-3 flex-wrap gap-2">
                             <span><i class="fa fa-users me-2" style="color: var(--primary);"></i> Officer Productivity & Activity Summary</span>
                             <div class="ms-md-auto d-flex gap-2 align-items-center flex-wrap">
+                                <button type="button" class="btn btn-sm btn-success text-white" onclick="exportOfficerToCSV()" title="Export Officer Summary to CSV / Excel">
+                                    <i class="fa fa-file-excel-o"></i> Export CSV
+                                </button>
+                                <button type="button" class="btn btn-sm btn-warning text-white" onclick="printTable('officerTableContainer')" title="Print Table">
+                                    <i class="fa fa-print"></i> Print Table
+                                </button>
                                 <button type="button" class="btn btn-minimize" onclick="toggleOfficerTable()" id="toggleOfficerBtn">
                                     <i class="fa fa-minus"></i> Minimize
                                 </button>
@@ -1689,15 +1801,6 @@ try {
                                     <span class="audit-summary-lbl">Total Logins</span>
                                 </div>
                             </div>
-                            <div class="audit-summary-pill">
-                                <div class="audit-summary-icon" style="background:#fef3c7; color:#d97706;">
-                                    <i class="fa fa-shield"></i>
-                                </div>
-                                <div class="audit-summary-info">
-                                    <span class="audit-summary-val"><?php echo $audit_security_count; ?></span>
-                                    <span class="audit-summary-lbl">Security / MFA</span>
-                                </div>
-                            </div>
                         </div>
                         
                         <!-- Interactive Audit Trail Filters -->
@@ -1731,16 +1834,6 @@ try {
                                         <i class="fa fa-refresh"></i> Reset
                                     </button>
                                 </div>
-                            </div>
-                            <!-- Category Filter Chips -->
-                            <div class="audit-chips-bar">
-                                <span class="text-muted small fw-bold d-flex align-items-center"><i class="fa fa-tags text-primary me-1"></i> Quick Filter:</span>
-                                <button type="button" class="audit-chip active" onclick="filterAuditCategory('ALL', this)"><i class="fa fa-globe"></i> All</button>
-                                <button type="button" class="audit-chip" onclick="filterAuditCategory('LOGIN', this)"><i class="fa fa-sign-in"></i> Logins & Access</button>
-                                <button type="button" class="audit-chip" onclick="filterAuditCategory('VISA', this)"><i class="fa fa-file-text-o"></i> Visa Actions</button>
-                                <button type="button" class="audit-chip" onclick="filterAuditCategory('USER', this)"><i class="fa fa-users"></i> User Admin</button>
-                                <button type="button" class="audit-chip" onclick="filterAuditCategory('SECURITY', this)"><i class="fa fa-lock"></i> Security & MFA</button>
-                                <button type="button" class="audit-chip" onclick="filterAuditCategory('PRINT', this)"><i class="fa fa-print"></i> Prints</button>
                             </div>
                         </div>
                         
@@ -1828,10 +1921,10 @@ try {
             <!-- Export Section -->
             <div class="export-section">
                 <h5><i class="fa fa-download" style="color: var(--primary);"></i> Reports & Export Center</h5>
-                <p class="text-muted mb-3" style="font-size:0.9rem;">Download full dataset exports or print official reports for the selected period (<?php echo htmlspecialchars($start_date); ?> to <?php echo htmlspecialchars($end_date); ?>)</p>
+                <p class="text-muted mb-3" style="font-size:0.9rem;">Download activity logs or print official reports for the selected period (<?php echo htmlspecialchars($start_date); ?> to <?php echo htmlspecialchars($end_date); ?>)</p>
                 <div class="btn-group flex-wrap gap-2 justify-content-center">
-                    <button class="btn btn-success btn-export" onclick="exportApplicationsToCSV()">
-                        <i class="fa fa-file-excel-o"></i> Export Applications (CSV)
+                    <button class="btn btn-success btn-export text-white" onclick="exportOfficerToCSV()">
+                        <i class="fa fa-file-excel-o"></i> Export Officer Summary (CSV)
                     </button>
                     <button class="btn btn-info btn-export text-white" onclick="exportAuditTrailToCSV()">
                         <i class="fa fa-shield"></i> Export Audit Trail (CSV)
@@ -1853,8 +1946,8 @@ try {
                 labels: ['Fresh Applications', 'Renewal Applications'],
                 datasets: [{
                     data: [
-                        <?php echo $static_fresh; ?>,
-                        <?php echo $static_renewal; ?>
+                        <?php echo $filtered_fresh_count; ?>,
+                        <?php echo $filtered_renewal_count; ?>
                     ],
                     backgroundColor: ['#27ae60', '#f39c12'],
                     borderWidth: 2,
@@ -2027,6 +2120,7 @@ try {
             let csv = '"S/No","Application Date","Re-Entry Visa Number","Applicant Name","Passport Number","Application Type"\n';
             let sno = 1;
             rows.forEach(r => {
+                if (r.querySelector('td[colspan]')) return;
                 const cols = r.querySelectorAll('td');
                 if (cols.length >= 6) {
                     const date = cols[1].innerText.replace(/"/g, '""').trim();
@@ -2043,10 +2137,10 @@ try {
             downloadCSV(csv, `visa_applications_${startDate}_to_${endDate}.csv`);
         }
 
-        // Export Audit Trail to CSV
+        // Export Audit Trail to CSV (Exports all records matching active filter)
         function exportAuditTrailToCSV() {
             const rows = document.querySelectorAll('#auditTable tbody tr');
-            if (!rows || rows.length === 0 || rows[0].querySelectorAll('td').length <= 1) {
+            if (!rows || rows.length === 0 || (rows.length === 1 && rows[0].querySelector('td[colspan]'))) {
                 alert('No audit trail records available to export.');
                 return;
             }
@@ -2054,6 +2148,9 @@ try {
             let csv = '"S/No","Timestamp","Operator","Action","Description","IP Address","Device / Client"\n';
             let sno = 1;
             rows.forEach(r => {
+                if (r.querySelector('td[colspan]')) return;
+                if (r.dataset.filterMatch === '0') return; // Only export records matching current filter
+
                 const cols = r.querySelectorAll('td');
                 if (cols.length >= 6) {
                     const time = cols[1].innerText.replace(/"/g, '""').trim();
@@ -2066,40 +2163,136 @@ try {
                 }
             });
 
+            if (sno === 1) {
+                alert('No matching audit records found for the active filter to export.');
+                return;
+            }
+
             const startDate = document.getElementById('filterStartDate')?.value || 'report';
             const endDate = document.getElementById('filterEndDate')?.value || 'period';
             downloadCSV(csv, `system_audit_trail_${startDate}_to_${endDate}.csv`);
         }
 
-        // Print Official Report
+        // Export Officer Productivity to CSV
+        function exportOfficerToCSV() {
+            const rows = document.querySelectorAll('#officerTable tbody tr');
+            if (!rows || rows.length === 0 || (rows.length === 1 && rows[0].querySelector('td[colspan]'))) {
+                alert('No officer productivity records available to export.');
+                return;
+            }
+
+            let csv = '"S/No","Officer / Username","Applications Created","Records Edited","Vignettes Printed","Logins","Total Actions","Last Active Timestamp"\n';
+            let sno = 1;
+            rows.forEach(r => {
+                if (r.querySelector('td[colspan]')) return;
+                const cols = r.querySelectorAll('td');
+                if (cols.length >= 8) {
+                    const user = cols[1].innerText.replace(/"/g, '""').trim();
+                    const creates = cols[2].innerText.replace(/"/g, '""').trim();
+                    const edits = cols[3].innerText.replace(/"/g, '""').trim();
+                    const prints = cols[4].innerText.replace(/"/g, '""').trim();
+                    const logins = cols[5].innerText.replace(/"/g, '""').trim();
+                    const total = cols[6].innerText.replace(/"/g, '""').trim();
+                    const lastActive = cols[7].innerText.replace(/"/g, '""').trim();
+                    csv += `"${sno++}","${user}","${creates}","${edits}","${prints}","${logins}","${total}","${lastActive}"\n`;
+                }
+            });
+
+            const startDate = document.getElementById('filterStartDate')?.value || 'report';
+            const endDate = document.getElementById('filterEndDate')?.value || 'period';
+            downloadCSV(csv, `officer_productivity_${startDate}_to_${endDate}.csv`);
+        }
+
+        // Print Official Report (Full Page)
         function printReport() {
             window.print();
         }
 
+        // Print Specific Table (Prints ALL filtered records for that table, not just 10 records)
         function printTable(tableContainerId) {
             const container = document.getElementById(tableContainerId);
             if (!container) {
-                alert('No table container found to print');
+                alert('No table container found to print.');
                 return;
             }
-            const tableContent = container.innerHTML;
-            
-            const printWindow = window.open('', '', 'height=700,width=900');
-            printWindow.document.write('<html><head><title>Nigeria Immigration Service - Report Print</title>');
+            const table = container.querySelector('table');
+            if (!table) {
+                alert('No table element found to print.');
+                return;
+            }
+
+            // Clone table to unhide all paginated rows without altering live screen
+            const clonedTable = table.cloneNode(true);
+            clonedTable.querySelectorAll('.pagination-container, .table-pagination-nav').forEach(el => el.remove());
+
+            const rows = clonedTable.querySelectorAll('tbody tr');
+            let totalPrintRecords = 0;
+            rows.forEach(r => {
+                if (r.querySelector('td[colspan]')) return;
+                if (r.getAttribute('data-filter-match') === '0') {
+                    r.remove(); // Remove rows filtered out by active search/filters
+                } else {
+                    r.style.display = ''; // Ensure all paginated records are fully visible
+                    totalPrintRecords++;
+                }
+            });
+
+            let reportTitle = "Official Records Report";
+            if (tableContainerId === 'filteredTableContainer') {
+                reportTitle = "Filtered Visa Application Records";
+            } else if (tableContainerId === 'officerTableContainer') {
+                reportTitle = "Officer Productivity & Activity Summary";
+            } else if (tableContainerId === 'auditTableContainer') {
+                reportTitle = "System Audit Trail & Security Logs";
+            }
+
+            const startDate = document.getElementById('filterStartDate')?.value || '<?php echo htmlspecialchars($start_date); ?>';
+            const endDate = document.getElementById('filterEndDate')?.value || '<?php echo htmlspecialchars($end_date); ?>';
+
+            const printWindow = window.open('', '_blank', 'height=750,width=1000');
+            printWindow.document.write('<!DOCTYPE html><html><head><title>' + reportTitle + ' - Nigeria Immigration Service</title>');
             printWindow.document.write('<link href="vendors/bootstrap/dist/css/bootstrap.min.css" rel="stylesheet">');
+            printWindow.document.write('<link href="vendors/font-awesome/css/font-awesome.min.css" rel="stylesheet">');
             printWindow.document.write('<style>');
-            printWindow.document.write('body{padding:30px; font-family:system-ui,-apple-system,sans-serif; color:#1e293b;}');
-            printWindow.document.write('.header-block{border-bottom:2px solid #1a5c2e; padding-bottom:15px; margin-bottom:20px; display:flex; justify-content:space-between; align-items:center;}');
-            printWindow.document.write('table{width:100%; border-collapse:collapse; margin-top:15px;}');
-            printWindow.document.write('th,td{border:1px solid #cbd5e1; padding:10px; text-align:left; font-size:12px;}');
-            printWindow.document.write('th{background-color:#f8fafc; color:#334155; font-weight:bold; text-transform:uppercase; font-size:11px;}');
-            printWindow.document.write('.audit-badge{display:inline-block; padding:2px 6px; font-size:10px; font-weight:bold; border:1px solid #ccc; border-radius:4px;}');
-            printWindow.document.write('.audit-ip{font-family:monospace; font-weight:bold;}');
-            printWindow.document.write('h3{color:#1a5c2e; margin:0 0 5px 0;}');
+            printWindow.document.write('@page { size: landscape; margin: 12mm; }');
+            printWindow.document.write('body { padding: 20px; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; color: #0f172a; background: #fff; }');
+            printWindow.document.write('.header-block { border-bottom: 2.5px solid #1a5c2e; padding-bottom: 12px; margin-bottom: 18px; display: flex; justify-content: space-between; align-items: flex-start; }');
+            printWindow.document.write('.header-block h3 { color: #1a5c2e; font-weight: 800; margin: 0 0 4px 0; font-size: 1.35rem; }');
+            printWindow.document.write('.header-block h4 { color: #334155; font-size: 1rem; margin: 0 0 4px 0; font-weight: 600; }');
+            printWindow.document.write('.header-block p { margin: 0; color: #64748b; font-size: 0.82rem; }');
+            printWindow.document.write('.meta-box { text-align: right; font-size: 0.82rem; color: #475569; }');
+            printWindow.document.write('.meta-box b { color: #0f172a; }');
+            printWindow.document.write('table { width: 100%; border-collapse: collapse; margin-top: 10px; }');
+            printWindow.document.write('th, td { border: 1px solid #cbd5e1 !important; padding: 7px 10px; text-align: left; font-size: 11px; vertical-align: middle; }');
+            printWindow.document.write('th { background-color: #f1f5f9 !important; color: #1e293b !important; font-weight: 700; text-transform: uppercase; font-size: 10.5px; }');
+            printWindow.document.write('tbody tr { display: table-row !important; page-break-inside: avoid; }');
+            printWindow.document.write('.audit-badge { display: inline-block; padding: 2px 6px; font-size: 9.5px; font-weight: 700; border: 1px solid #ccc; border-radius: 4px; }');
+            printWindow.document.write('.audit-ip { font-family: monospace; font-weight: 700; font-size: 10.5px; }');
+            printWindow.document.write('.audit-device-text { font-size: 9.5px; color: #64748b; }');
+            printWindow.document.write('.badge-local-tag { display: none; }');
+            printWindow.document.write('.pagination-container, .table-pagination-nav { display: none !important; }');
             printWindow.document.write('.table-responsive { overflow: visible !important; max-height: none !important; }');
+            printWindow.document.write('.footer-note { margin-top: 20px; border-top: 1px solid #e2e8f0; padding-top: 10px; font-size: 0.78rem; color: #64748b; display: flex; justify-content: space-between; }');
             printWindow.document.write('</style></head><body>');
-            printWindow.document.write('<div class="header-block"><div><h3>NIGERIA IMMIGRATION SERVICE</h3><p style="margin:0;color:#64748b;font-size:13px;">Re-Entry Visa System Official Records</p></div><div style="text-align:right;"><small style="color:#64748b;">Report Period: <?php echo htmlspecialchars($start_date); ?> to <?php echo htmlspecialchars($end_date); ?><br>Generated: ' + new Date().toLocaleString() + '</small></div></div>');
-            printWindow.document.write(tableContent);
+            printWindow.document.write('<div class="header-block">');
+            printWindow.document.write('  <div>');
+            printWindow.document.write('    <h3>NIGERIA IMMIGRATION SERVICE (NISREV)</h3>');
+            printWindow.document.write('    <h4>' + reportTitle + '</h4>');
+            printWindow.document.write('    <p>Official System Audit & Operational Record Log</p>');
+            printWindow.document.write('  </div>');
+            printWindow.document.write('  <div class="meta-box">');
+            printWindow.document.write('    <div>Report Period: <b>' + startDate + '</b> to <b>' + endDate + '</b></div>');
+            printWindow.document.write('    <div>Total Records Printed: <b>' + totalPrintRecords + '</b></div>');
+            printWindow.document.write('    <div>Printed on: <b>' + new Date().toLocaleString() + '</b></div>');
+            printWindow.document.write('  </div>');
+            printWindow.document.write('</div>');
+            printWindow.document.write('<div class="table-responsive">');
+            printWindow.document.write(clonedTable.outerHTML);
+            printWindow.document.write('</div>');
+            printWindow.document.write('<div class="footer-note">');
+            printWindow.document.write('  <span>Confidential — Official Nigeria Immigration Service Document</span>');
+            printWindow.document.write('  <span>Page Printed from NISREV Portal</span>');
+            printWindow.document.write('</div>');
             printWindow.document.write('</body></html>');
             printWindow.document.close();
             
@@ -2110,7 +2303,7 @@ try {
             }, 500);
         }
 
-        // Reusable Table Pagination Engine
+        // Clean Reusable Table Pagination Engine (No "Per page:" dropdown)
         class TablePaginator {
             constructor(tableId, paginationContainerId, options = {}) {
                 this.tableId = tableId;
@@ -2121,7 +2314,6 @@ try {
 
                 this.pageSize = parseInt(options.pageSize, 10) || 10;
                 this.currentPage = 1;
-                this.showPageSizeOptions = options.showPageSizeOptions !== false;
                 this.rowFilter = typeof options.rowFilter === 'function' ? options.rowFilter : null;
                 
                 // Store global reference for inline onclick callbacks
@@ -2152,12 +2344,6 @@ try {
                 if (isNaN(page) || page < 1) page = 1;
                 if (page > totalPages) page = totalPages;
                 this.currentPage = page;
-                this.render();
-            }
-
-            setPageSize(size) {
-                this.pageSize = parseInt(size, 10) || 10;
-                this.currentPage = 1;
                 this.render();
             }
 
@@ -2212,21 +2398,8 @@ try {
                 const dispEnd = Math.min(endIndex, totalRows);
 
                 let html = `
-                    <div class="d-flex align-items-center gap-3 flex-wrap">
-                        <div class="pagination-info">
-                            Showing <b>${dispStart}</b> to <b>${dispEnd}</b> of <b>${totalRows}</b> records
-                        </div>
-                        ${this.showPageSizeOptions ? `
-                        <div class="page-size-selector">
-                            <span>Per page:</span>
-                            <select class="page-size-select" onchange="window['paginator_${this.containerId}'].setPageSize(this.value)">
-                                <option value="10" ${this.pageSize === 10 ? 'selected' : ''}>10</option>
-                                <option value="25" ${this.pageSize === 25 ? 'selected' : ''}>25</option>
-                                <option value="50" ${this.pageSize === 50 ? 'selected' : ''}>50</option>
-                                <option value="100" ${this.pageSize === 100 ? 'selected' : ''}>100</option>
-                            </select>
-                        </div>
-                        ` : ''}
+                    <div class="pagination-info">
+                        Showing <b>${dispStart}</b> to <b>${dispEnd}</b> of <b>${totalRows}</b> records
                     </div>
                 `;
 
@@ -2295,18 +2468,10 @@ try {
             }
         }
 
-        // Global Category Filter & Paginator References
-        let currentCategory = 'ALL';
+        // Global Paginator References
         let auditPaginator = null;
         let filteredAppsPaginator = null;
         let officerPaginator = null;
-
-        function filterAuditCategory(cat, btn) {
-            currentCategory = cat;
-            document.querySelectorAll('.audit-chip').forEach(c => c.classList.remove('active'));
-            btn.classList.add('active');
-            applyAuditFilters();
-        }
 
         function applyAuditFilters() {
             const searchInput = document.getElementById('auditSearchInput');
@@ -2334,21 +2499,8 @@ try {
                 let matchOperator = !operatorVal || operatorText === operatorVal;
                 let matchAction = !actionVal || rawAction.toLowerCase() === actionVal;
                 let matchIP = !ipVal || rawIP === ipVal;
-                let matchCategory = true;
 
-                if (currentCategory === 'LOGIN') {
-                    matchCategory = rawAction.includes('LOGIN') || rawAction.includes('LOGOUT');
-                } else if (currentCategory === 'VISA') {
-                    matchCategory = rawAction.includes('CREATE') || rawAction.includes('EDIT') || rawAction.includes('VIEW') || rawAction.includes('SYNC');
-                } else if (currentCategory === 'USER') {
-                    matchCategory = rawAction.includes('USER') || rawAction.includes('ROLE') || rawAction.includes('STATUS');
-                } else if (currentCategory === 'SECURITY') {
-                    matchCategory = rawAction.includes('RESET') || rawAction.includes('PASSWORD') || rawAction.includes('MFA') || rawAction.includes('AUTH') || rawAction.includes('FAILED');
-                } else if (currentCategory === 'PRINT') {
-                    matchCategory = rawAction.includes('PRINT');
-                }
-
-                if (matchSearch && matchOperator && matchAction && matchIP && matchCategory) {
+                if (matchSearch && matchOperator && matchAction && matchIP) {
                     row.dataset.filterMatch = '1';
                 } else {
                     row.dataset.filterMatch = '0';
@@ -2362,22 +2514,19 @@ try {
 
         // Initialize Audit Filter Options and Table Pagination on DOM Ready
         document.addEventListener('DOMContentLoaded', function() {
-            // 1. Initialize Filtered Applications Table Pagination (10 per page)
+            // 1. Initialize Filtered Applications Table Pagination (10 per page, no per-page select)
             filteredAppsPaginator = new TablePaginator('filteredTable', 'filteredPagination', {
-                pageSize: 10,
-                showPageSizeOptions: true
+                pageSize: 10
             });
 
-            // 2. Initialize Officer Productivity Table Pagination (10 per page)
+            // 2. Initialize Officer Productivity Table Pagination (10 per page, no per-page select)
             officerPaginator = new TablePaginator('officerTable', 'officerPagination', {
-                pageSize: 10,
-                showPageSizeOptions: true
+                pageSize: 10
             });
 
-            // 3. Initialize Audit Trail Table Pagination (10 per page)
+            // 3. Initialize Audit Trail Table Pagination (10 per page, no per-page select)
             auditPaginator = new TablePaginator('auditTable', 'auditPagination', {
                 pageSize: 10,
-                showPageSizeOptions: true,
                 rowFilter: (row) => row.dataset.filterMatch !== '0'
             });
 
@@ -2437,10 +2586,6 @@ try {
                             if (filterOperator) filterOperator.value = '';
                             if (filterAction) filterAction.value = '';
                             if (filterIP) filterIP.value = '';
-                            currentCategory = 'ALL';
-                            document.querySelectorAll('.audit-chip').forEach(c => c.classList.remove('active'));
-                            const allChip = document.querySelector('.audit-chip');
-                            if (allChip) allChip.classList.add('active');
                             applyAuditFilters();
                         });
                     }

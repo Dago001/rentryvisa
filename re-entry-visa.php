@@ -5,12 +5,13 @@ ini_set('display_errors', 1);
 require_once('db/db.php');
 
 // Check if user is logged in
-if (!isset($_SESSION['user_id'])) {
+if (!isset($_SESSION['user_id']) && !isset($_SESSION['username'])) {
     header("Location: index");
     exit();
 }
 
 $userRole = $_SESSION['role'] ?? 'DataEntry';
+$isDataEntry = ($userRole === 'DataEntry' || strcasecmp($userRole, 'dataentry') === 0 || strcasecmp($userRole, 'data entry') === 0);
 $username = $_SESSION['username'] ?? 'User';
 $fullName = $_SESSION['full_name'] ?? $username;
 
@@ -19,63 +20,78 @@ $current_page = basename($_SERVER['PHP_SELF']);
 
 // Check database connection
 if (!$conn) {
-    die("<div class='alert alert-danger'>Database connection failed</div>");
+    die("<div class='alert alert-danger'>Database connection failed: " . htmlspecialchars(mysqli_connect_error()) . "</div>");
 }
 
-// First, check what columns exist in the table
-$checkColumns = mysqli_query($conn, "DESCRIBE visa_applications");
-$columns = [];
-if ($checkColumns) {
-    while ($row = mysqli_fetch_assoc($checkColumns)) {
-        $columns[] = $row['Field'];
+// 1. Fetch Dynamic Statistics for Re-Entry Visas (Scoped to individual work for DataEntry)
+$whereClause = $isDataEntry ? " WHERE created_by = '" . mysqli_real_escape_string($conn, $username) . "'" : "";
+
+$stats_sql = "SELECT 
+    COUNT(*) as total_records,
+    COALESCE(SUM(CASE WHEN LOWER(application_type) = 'fresh' OR application_type IS NULL OR application_type = '' THEN 1 ELSE 0 END), 0) as total_fresh,
+    COALESCE(SUM(CASE WHEN LOWER(application_type) = 'renewal' THEN 1 ELSE 0 END), 0) as total_renewal,
+    COALESCE(SUM(CASE WHEN DATE(application_date) = CURDATE() OR (application_date IS NULL AND DATE(created_at) = CURDATE()) THEN 1 ELSE 0 END), 0) as total_today
+FROM visa_applications" . $whereClause;
+
+$stats_res = mysqli_query($conn, $stats_sql);
+$stats_data = ($stats_res) ? mysqli_fetch_assoc($stats_res) : [];
+$stats = [
+    'total_records' => intval($stats_data['total_records'] ?? 0),
+    'total_fresh' => intval($stats_data['total_fresh'] ?? 0),
+    'total_renewal' => intval($stats_data['total_renewal'] ?? 0),
+    'total_today' => intval($stats_data['total_today'] ?? 0)
+];
+
+// 2. Fetch all system users & officers who created records for the dropdown filter
+$all_officers = [];
+$users_q = mysqli_query($conn, "SELECT service_no, fname, lname, role FROM users ORDER BY fname ASC, lname ASC");
+if ($users_q) {
+    while ($u = mysqli_fetch_assoc($users_q)) {
+        $sno = trim($u['service_no']);
+        $name = trim($u['fname'] . ' ' . $u['lname']);
+        if (empty($name)) $name = $sno;
+        $all_officers[$sno] = [
+            'value' => $sno,
+            'label' => $name . ' (' . $sno . ')'
+        ];
     }
-    mysqli_free_result($checkColumns);
+}
+$creators_q = mysqli_query($conn, "SELECT DISTINCT created_by FROM visa_applications WHERE created_by IS NOT NULL AND created_by != ''");
+if ($creators_q) {
+    while ($c = mysqli_fetch_assoc($creators_q)) {
+        $cb = trim($c['created_by']);
+        if (!empty($cb) && !isset($all_officers[$cb])) {
+            $all_officers[$cb] = [
+                'value' => $cb,
+                'label' => $cb
+            ];
+        }
+    }
 }
 
-// Build query based on available columns using table alias to support join
-$sqluse = "SELECT v.visa_number, v.passport_number, v.surname, v.given_name, v.application_type, ";
-if (in_array('within', $columns)) {
-    $sqluse .= "v.within, ";
-} elseif (in_array('validity_date', $columns)) {
-    $sqluse .= "v.validity_date as within, ";
-} elseif (in_array('expiry_date', $columns)) {
-    $sqluse .= "v.expiry_date as within, ";
-} else {
-    $sqluse .= "'' as within, ";
-}
+// 3. Query all visa applications
+$sqluse = "SELECT 
+    v.id,
+    v.visa_number,
+    v.passport_number,
+    v.surname,
+    v.given_name,
+    v.application_type,
+    v.within,
+    v.journey,
+    v.created_by,
+    v.created_at,
+    v.application_date,
+    u.fname,
+    u.lname 
+FROM visa_applications v 
+LEFT JOIN users u ON v.created_by = u.service_no";
 
-if (in_array('journey', $columns)) {
-    $sqluse .= "v.journey, ";
-} elseif (in_array('purpose', $columns)) {
-    $sqluse .= "v.purpose as journey, ";
-} elseif (in_array('travel_purpose', $columns)) {
-    $sqluse .= "v.travel_purpose as journey, ";
-} else {
-    $sqluse .= "'' as journey, ";
-}
-
-$sqluse .= "v.created_by, u.fname, u.lname 
-            FROM visa_applications v 
-            LEFT JOIN users u ON v.created_by = u.service_no";
-
-if ($userRole === 'DataEntry') {
+if ($isDataEntry) {
     $sqluse .= " WHERE v.created_by = '" . mysqli_real_escape_string($conn, $username) . "'";
 }
 $sqluse .= " ORDER BY v.application_date DESC, v.id DESC";
 $retrieve = mysqli_query($conn, $sqluse);
-
-if (!$retrieve) {
-    // If complex query fails, try basic query
-    $sqluse = "SELECT v.visa_number, v.passport_number, v.surname, v.given_name, v.application_type, v.created_by, u.fname, u.lname 
-               FROM visa_applications v 
-               LEFT JOIN users u ON v.created_by = u.service_no";
-    if ($userRole === 'DataEntry') {
-        $sqluse .= " WHERE v.created_by = '" . mysqli_real_escape_string($conn, $username) . "'";
-    }
-    $sqluse .= " ORDER BY v.id DESC";
-    $retrieve = mysqli_query($conn, $sqluse);
-}
-
 $numb = $retrieve ? mysqli_num_rows($retrieve) : 0;
 ?>
 <!DOCTYPE html>
@@ -94,6 +110,7 @@ $numb = $retrieve ? mysqli_num_rows($retrieve) : 0;
     <style>
         :root {
             --primary: #1a5c2e;
+            --primary-dark: #144824;
             --secondary: #27ae60;
             --dark: #2c3e50;
             --light: #f8f9fa;
@@ -125,15 +142,13 @@ $numb = $retrieve ? mysqli_num_rows($retrieve) : 0;
             overflow-x: hidden;
         }
         
-        /* Centralized Sidebar Styles moved to sidebar.php */
-        
         /* Main Content */
         .main-content {
             min-height: 100vh;
             transition: all 0.3s ease;
         }
         
-        /* Top Navigation - MATCHING INDEX.PHP */
+        /* Top Navigation */
         .top-nav {
             background: white;
             padding: 12px 20px;
@@ -185,24 +200,37 @@ $numb = $retrieve ? mysqli_num_rows($retrieve) : 0;
         }
         
         .user-avatar {
-            width: 38px;
-            height: 38px;
+            width: 48px;
+            height: 48px;
+            min-width: 48px;
+            max-width: 48px;
             border-radius: 50%;
-            background: linear-gradient(135deg, var(--primary), var(--secondary));
-            color: white;
-            display: flex;
+            background: #ffffff;
+            border: 2.5px solid #1a5c2e;
+            color: #1a5c2e;
+            display: inline-flex;
             align-items: center;
             justify-content: center;
-            font-weight: 600;
-            font-size: 1rem;
-            box-shadow: 0 2px 8px rgba(26, 92, 46, 0.2);
+            font-weight: 800;
+            font-size: 1.15rem;
+            box-shadow: 0 0 0 1px #ffffff, 0 3px 8px rgba(26, 92, 46, 0.35);
             overflow: hidden;
+            flex-shrink: 0;
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+        
+        .user-avatar:hover {
+            transform: scale(1.06);
+            border-color: #27ae60;
+            box-shadow: 0 0 0 2px #ffffff, 0 5px 14px rgba(26, 92, 46, 0.45);
         }
         
         .user-avatar img {
             width: 100%;
             height: 100%;
             object-fit: cover;
+            object-position: center top;
+            display: block;
         }
         
         .user-details {
@@ -242,10 +270,8 @@ $numb = $retrieve ? mysqli_num_rows($retrieve) : 0;
             color: white;
             text-decoration: none;
             transform: translateY(-1px);
-            box-shadow: 0 4px 12px rgba(220, 53, 69, 0.3);
         }
         
-        /* Page Content */
         .page-content {
             padding: 20px;
             min-height: calc(100vh - 64px);
@@ -253,26 +279,28 @@ $numb = $retrieve ? mysqli_num_rows($retrieve) : 0;
 
         /* Welcome Banner */
         .welcome-banner {
-            background: linear-gradient(135deg, #1e293b, #334155);
-            color: white;
-            padding: 20px;
+            background: #fdfbf7 !important;
+            color: #5c3c1e !important;
+            border: 1px solid #e2dcd0 !important;
+            box-shadow: 0 4px 15px rgba(92, 60, 30, 0.05) !important;
+            padding: 18px 20px;
             border-radius: 12px;
             margin-bottom: 20px;
-            box-shadow: 0 8px 25px rgba(30, 41, 59, 0.15);
             position: relative;
             overflow: hidden;
         }
         
         .welcome-banner h2 {
-            font-size: 1.5rem;
-            font-weight: 600;
-            margin-bottom: 8px;
+            font-size: 1.45rem;
+            font-weight: 700;
+            margin-bottom: 6px;
+            color: #5c3c1e !important;
         }
         
         .welcome-banner p {
-            opacity: 0.9;
             margin-bottom: 0;
-            font-size: 0.9rem;
+            font-size: 0.88rem;
+            color: #7c6e60 !important;
         }
         
         .datetime-display {
@@ -280,29 +308,78 @@ $numb = $retrieve ? mysqli_num_rows($retrieve) : 0;
         }
         
         #currentDateTime {
-            font-size: 1.1rem;
-            font-weight: 600;
-            margin-bottom: 4px;
+            font-size: 1.05rem;
+            font-weight: 700;
+            margin-bottom: 3px;
+            color: #5c3c1e !important;
         }
         
         .location {
-            font-size: 0.85rem;
-            opacity: 0.9;
+            font-size: 0.82rem;
+            color: #7c6e60 !important;
         }
         
-        /* Page Title */
-        .page-title h3 {
-            color: var(--primary);
+        /* Stat Cards Section */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+            gap: 16px;
+            margin-bottom: 22px;
+        }
+        
+        .stat-card {
+            background: #ffffff;
+            padding: 18px 20px;
+            border-radius: 10px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+            text-align: center;
+            border: 1px solid #e2e8f0;
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .stat-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 16px rgba(0, 0, 0, 0.08);
+            border-color: #cbd5e1;
+        }
+        
+        .stat-card-icon {
+            font-size: 1.75rem;
+            margin-bottom: 6px;
+            line-height: 1;
+        }
+        
+        .stat-number {
+            font-size: 1.8rem;
+            font-weight: 800;
+            margin: 4px 0;
+            line-height: 1;
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+            letter-spacing: -0.5px;
+        }
+        
+        .stat-label {
+            color: #64748b;
             font-weight: 600;
-            margin-bottom: 20px;
-            font-size: 1.4rem;
+            text-transform: uppercase;
+            font-size: 0.74rem;
+            letter-spacing: 0.5px;
         }
-        
-        /* Card Styles */
+
+        .stat-card.card-total .stat-number { color: #1a5c2e; }
+        .stat-card.card-fresh .stat-number { color: #16a34a; }
+        .stat-card.card-renewal .stat-number { color: #d97706; }
+        .stat-card.card-today .stat-number { color: #1a5c2e; }
+
+        /* Card Container */
         .card {
             border-radius: 12px;
-            box-shadow: 0 3px 10px rgba(0, 0, 0, 0.08);
-            border: none;
+            box-shadow: 0 3px 12px rgba(0, 0, 0, 0.06);
+            border: 1px solid #e2e8f0;
             margin-bottom: 20px;
             background: white;
         }
@@ -315,509 +392,364 @@ $numb = $retrieve ? mysqli_num_rows($retrieve) : 0;
             display: flex;
             justify-content: space-between;
             align-items: center;
-            margin-bottom: 20px;
+            margin-bottom: 16px;
             flex-wrap: wrap;
-            gap: 15px;
+            gap: 12px;
         }
         
         .card-title {
             margin-bottom: 0;
-            font-size: 1.1rem;
-            font-weight: 600;
-            color: var(--dark);
-        }
-        
-        /* Search Section */
-        .search-section {
+            font-size: 1.18rem;
+            font-weight: 700;
+            color: #0f172a;
             display: flex;
-            gap: 10px;
             align-items: center;
+            gap: 8px;
         }
-        
-        .search-box {
-            position: relative;
-            flex: 1;
-            min-width: 200px;
-        }
-        
-        .search-box input {
-            padding: 8px 35px 8px 12px;
-            border: 1.5px solid #e1e5e9;
-            border-radius: 6px;
-            font-size: 0.9rem;
+
+        /* Custom Executive Vignette Toolbar (Fully Independent Responsive Flexbox) */
+        .vignette-toolbar {
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 10px;
+            padding: 12px 14px;
+            margin-bottom: 20px;
             width: 100%;
-            transition: all 0.3s;
         }
-        
-        .search-box input:focus {
-            outline: none;
-            border-color: var(--primary);
-            box-shadow: 0 0 0 3px rgba(26, 92, 46, 0.1);
+
+        .vignette-toolbar-grid {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 10px;
+            width: 100%;
         }
-        
-        .search-box i {
-            position: absolute;
-            right: 12px;
-            top: 50%;
-            transform: translateY(-50%);
-            color: var(--gray);
+
+        /* Individual Toolbar Field Boxes */
+        .vignette-field {
+            display: flex;
+            align-items: stretch;
+            background: #ffffff;
+            border: 1.5px solid #cbd5e1;
+            border-radius: 6px;
+            height: 38px;
+            overflow: hidden;
+            box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+            transition: border-color 0.2s ease, box-shadow 0.2s ease;
         }
-        
+
+        .vignette-field:focus-within {
+            border-color: #1a5c2e;
+            box-shadow: 0 0 0 3px rgba(26, 92, 46, 0.15);
+        }
+
+        /* Addon Labels & Icons */
+        .vignette-field-addon {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            background: #f1f5f9;
+            color: #334155;
+            font-size: 0.82rem;
+            font-weight: 700;
+            padding: 0 12px;
+            border-right: 1px solid #cbd5e1;
+            white-space: nowrap;
+            user-select: none;
+            flex-shrink: 0;
+            line-height: 1;
+        }
+
+        /* Inputs & Selects inside Fields */
+        .vignette-select,
+        .vignette-input {
+            border: none !important;
+            outline: none !important;
+            box-shadow: none !important;
+            background: #ffffff !important;
+            padding: 0 12px !important;
+            height: 100% !important;
+            font-size: 0.84rem !important;
+            color: #1e293b !important;
+            flex: 1 1 auto !important;
+            min-width: 0 !important;
+            line-height: normal !important;
+        }
+
+        .vignette-select {
+            cursor: pointer;
+        }
+
+        /* Responsive proportions */
+        .vignette-field-user {
+            flex: 1 1 260px;
+            min-width: 220px;
+        }
+
+        .vignette-field-status {
+            flex: 1 1 180px;
+            min-width: 160px;
+        }
+
+        .vignette-field-search {
+            flex: 2 1 300px;
+            min-width: 240px;
+        }
+
+        .vignette-field-reset {
+            border: none !important;
+            background: transparent !important;
+            box-shadow: none !important;
+            flex: 0 0 auto;
+        }
+
+        /* Reset Button */
+        .vignette-btn-reset {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            height: 38px;
+            padding: 0 16px;
+            background: #ffffff;
+            border: 1.5px solid #cbd5e1;
+            border-radius: 6px;
+            color: #475569;
+            font-size: 0.84rem;
+            font-weight: 700;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            white-space: nowrap;
+            box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+        }
+
+        .vignette-btn-reset:hover {
+            background: #f1f5f9;
+            color: #0f172a;
+            border-color: #94a3b8;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.08);
+        }
+
         /* Table Styles */
         .table-responsive {
             overflow-x: auto;
             border-radius: 8px;
-            border: 1px solid #e1e5e9;
+            border: 1px solid #e2e8f0;
         }
         
         .table {
             margin: 0;
-            min-width: 700px;
+            width: 100%;
+            min-width: 880px;
         }
         
         .table thead th {
-            background: #f8f9fa;
+            background: #f1f5f9;
             border: none;
-            padding: 12px;
-            font-weight: 600;
-            color: var(--dark);
+            padding: 10px 12px;
+            font-weight: 700;
+            color: #1e293b;
             text-transform: uppercase;
-            font-size: 0.8rem;
-            letter-spacing: 0.5px;
-            border-bottom: 2px solid #e1e5e9;
+            font-size: 0.75rem;
+            letter-spacing: 0.4px;
+            border-bottom: 2px solid #cbd5e1;
         }
         
         .table tbody td {
-            padding: 12px;
+            padding: 11px 12px;
             vertical-align: middle;
-            border-color: #e1e5e9;
-            font-size: 0.9rem;
+            border-bottom: 1px solid #f1f5f9;
+            color: #334155;
+            font-size: 0.85rem;
         }
         
         .table tbody tr:hover {
-            background: #f8f9fa;
+            background-color: #f8fafc;
         }
-        
-        .no-results {
-            text-align: center;
-            padding: 30px 15px;
-            color: var(--gray);
-            font-style: italic;
-            display: none;
+
+        /* Badge Styles */
+        .badge-app-fresh {
+            background-color: #e0f2fe;
+            color: #0369a1;
+            border: 1px solid #bae6fd;
+            font-size: 0.75rem;
+            padding: 3px 8px;
+            border-radius: 4px;
+            font-weight: 700;
         }
-        
-        /* Button Styles */
-        .btn-view {
-            background: linear-gradient(135deg, #1e293b, #334155);
-            color: white;
-            border: none;
-            padding: 6px 12px;
-            border-radius: 6px;
-            text-decoration: none;
-            font-size: 0.85rem;
-            font-weight: 500;
-            transition: all 0.3s ease;
+
+        .badge-app-renewal {
+            background-color: #fef3c7;
+            color: #92400e;
+            border: 1px solid #fde68a;
+            font-size: 0.75rem;
+            padding: 3px 8px;
+            border-radius: 4px;
+            font-weight: 700;
+        }
+
+        /* Action Buttons */
+        .btn-action-group {
             display: inline-flex;
+            gap: 5px;
             align-items: center;
             justify-content: center;
-            gap: 5px;
-            min-width: 80px;
         }
-        
-        .btn-view:hover {
-            background: linear-gradient(135deg, #2e7d46, var(--primary));
-            color: white;
-            transform: translateY(-2px);
-            box-shadow: 0 4px 12px rgba(26, 92, 46, 0.3);
-            text-decoration: none;
-        }
-        
-        .btn-outline-secondary {
-            border: 1.5px solid var(--gray);
-            color: var(--gray);
-            padding: 8px 15px;
-            border-radius: 6px;
-            font-size: 0.85rem;
-            transition: all 0.3s;
-        }
-        
-        .btn-outline-secondary:hover {
-            background: var(--gray);
-            color: white;
-            border-color: var(--gray);
-        }
-        
 
-    /* Button Group Styles */
-    .btn-group {
-        display: flex;
-        gap: 6px;
-        flex-wrap: wrap;
-    }
-    
-    .btn-view {
-        background: linear-gradient(135deg, #1e293b, #334155);
-        color: white;
-        border: none;
-        padding: 6px 12px;
-        border-radius: 6px;
-        text-decoration: none;
-        font-size: 0.85rem;
-        font-weight: 500;
-        transition: all 0.3s ease;
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        gap: 5px;
-        min-width: 80px;
-    }
-    
-    .btn-view:hover {
-        background: linear-gradient(135deg, #2e7d46, var(--primary));
-        color: white;
-        transform: translateY(-2px);
-        box-shadow: 0 4px 12px rgba(26, 92, 46, 0.3);
-        text-decoration: none;
-    }
-    
-    .btn-edit {
-        background: linear-gradient(135deg, var(--warning), #e67e22);
-        color: white;
-        border: none;
-        padding: 6px 12px;
-        border-radius: 6px;
-        text-decoration: none;
-        font-size: 0.85rem;
-        font-weight: 500;
-        transition: all 0.3s ease;
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        gap: 5px;
-        min-width: 80px;
-    }
-    
-    .btn-edit:hover {
-        background: linear-gradient(135deg, #e67e22, var(--warning));
-        color: white;
-        transform: translateY(-2px);
-        box-shadow: 0 4px 12px rgba(243, 156, 18, 0.3);
-        text-decoration: none;
-    }
-    
-    .btn-global-search {
-        background: linear-gradient(135deg, var(--info), #2980b9);
-        color: white;
-        border: none;
-        padding: 6px 12px;
-        border-radius: 6px;
-        text-decoration: none;
-        font-size: 0.85rem;
-        font-weight: 500;
-        transition: all 0.3s ease;
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        gap: 5px;
-        min-width: 110px;
-    }
-    
-    .btn-global-search:hover {
-        background: linear-gradient(135deg, #2980b9, var(--info));
-        color: white;
-        transform: translateY(-2px);
-        box-shadow: 0 4px 12px rgba(52, 152, 219, 0.3);
-        text-decoration: none;
-    }
-        
-        /* Footer Styles */
-        .main-footer {
-            background: transparent;
-            color: var(--gray);
-            padding: 15px 20px;
-            text-align: right;
-            border-top: 1px solid #e1e5e9;
-            font-size: 0.8rem;
-        }
-        
-        .main-footer a {
-            color: var(--secondary);
+        .btn-view {
+            background: #1e293b;
+            border: 1px solid #1e293b;
+            color: #ffffff;
+            font-size: 0.78rem;
+            padding: 4px 10px;
+            border-radius: 5px;
+            font-weight: 600;
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            transition: all 0.2s ease;
+            box-shadow: 0 1px 3px rgba(30, 41, 59, 0.2);
             text-decoration: none;
+            cursor: pointer;
+        }
+
+        .btn-view:hover {
+            background: #0f172a;
+            color: #ffffff;
+            border-color: #0f172a;
+            transform: translateY(-1px);
+        }
+
+        .btn-edit {
+            background: #d97706;
+            border: 1px solid #d97706;
+            color: #ffffff;
+            font-size: 0.78rem;
+            padding: 4px 10px;
+            border-radius: 5px;
+            font-weight: 600;
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            transition: all 0.2s ease;
+            box-shadow: 0 1px 3px rgba(217, 119, 6, 0.2);
+            text-decoration: none;
+            cursor: pointer;
+        }
+
+        .btn-edit:hover {
+            background: #b45309;
+            color: #ffffff;
+            border-color: #b45309;
+            transform: translateY(-1px);
+        }
+
+        .btn-global-search {
+            background: #0284c7;
+            border: 1px solid #0284c7;
+            color: #ffffff;
+            font-size: 0.78rem;
+            padding: 4px 10px;
+            border-radius: 5px;
+            font-weight: 600;
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            transition: all 0.2s ease;
+            box-shadow: 0 1px 3px rgba(2, 132, 199, 0.2);
+            text-decoration: none;
+            cursor: pointer;
+        }
+
+        .btn-global-search:hover {
+            background: #0369a1;
+            color: #ffffff;
+            border-color: #0369a1;
+            transform: translateY(-1px);
+        }
+
+        /* Pagination Styling */
+        .pagination-footer {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 12px;
+            padding-top: 14px;
+            margin-top: 14px;
+            border-top: 1px solid #e2e8f0;
+        }
+
+        .pagination-info {
+            font-size: 0.84rem;
+            color: #64748b;
             font-weight: 500;
         }
-        
-        .main-footer a:hover {
-            text-decoration: underline;
+
+        .pagination .page-item .page-link {
+            color: #334155;
+            border: 1px solid #cbd5e1;
+            border-radius: 5px;
+            padding: 4px 10px;
+            font-size: 0.82rem;
+            font-weight: 600;
+            min-width: 32px;
+            text-align: center;
+            transition: all 0.15s ease;
         }
-        
-        /* Centralized Sidebar Responsive Styles moved to sidebar.php */    
-            .welcome-banner {
-                text-align: center;
-            }
-            
-            .datetime-display {
-                text-align: center;
-                margin-top: 15px;
-            }
-            
-            .card-title-section {
-                flex-direction: column;
-                align-items: flex-start;
-            }
-            
-            .search-section {
-                width: 100%;
-            }
+
+        .pagination .page-item.active .page-link {
+            background-color: #1a5c2e !important;
+            border-color: #1a5c2e !important;
+            color: #ffffff !important;
+            box-shadow: 0 2px 4px rgba(26, 92, 46, 0.25);
         }
-        
+
+        .pagination .page-item.disabled .page-link {
+            color: #94a3b8;
+            background-color: #f8fafc;
+            border-color: #e2e8f0;
+            cursor: not-allowed;
+        }
+
+        .pagination .page-item:not(.active):not(.disabled) .page-link:hover {
+            background-color: #f1f5f9;
+            color: #1a5c2e;
+            border-color: #94a3b8;
+        }
+
+        /* No Results State */
+        .no-results {
+            display: none;
+            text-align: center;
+            padding: 40px 20px;
+            color: #64748b;
+        }
+
         @media (max-width: 768px) {
             .page-content {
-                padding: 15px;
-            }
-            
-            .top-nav {
-                padding: 10px 15px;
-            }
-            
-            .user-info {
-                flex-wrap: wrap;
-            }
-            
-            .welcome-banner {
-                padding: 15px;
-            }
-            
-            .welcome-banner h2 {
-                font-size: 1.3rem;
-            }
-            
-            .card {
-                margin-bottom: 15px;
-            }
-            
-            .card-body {
-                padding: 15px;
-            }
-            
-            .search-box {
-                min-width: 150px;
-            }
-        }
-        
-        @media (max-width: 576px) {
-            .sidebar {
-                width: 85%;
-                max-width: 280px;
-            }
-            
-            .top-nav {
-                flex-direction: column;
-                gap: 12px;
-                align-items: stretch;
-            }
-            
-            .nav-left {
-                justify-content: space-between;
-            }
-            
-            .user-info {
-                padding-top: 12px;
-                border-top: 1px solid #e1e5e9;
-                flex-direction: row;
-                justify-content: space-between;
-            }
-            
-            .page-content {
                 padding: 12px;
             }
-            
-            .welcome-banner {
-                padding: 12px;
+            .datetime-display {
+                text-align: left;
+                margin-top: 12px;
             }
-            
-            .card-title-section {
-                gap: 10px;
+            .vignette-field-user,
+            .vignette-field-status,
+            .vignette-field-search,
+            .vignette-field-reset {
+                flex: 1 1 100%;
+                min-width: 100%;
             }
-            
-            .search-section {
-                flex-direction: column;
-                align-items: stretch;
-            }
-            
-            .btn-outline-secondary {
+            .vignette-btn-reset {
                 width: 100%;
             }
-        }
-        
-        @media (max-width: 360px) {
-            .page-content {
-                padding: 10px;
-            }
-            
-            .user-info {
+            .pagination-footer {
                 flex-direction: column;
-                align-items: flex-start;
-                gap: 8px;
-            }
-            
-            .logout-btn {
-                width: 100%;
-                justify-content: center;
-            }
-            
-            .table {
-                font-size: 0.85rem;
-            }
-            
-            .table thead th,
-            .table tbody td {
-                padding: 8px;
+                align-items: center;
             }
         }
-        
-        /* Print Styles */
-        @media print {
-            .sidebar,
-            .top-nav,
-            .welcome-banner,
-            .search-section,
-            .btn,
-            .main-footer {
-                display: none !important;
-            }
-            
-            .main-content {
-                margin-left: 0;
-            }
-            
-            .page-content {
-                padding: 20px 0;
-            }
-            
-            .card {
-                box-shadow: none;
-                border: 1px solid #ddd;
-            }
-            
-            body {
-                background: white !important;
-                font-size: 12pt;
-            }
-            
-            .table {
-                font-size: 10pt;
-            }
-            
-            .table th {
-                background-color: #f8f9fa !important;
-                color: black !important;
-                border: 1px solid #ddd !important;
-            }
-        }
-        
-        @media (prefers-contrast: high) {
-            .table thead th {
-                border-bottom-width: 3px;
-            }
-        }
-        
-        /* Reduced Motion */
-        @media (prefers-reduced-motion: reduce) {
-            * {
-                animation-duration: 0.01ms !important;
-                animation-iteration-count: 1 !important;
-                transition-duration: 0.01ms !important;
-            }
-            
-            .btn-view:hover,
-            .logout-btn:hover {
-                transform: none;
-            }
-            
-            .sidebar-menu a:hover {
-                transform: none;
-            }
-        }
-    
-        /* Welcome Banner Cream/Off-White Theme Override */
-        .welcome-banner {
-            background: #fdfbf7 !important;
-            color: #5c3c1e !important;
-            border: 1px solid #e2dcd0 !important;
-            box-shadow: 0 4px 15px rgba(92, 60, 30, 0.05) !important;
-        }
-        .welcome-banner h2, .welcome-text h2, #currentDateTime {
-            color: #5c3c1e !important;
-        }
-        .welcome-banner p, .welcome-text p, .location {
-            color: #7c6e60 !important;
-            opacity: 1 !important;
-        }
-        
-        /* Professional Filter Styles */
-        .filter-section {
-            background: #f0e8dc; /* Light brown background */
-            border: none;
-            border-radius: 12px;
-            padding: 20px;
-            margin-bottom: 25px;
-            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.02);
-        }
-        .filter-header {
-            font-size: 0.95rem;
-            font-weight: 700;
-            color: var(--dark);
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-        .filter-label {
-            font-size: 0.78rem;
-            font-weight: 700;
-            color: var(--gray);
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-            margin-bottom: 8px;
-            display: block;
-        }
-        .filter-select {
-            height: 42px;
-            font-size: 0.88rem;
-            border: 1.5px solid #e1e5e9;
-            border-radius: 8px;
-            background-color: #ffffff;
-            color: var(--dark);
-            padding: 8px 12px;
-            transition: all 0.3s ease;
-        }
-        .filter-select:focus {
-            border-color: var(--primary);
-            background-color: #ffffff;
-            box-shadow: 0 0 0 3px rgba(26, 92, 46, 0.1);
-            outline: none;
-        }
-        .btn-reset {
-            height: 42px;
-            font-size: 0.88rem;
-            font-weight: 600;
-            border: 1.5px solid #e1e5e9;
-            background: #ffffff;
-            color: var(--dark);
-            border-radius: 8px;
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            gap: 8px;
-            transition: all 0.3s ease;
-        }
-        .btn-reset:hover {
-            background: #f8f9fa;
-            border-color: var(--gray);
-            color: var(--primary);
-        }
-</style>
+    </style>
 </head>
 <body>
     <!-- Shared Sidebar Component -->
@@ -825,7 +757,7 @@ $numb = $retrieve ? mysqli_num_rows($retrieve) : 0;
 
     <!-- Main Content -->
     <div class="main-content">
-        <!-- Top Navigation - MATCHING INDEX.PHP -->
+        <!-- Top Navigation -->
         <nav class="top-nav">
             <div class="nav-left">
                 <button class="mobile-menu-btn" id="mobileMenuBtn">
@@ -836,7 +768,7 @@ $numb = $retrieve ? mysqli_num_rows($retrieve) : 0;
             </div>
             
             <div class="user-info">
-                <div class="user-avatar" style="overflow: hidden; display: flex; align-items: center; justify-content: center;">
+                <div class="user-avatar">
                     <?php 
                     $session_photo = $_SESSION['photo'] ?? '';
                     $user_photo_path = '';
@@ -849,7 +781,7 @@ $numb = $retrieve ? mysqli_num_rows($retrieve) : 0;
                     }
                     if (!empty($user_photo_path) && file_exists($user_photo_path)): 
                     ?>
-                        <img src="<?php echo htmlspecialchars($user_photo_path); ?>" alt="Avatar" style="width: 100%; height: 100%; object-fit: cover;">
+                        <img src="<?php echo htmlspecialchars($user_photo_path); ?>" alt="Avatar">
                     <?php else: ?>
                         <?php 
                             $initials = isset($_SESSION['username']) 
@@ -879,152 +811,222 @@ $numb = $retrieve ? mysqli_num_rows($retrieve) : 0;
                 </a>
             </div>
         </nav>
+
         <!-- Page Content -->
         <div class="page-content">
-            <!-- Page Content -->
-            <div class="page-title">
-                <h3>Re-Entry Visas</h3>
-            </div>
-            
-            <!-- Start Page Content -->
-            <div class="card">
-                <div class="card-body">
-                    <!-- Updated Search Section -->
-                    <div class="card-title-section">
-                        <h5 class="card-title">Applications (<?php echo $numb; ?> records)</h5>
-                        
-                        <!-- Search Bar -->
-                        <div class="search-section">
-                            <div class="search-box">
-                                <input type="text" id="searchInput" class="form-control" placeholder="Search by name, re-entry visa no., or passport number...">
-                                <i class="fa fa-search"></i>
-                            </div>
-                            <button id="clearSearch" class="btn btn-outline-secondary">
-                                <i class="fa fa-times"></i> Clear
-                            </button>
+            <!-- Welcome Banner -->
+            <div class="welcome-banner">
+                <div class="row align-items-center">
+                    <div class="col-md-8">
+                        <h2>Welcome, <?php echo htmlspecialchars($fullName); ?></h2>
+                        <p>View, manage, and search processed Re-Entry Visa applications.</p>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="datetime-display">
+                            <div id="currentDateTime">Loading date...</div>
+                            <div class="location"><i class="fa fa-map-marker text-danger me-1"></i> NIS Headquarters, Abuja</div>
                         </div>
                     </div>
+                </div>
+            </div>
+
+            <!-- Statistics Overview Cards -->
+            <div class="stats-grid">
+                <!-- Stat 1: Total Applications -->
+                <div class="stat-card card-total">
+                    <div class="stat-card-icon" style="color: #1a5c2e;"><i class="fa fa-folder-open-o"></i></div>
+                    <div class="stat-number"><?php echo number_format($stats['total_records']); ?></div>
+                    <div class="stat-label">Total Applications</div>
+                </div>
+
+                <!-- Stat 2: Fresh Applications -->
+                <div class="stat-card card-fresh">
+                    <div class="stat-card-icon text-success"><i class="fa fa-plus-circle"></i></div>
+                    <div class="stat-number"><?php echo number_format($stats['total_fresh']); ?></div>
+                    <div class="stat-label">Fresh Applications</div>
+                </div>
+
+                <!-- Stat 3: Renewal Applications -->
+                <div class="stat-card card-renewal">
+                    <div class="stat-card-icon text-warning"><i class="fa fa-refresh"></i></div>
+                    <div class="stat-number"><?php echo number_format($stats['total_renewal']); ?></div>
+                    <div class="stat-label">Renewal Applications</div>
+                </div>
+
+                <!-- Stat 4: Applications Today -->
+                <div class="stat-card card-today">
+                    <div class="stat-card-icon" style="color: #1a5c2e;"><i class="fa fa-calendar-check-o"></i></div>
+                    <div class="stat-number"><?php echo number_format($stats['total_today']); ?></div>
+                    <div class="stat-label">Total Applications Today</div>
+                </div>
+            </div>
+            
+            <!-- Re-Entry Visas Table Card -->
+            <div class="card">
+                <div class="card-body">
+                    <!-- Title Section -->
+                    <div class="card-title-section">
+                        <h5 class="card-title">
+                            <i class="fa fa-list-alt text-success"></i> Re-Entry Visa Applications Records
+                        </h5>
+                    </div>
                     
-                    <!-- Professional Filter Controls -->
-                    <div class="filter-section">
-                        <div class="filter-header mb-3">
-                            <i class="fa fa-sliders"></i> Filter Records
-                        </div>
-                        <div class="row g-3 align-items-end">
-                            <div class="col-md-4 col-sm-12">
-                                <label for="filterAppType" class="filter-label">
-                                    <i class="fa fa-file-text-o me-1"></i> Application Type
-                                </label>
-                                <select id="filterAppType" class="form-select filter-select w-100">
+                    <!-- Dedicated Clean Toolbar -->
+                    <div class="vignette-toolbar">
+                        <div class="vignette-toolbar-grid">
+                            <!-- Filter 1: Processed By Officer -->
+                            <div class="vignette-field vignette-field-user">
+                                <span class="vignette-field-addon">
+                                    <i class="fa fa-user text-success"></i> <?php echo $isDataEntry ? 'Officer:' : 'Processed By:'; ?>
+                                </span>
+                                <?php if ($isDataEntry): ?>
+                                    <select id="filterProcessedBy" class="vignette-select" disabled>
+                                        <option value=""><?php echo htmlspecialchars($fullName . ' (' . $username . ')'); ?></option>
+                                    </select>
+                                <?php else: ?>
+                                    <select id="filterProcessedBy" class="vignette-select">
+                                        <option value="">All Officers / Users</option>
+                                        <?php foreach ($all_officers as $off): ?>
+                                            <option value="<?php echo htmlspecialchars($off['value']); ?>">
+                                                <?php echo htmlspecialchars($off['label']); ?>
+                                            </option>
+                                        <?php endforeach; ?>
+                                    </select>
+                                <?php endif; ?>
+                            </div>
+
+                            <!-- Filter 2: Application Type -->
+                            <div class="vignette-field vignette-field-status">
+                                <span class="vignette-field-addon">
+                                    <i class="fa fa-tag text-success"></i> Type:
+                                </span>
+                                <select id="filterAppType" class="vignette-select">
                                     <option value="">All Types (Fresh & Renewal)</option>
                                     <option value="fresh">Fresh</option>
                                     <option value="renewal">Renewal</option>
                                 </select>
                             </div>
-                            <div class="col-md-4 col-sm-12">
-                                <label for="filterProcessedBy" class="filter-label">
-                                    <i class="fa fa-user-o me-1"></i> Processed By
-                                </label>
-                                <select id="filterProcessedBy" class="form-select filter-select w-100">
-                                    <option value="">All Officers</option>
-                                </select>
+
+                            <!-- Search Input -->
+                            <div class="vignette-field vignette-field-search">
+                                <span class="vignette-field-addon">
+                                    <i class="fa fa-search text-muted"></i>
+                                </span>
+                                <input type="text" id="searchInput" class="vignette-input" placeholder="Search by Visa No, Applicant Name, Passport No...">
                             </div>
-                            <div class="col-md-4 col-sm-12">
-                                <label class="filter-label d-none d-md-block">&nbsp;</label>
-                                <button id="resetFilters" class="btn btn-reset w-100">
-                                    <i class="fa fa-refresh"></i> Reset Filters
+
+                            <!-- Reset / Clear Button -->
+                            <div class="vignette-field vignette-field-reset">
+                                <button id="clearSearch" type="button" class="vignette-btn-reset" title="Clear search and reset filters">
+                                    <i class="fa fa-refresh"></i> Reset
                                 </button>
                             </div>
                         </div>
                     </div>
                     
+                    <!-- Responsive Table Container -->
                     <div class="table-responsive">
-                        <table id="applicationsTable" class="table table-striped table-bordered">
+                        <table class="table table-hover table-striped" id="applicationsTable">
                             <thead>
                                 <tr>
-                                    <th>S/No</th>
+                                    <th style="width: 55px;" class="text-center">S/No</th>
                                     <th>Re-Entry Visa No.</th>
                                     <th>Full Name</th>
-                                    <th>Passport Number</th>
-                                    <th>Type of Application</th>
+                                    <th>Passport No.</th>
+                                    <th>Type</th>
                                     <th>Journey</th>
-                                    <th>Within (Validity Period)</th> 
+                                    <th>Within (Validity)</th>
                                     <th>Processed By</th>
-                                    <th>Action</th>
+                                    <th style="width: 180px;" class="text-center">Action</th>
                                 </tr>
                             </thead>
-<tbody>
-    <?php
-    if($numb > 0 && $retrieve) {
-        $sno = 1;
-        while ($ret = mysqli_fetch_assoc($retrieve)) {
-            // Escape output for security
-            $visa_number = htmlspecialchars($ret['visa_number']);
-            $surname = htmlspecialchars($ret['surname']);
-            $given_name = htmlspecialchars($ret['given_name']);
-            $passport_number = htmlspecialchars($ret['passport_number']);
-            $journey = isset($ret['journey']) ? htmlspecialchars($ret['journey']) : 'N/A';
-            $within = isset($ret['within']) ? formatNISDate($ret['within']) : 'N/A';
-            ?>
-            <tr>
-                <td><?php echo $sno++; ?></td>
-                <td><?php echo $visa_number; ?></td>
-                <td><?php echo strtoupper($surname . ' ' . $given_name); ?></td>
-                <td><?php echo $passport_number; ?></td>
-                <td>
-                    <?php 
-                        $app_type = strtolower($ret['application_type'] ?? 'fresh');
-                        if ($app_type === 'renewal') {
-                            echo '<span style="font-size: 0.85rem; font-weight: 600;">RENEWAL</span>';
-                        } else {
-                            echo '<span style="font-size: 0.85rem; font-weight: 600;">FRESH</span>';
-                        }
-                    ?>
-                </td>
-                <td><?php echo $journey; ?></td>
-                <td><?php echo $within; ?></td>
-                <td>
-                    <?php 
-                        if (!empty($ret['fname'])) {
-                            echo htmlspecialchars(strtoupper($ret['fname'] . ' ' . $ret['lname'] . ' (' . $ret['created_by'] . ')'));
-                        } else {
-                            echo htmlspecialchars(strtoupper($ret['created_by'] ?? 'N/A'));
-                        }
-                    ?>
-                </td>
-                <td>
-                    <div class="btn-group">
-                        <button class="btn btn-view" type="button" 
-                            onclick="viewRecord('<?php echo $visa_number; ?>')">
-                            <i class="fa fa-eye"></i> View
-                        </button>
-                        <?php if ($userRole !== 'ViewOnly'): ?>
-                        <button class="btn btn-edit" type="button" 
-                            onclick="editRecord('<?php echo $visa_number; ?>')">
-                            <i class="fa fa-edit"></i> Edit
-                        </button>
-                        <button class="btn btn-global-search" type="button" onclick="location.href='globalsearch'">
-                            <i class="fa fa-search-plus"></i> Global Search
-                        </button>
-                        <?php endif; ?>
-                 </div>
-                </td>
-            </tr>
-            <?php
-        }
-        mysqli_free_result($retrieve);
-    } else {
-        echo "<tr><td colspan='9' class='text-center'>No records found</td></tr>";
-    }
-    
-    // Close database connection
-    mysqli_close($conn);
-    ?>
-</tbody>
+                            <tbody id="applicationsTableBody">
+                                <?php
+                                if ($numb > 0 && $retrieve) {
+                                    $sno = 1;
+                                    while ($ret = mysqli_fetch_assoc($retrieve)) {
+                                        $visa_number = htmlspecialchars($ret['visa_number']);
+                                        $surname = htmlspecialchars($ret['surname']);
+                                        $given_name = htmlspecialchars($ret['given_name']);
+                                        $passport_number = htmlspecialchars($ret['passport_number']);
+                                        $journey = isset($ret['journey']) ? htmlspecialchars($ret['journey']) : 'N/A';
+                                        $within = isset($ret['within']) ? formatNISDate($ret['within']) : 'N/A';
+                                        $app_type = strtolower($ret['application_type'] ?? 'fresh');
+                                        $created_by = $ret['created_by'] ?? '';
+                                        
+                                        if (!empty($ret['fname'])) {
+                                            $officer_display = htmlspecialchars(strtoupper($ret['fname'] . ' ' . $ret['lname'] . ' (' . $created_by . ')'));
+                                        } else {
+                                            $officer_display = htmlspecialchars(strtoupper($created_by ?: 'N/A'));
+                                        }
+                                        $jsVisa = json_encode($ret['visa_number']);
+                                ?>
+                                <tr class="app-row"
+                                    data-visa="<?php echo strtolower($visa_number); ?>"
+                                    data-surname="<?php echo strtolower($ret['surname']); ?>"
+                                    data-givenname="<?php echo strtolower($ret['given_name']); ?>"
+                                    data-passport="<?php echo strtolower($ret['passport_number']); ?>"
+                                    data-type="<?php echo strtolower($app_type); ?>"
+                                    data-created-by="<?php echo strtolower($created_by); ?>"
+                                    data-officer-display="<?php echo strtolower($officer_display); ?>">
+                                    <td class="cell-sno text-center fw-bold text-muted"><?php echo $sno; ?></td>
+                                    <td class="fw-bold text-dark font-monospace"><?php echo $visa_number; ?></td>
+                                    <td class="fw-semibold text-dark"><?php echo strtoupper($surname . ' ' . $given_name); ?></td>
+                                    <td class="font-monospace text-dark"><?php echo $passport_number; ?></td>
+                                    <td>
+                                        <span class="badge <?php echo ($app_type === 'renewal') ? 'badge-app-renewal' : 'badge-app-fresh'; ?>">
+                                            <?php echo strtoupper($app_type); ?>
+                                        </span>
+                                    </td>
+                                    <td><?php echo $journey; ?></td>
+                                    <td><?php echo $within; ?></td>
+                                    <td>
+                                        <div class="fw-semibold text-dark" style="font-size: 0.8rem;"><?php echo $officer_display; ?></div>
+                                    </td>
+                                    <td class="text-center">
+                                        <div class="btn-action-group">
+                                            <a href="viewrecord?id=<?php echo urlencode($ret['visa_number']); ?>" class="btn-view" title="View Application Details">
+                                                <i class="fa fa-eye"></i> View
+                                            </a>
+                                            <?php if ($userRole !== 'ViewOnly'): ?>
+                                                <a href="editrecord?id=<?php echo urlencode($ret['visa_number']); ?>" class="btn-edit" title="Edit Application">
+                                                    <i class="fa fa-edit"></i> Edit
+                                                </a>
+                                            <?php endif; ?>
+                                            <a href="globalsearch" class="btn-global-search" title="Global Search across all applications">
+                                                <i class="fa fa-globe"></i> Global Search
+                                            </a>
+                                        </div>
+                                    </td>
+                                </tr>
+                                <?php
+                                        $sno++;
+                                    }
+                                    mysqli_free_result($retrieve);
+                                } else {
+                                    echo "<tr><td colspan='9' class='text-center py-4 text-muted'><i class='fa fa-info-circle me-1'></i> No records found.</td></tr>";
+                                }
+                                ?>
+                            </tbody>
                         </table>
+                        
                         <div id="noResults" class="no-results">
-                            No matching records found
+                            <i class="fa fa-search fa-2x text-muted mb-2 d-block"></i>
+                            <strong>No matching applications found</strong>
+                            <p class="small text-muted mb-0">Try changing your search term or selecting a different officer/type filter.</p>
                         </div>
+                    </div>
+
+                    <!-- Pagination Footer (Breaks at 20 records per page) -->
+                    <div class="pagination-footer">
+                        <div class="pagination-info" id="paginationInfo">
+                            Showing <span id="pageStart">1</span> to <span id="pageEnd">20</span> of <span id="totalItems">0</span> records
+                        </div>
+                        <nav aria-label="Visa Records Pagination">
+                            <ul class="pagination pagination-sm mb-0 gap-1" id="paginationNav">
+                                <!-- Dynamically generated by JS -->
+                            </ul>
+                        </nav>
                     </div>
                 </div>
             </div>
@@ -1037,24 +1039,25 @@ $numb = $retrieve ? mysqli_num_rows($retrieve) : 0;
         }
         ?>
     </div>
+
     <!-- Bootstrap JS -->
     <script src="vendors/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
     
     <script>
         // JavaScript functions for record actions
         function viewRecord(id) {
-            window.location.href = 'viewrecord?id=' + id;
+            window.location.href = 'viewrecord?id=' + encodeURIComponent(id);
         }
         
         function editRecord(id) {
-            window.location.href = 'editrecord?id=' + id;
+            window.location.href = 'editrecord?id=' + encodeURIComponent(id);
         }
         
         function downloadRecord(id) {
-            window.location.href = 'download?id=' + id;
+            window.location.href = 'download?id=' + encodeURIComponent(id);
         }
         
-        // Function to update date and time safely
+        // Update Live Date & Time
         function updateDateTime() {
             const dateTimeEl = document.getElementById('currentDateTime');
             if (!dateTimeEl) return;
@@ -1072,162 +1075,190 @@ $numb = $retrieve ? mysqli_num_rows($retrieve) : 0;
             dateTimeEl.textContent = now.toLocaleDateString('en-US', options);
         }
         
-        // Update date and time immediately and then every second
         updateDateTime();
         setInterval(updateDateTime, 1000);
         
-        // Search and Filter functionality
-        function initSearchAndFilters() {
+        // Interactive Pagination & Filter Engine (20 records per page)
+        const PAGE_SIZE = 20;
+        let currentPage = 1;
+        let filteredRows = [];
+
+        function getRows() {
+            return Array.from(document.querySelectorAll('#applicationsTableBody tr.app-row'));
+        }
+
+        function applyFiltersAndPagination(goToPage = 1) {
+            const allRows = getRows();
             const searchInput = document.getElementById('searchInput');
-            const clearSearch = document.getElementById('clearSearch');
-            const table = document.getElementById('applicationsTable');
-            const filterAppType = document.getElementById('filterAppType');
-            const filterProcessedBy = document.getElementById('filterProcessedBy');
-            const resetFilters = document.getElementById('resetFilters');
+            const searchTerm = searchInput ? searchInput.value.toLowerCase().trim() : '';
+            const searchWords = searchTerm.split(/\s+/).filter(w => w.length > 0);
             
-            if (!table) return;
-            const tbody = table.getElementsByTagName('tbody')[0];
-            if (!tbody) return;
-            const noResults = document.getElementById('noResults');
-            const tableRows = tbody.getElementsByTagName('tr');
-
-            // Dynamically populate "Processed By" dropdown from table rows
-            const officersSet = new Set();
-            for (let i = 0; i < tableRows.length; i++) {
-                const cells = tableRows[i].getElementsByTagName('td');
-                if (cells.length >= 8) {
-                    const officerText = cells[7].textContent.trim();
-                    if (officerText && officerText !== 'N/A' && officerText !== 'No records found') {
-                        officersSet.add(officerText);
-                    }
-                }
-            }
+            const userFilter = document.getElementById('filterProcessedBy');
+            const selectedUser = userFilter ? userFilter.value.toLowerCase().trim() : '';
             
-            if (filterProcessedBy) {
-                filterProcessedBy.innerHTML = '<option value="">All Officers</option>';
-                const sortedOfficers = Array.from(officersSet).sort();
-                sortedOfficers.forEach(officer => {
-                    const opt = document.createElement('option');
-                    opt.value = officer;
-                    opt.textContent = officer;
-                    filterProcessedBy.appendChild(opt);
-                });
-            }
+            const typeFilter = document.getElementById('filterAppType');
+            const selectedType = typeFilter ? typeFilter.value.toLowerCase().trim() : '';
 
-            function applyFilters() {
-                const searchTerm = searchInput ? searchInput.value.toLowerCase().trim() : '';
-                const searchWords = searchTerm.split(/\s+/).filter(word => word.length > 0);
-                
-                const selectedAppType = filterAppType ? filterAppType.value.toLowerCase() : '';
-                const selectedOfficer = filterProcessedBy ? filterProcessedBy.value.toLowerCase() : '';
-                
-                let hasResults = false;
-                let totalRowsCount = 0;
-                
-                for (let i = 0; i < tableRows.length; i++) {
-                    const row = tableRows[i];
-                    const cells = row.getElementsByTagName('td');
-                    
-                    // Safe guard: ignore row if it's a message row (like "No records found")
-                    if (cells.length < 8) {
-                        continue;
-                    }
-                    totalRowsCount++;
-                    
-                    let matchesSearch = true;
-                    let matchesAppType = true;
-                    let matchesOfficer = true;
-                    
-                    // 1. Search Text Match
-                    const visaNo = cells[1] ? cells[1].textContent.toLowerCase() : '';
-                    const fullName = cells[2] ? cells[2].textContent.toLowerCase() : '';
-                    const passportNo = cells[3] ? cells[3].textContent.toLowerCase() : '';
-                    const combinedRowText = `${visaNo} ${fullName} ${passportNo}`;
-                    
-                    for (let j = 0; j < searchWords.length; j++) {
-                        if (!combinedRowText.includes(searchWords[j])) {
-                            matchesSearch = false;
-                            break;
-                        }
-                    }
-                    
-                    // 2. Application Type Match
-                    if (selectedAppType) {
-                        const appTypeCell = cells[4] ? cells[4].textContent.toLowerCase() : '';
-                        if (!appTypeCell.includes(selectedAppType)) {
-                            matchesAppType = false;
-                        }
-                    }
-                    
-                    // 3. Officer Match
-                    if (selectedOfficer) {
-                        const officerCell = cells[7] ? cells[7].textContent.toLowerCase().trim() : '';
-                        if (officerCell !== selectedOfficer) {
-                            matchesOfficer = false;
-                        }
-                    }
-                    
-                    // Show or hide row
-                    if (matchesSearch && matchesAppType && matchesOfficer) {
-                        row.style.display = '';
-                        hasResults = true;
-                    } else {
-                        row.style.display = 'none';
+            // Filter rows based on search, type, and officer
+            filteredRows = allRows.filter(row => {
+                // 1. Application Type Filter
+                const rowType = row.getAttribute('data-type') || '';
+                if (selectedType && selectedType !== rowType) {
+                    return false;
+                }
+
+                // 2. Processed By Filter
+                const rowCreatedBy = row.getAttribute('data-created-by') || '';
+                const rowOfficerDisplay = row.getAttribute('data-officer-display') || '';
+                if (selectedUser) {
+                    if (rowCreatedBy !== selectedUser && !rowOfficerDisplay.includes(selectedUser)) {
+                        return false;
                     }
                 }
-                
-                // Show/hide no results message
-                if (noResults) {
-                    if (hasResults || totalRowsCount === 0) {
-                        noResults.style.display = 'none';
-                        table.style.display = '';
-                    } else {
-                        noResults.style.display = 'block';
-                        table.style.display = 'none';
+
+                // 3. Search Query Filter (Searches visa, surname, given name, passport, officer display)
+                if (searchWords.length > 0) {
+                    const visa = row.getAttribute('data-visa') || '';
+                    const surname = row.getAttribute('data-surname') || '';
+                    const givenName = row.getAttribute('data-givenname') || '';
+                    const passport = row.getAttribute('data-passport') || '';
+                    const combinedText = `${visa} ${surname} ${givenName} ${passport} ${rowCreatedBy} ${rowOfficerDisplay} ${rowType}`;
+                    
+                    for (let word of searchWords) {
+                        if (!combinedText.includes(word)) {
+                            return false;
+                        }
                     }
+                }
+
+                return true;
+            });
+
+            const totalMatching = filteredRows.length;
+            const totalPages = Math.max(1, Math.ceil(totalMatching / PAGE_SIZE));
+            
+            if (goToPage > totalPages) goToPage = totalPages;
+            if (goToPage < 1) goToPage = 1;
+            currentPage = goToPage;
+
+            const startIndex = (currentPage - 1) * PAGE_SIZE;
+            const endIndex = Math.min(startIndex + PAGE_SIZE, totalMatching);
+
+            // Hide all rows initially
+            allRows.forEach(r => r.style.display = 'none');
+
+            // Show and re-number only current page's matching rows
+            filteredRows.forEach((row, idx) => {
+                if (idx >= startIndex && idx < endIndex) {
+                    row.style.display = '';
+                    const snoCell = row.querySelector('.cell-sno');
+                    if (snoCell) {
+                        snoCell.textContent = (idx + 1);
+                    }
+                } else {
+                    row.style.display = 'none';
+                }
+            });
+
+            // Update UI elements
+            const infoEl = document.getElementById('paginationInfo');
+            const tableEl = document.getElementById('applicationsTable');
+            const noResultsEl = document.getElementById('noResults');
+
+            if (totalMatching === 0) {
+                if (tableEl) tableEl.style.display = 'none';
+                if (noResultsEl) noResultsEl.style.display = 'block';
+                if (infoEl) infoEl.innerHTML = 'Showing <strong class="text-dark">0</strong> records';
+            } else {
+                if (tableEl) tableEl.style.display = '';
+                if (noResultsEl) noResultsEl.style.display = 'none';
+                if (infoEl) {
+                    infoEl.innerHTML = `Showing <strong class="text-dark">${startIndex + 1}</strong> to <strong class="text-dark">${endIndex}</strong> of <strong class="text-dark">${totalMatching}</strong> records`;
                 }
             }
 
-            // Bind events
+            renderPaginationNav(totalPages, currentPage);
+        }
+
+        function renderPaginationNav(totalPages, activePage) {
+            const navEl = document.getElementById('paginationNav');
+            if (!navEl) return;
+
+            if (totalPages <= 1) {
+                navEl.innerHTML = '';
+                return;
+            }
+
+            let html = '';
+            
+            // Previous Button
+            if (activePage > 1) {
+                html += `<li class="page-item"><a class="page-link" href="#" onclick="applyFiltersAndPagination(${activePage - 1}); return false;" aria-label="Previous">&laquo; Prev</a></li>`;
+            } else {
+                html += `<li class="page-item disabled"><span class="page-link">&laquo; Prev</span></li>`;
+            }
+
+            // Numbered Page Buttons with Smart Ellipsis
+            for (let p = 1; p <= totalPages; p++) {
+                if (p === 1 || p === totalPages || (p >= activePage - 2 && p <= activePage + 2)) {
+                    if (p === activePage) {
+                        html += `<li class="page-item active"><span class="page-link">${p}</span></li>`;
+                    } else {
+                        html += `<li class="page-item"><a class="page-link" href="#" onclick="applyFiltersAndPagination(${p}); return false;">${p}</a></li>`;
+                    }
+                } else if (p === activePage - 3 || p === activePage + 3) {
+                    html += `<li class="page-item disabled"><span class="page-link">&hellip;</span></li>`;
+                }
+            }
+
+            // Next Button
+            if (activePage < totalPages) {
+                html += `<li class="page-item"><a class="page-link" href="#" onclick="applyFiltersAndPagination(${activePage + 1}); return false;" aria-label="Next">Next &raquo;</a></li>`;
+            } else {
+                html += `<li class="page-item disabled"><span class="page-link">Next &raquo;</span></li>`;
+            }
+
+            navEl.innerHTML = html;
+        }
+
+        // Initialize Filter & Search Listeners
+        document.addEventListener('DOMContentLoaded', function() {
+            const searchInput = document.getElementById('searchInput');
+            const userFilter = document.getElementById('filterProcessedBy');
+            const typeFilter = document.getElementById('filterAppType');
+            const clearBtn = document.getElementById('clearSearch');
+
             if (searchInput) {
-                searchInput.addEventListener('input', applyFilters);
-            }
-            if (filterAppType) {
-                filterAppType.addEventListener('change', applyFilters);
-            }
-            if (filterProcessedBy) {
-                filterProcessedBy.addEventListener('change', applyFilters);
-            }
-            
-            // Clear Search
-            if (clearSearch) {
-                clearSearch.addEventListener('click', function() {
-                    searchInput.value = '';
-                    applyFilters();
-                    searchInput.focus();
+                searchInput.addEventListener('input', function() {
+                    applyFiltersAndPagination(1);
                 });
             }
-            
-            // Reset Filters
-            if (resetFilters) {
-                resetFilters.addEventListener('click', function() {
-                    if (searchInput) searchInput.value = '';
-                    if (filterAppType) filterAppType.value = '';
-                    if (filterProcessedBy) filterProcessedBy.value = '';
-                    applyFilters();
-                });
-            }
-        }
 
-        if (document.readyState === 'loading') {
-            document.addEventListener('DOMContentLoaded', initSearchAndFilters);
-        } else {
-            initSearchAndFilters();
-        }
+            if (userFilter) {
+                userFilter.addEventListener('change', function() {
+                    applyFiltersAndPagination(1);
+                });
+            }
+
+            if (typeFilter) {
+                typeFilter.addEventListener('change', function() {
+                    applyFiltersAndPagination(1);
+                });
+            }
+
+            if (clearBtn) {
+                clearBtn.addEventListener('click', function() {
+                    if (searchInput) searchInput.value = '';
+                    if (userFilter) userFilter.value = '';
+                    if (typeFilter) typeFilter.value = '';
+                    applyFiltersAndPagination(1);
+                    if (searchInput) searchInput.focus();
+                });
+            }
+
+            // Initial pagination render on load
+            applyFiltersAndPagination(1);
+        });
     </script>
 </body>
-</html>
-
-
-
 

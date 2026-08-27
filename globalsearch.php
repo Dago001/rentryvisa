@@ -150,24 +150,40 @@ if (!empty($searchTerm)) {
         }
         
         .user-avatar {
-            width: 38px;
-            height: 38px;
+            width: 48px;
+            height: 48px;
+            min-width: 48px;
+            max-width: 48px;
             border-radius: 50%;
-            background: linear-gradient(135deg, var(--primary), var(--secondary));
-            color: white;
-            display: flex;
+            background: #ffffff;
+            border: 2.5px solid #1a5c2e;
+            color: #1a5c2e;
+            display: inline-flex;
             align-items: center;
             justify-content: center;
-            font-weight: 600;
-            font-size: 1rem;
-            box-shadow: 0 2px 8px rgba(26, 92, 46, 0.2);
+            font-weight: 800;
+            font-size: 1.15rem;
+            box-shadow: 0 0 0 1px #ffffff, 0 3px 8px rgba(26, 92, 46, 0.35);
             overflow: hidden;
+            flex-shrink: 0;
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+        
+        .user-avatar:hover {
+            transform: scale(1.06);
+            border-color: #27ae60;
+            box-shadow: 0 0 0 2px #ffffff, 0 5px 14px rgba(26, 92, 46, 0.45);
         }
         
         .user-avatar img {
             width: 100%;
             height: 100%;
             object-fit: cover;
+            object-position: center top;
+            display: block;
+            image-rendering: -webkit-optimize-contrast;
+            image-rendering: crisp-edges;
+            filter: contrast(1.08) saturate(1.06) brightness(1.02);
         }
         
         .user-details {
@@ -629,12 +645,8 @@ if (!empty($searchTerm)) {
                                                 <td style="padding-right: 20px; text-align: right;">
                                                     <div class="btn-group justify-content-end">
                                                         <a href="viewrecord?id=<?php echo urlencode($row['visa_number']); ?>&ref=globalsearch" 
-                                                           class="btn btn-view">
+                                                           class="btn btn-view" title="View Application Details">
                                                             <i class="fa fa-eye"></i> View
-                                                        </a>
-                                                        <a href="editrecord?id=<?php echo urlencode($row['visa_number']); ?>&ref=globalsearch" 
-                                                           class="btn btn-edit">
-                                                            <i class="fa fa-edit"></i> Edit
                                                         </a>
                                                     </div>
                                                 </td>
@@ -659,7 +671,7 @@ if (!empty($searchTerm)) {
                         <i class="fa fa-globe fa-4x text-muted mb-3" style="opacity: 0.5;"></i>
                         <h5 class="text-muted" style="font-weight: 600;">Global Lookup System</h5>
                         <p class="text-muted mx-auto" style="max-width: 450px;">
-                            Enter a search query in the form above to look up visa application records across the entire registry.
+                            Enter a search query in the search box above to look up visa application records across the entire registry.
                         </p>
                     </div>
                 </div>

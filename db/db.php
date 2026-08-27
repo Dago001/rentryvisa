@@ -31,7 +31,10 @@ $new_cols = [
     'contract_duration' => "VARCHAR(100) DEFAULT NULL",
     'old_visa_number' => "VARCHAR(50) DEFAULT NULL",
     'passport_date_of_issue' => "DATE DEFAULT NULL",
-    'passport_date_of_expiry' => "DATE DEFAULT NULL"
+    'passport_date_of_expiry' => "DATE DEFAULT NULL",
+    'print_status' => "TINYINT(1) NOT NULL DEFAULT 0",
+    'printed_by' => "VARCHAR(100) DEFAULT NULL",
+    'printed_at' => "DATETIME DEFAULT NULL"
 ];
 
 foreach ($new_cols as $col_name => $col_def) {
@@ -50,45 +53,6 @@ if ($ga_check && mysqli_num_rows($ga_check) == 0) {
 $pwd_reset_check = mysqli_query($conn, "SHOW COLUMNS FROM users LIKE 'password_reset_required'");
 if ($pwd_reset_check && mysqli_num_rows($pwd_reset_check) == 0) {
     mysqli_query($conn, "ALTER TABLE users ADD COLUMN password_reset_required TINYINT(1) NOT NULL DEFAULT 0");
-}
-
-// Mail / SMTP Configuration & Database Table Management
-$tbl_email_check = mysqli_query($conn, "SHOW TABLES LIKE 'email_settings'");
-if (!$tbl_email_check || mysqli_num_rows($tbl_email_check) == 0) {
-    mysqli_query($conn, "CREATE TABLE IF NOT EXISTS email_settings (
-        id INT(11) AUTO_INCREMENT PRIMARY KEY,
-        smtp_host VARCHAR(255) NOT NULL DEFAULT 'mail.nisapps.com.ng',
-        smtp_port INT(11) NOT NULL DEFAULT 587,
-        smtp_user VARCHAR(255) DEFAULT '',
-        smtp_pass VARCHAR(255) DEFAULT '',
-        smtp_encryption VARCHAR(20) NOT NULL DEFAULT 'tls',
-        from_address VARCHAR(255) NOT NULL DEFAULT 'noreply@nisapps.com.ng',
-        from_name VARCHAR(255) NOT NULL DEFAULT 'Nigeria Immigration Service (NISREV)',
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;");
-    
-    mysqli_query($conn, "INSERT INTO email_settings (smtp_host, smtp_port, smtp_user, smtp_pass, smtp_encryption, from_address, from_name) 
-        VALUES ('mail.nisapps.com.ng', 587, '', '', 'tls', 'noreply@nisapps.com.ng', 'Nigeria Immigration Service (NISREV)')");
-}
-
-// Load dynamic email settings from database
-$es_check = mysqli_query($conn, "SELECT * FROM email_settings LIMIT 1");
-if ($es_check && $es = mysqli_fetch_assoc($es_check)) {
-    if (!defined('SMTP_HOST')) define('SMTP_HOST', $es['smtp_host'] ?: 'mail.nisapps.com.ng');
-    if (!defined('SMTP_PORT')) define('SMTP_PORT', intval($es['smtp_port']) ?: 587);
-    if (!defined('SMTP_USER')) define('SMTP_USER', $es['smtp_user'] ?? '');
-    if (!defined('SMTP_PASS')) define('SMTP_PASS', $es['smtp_pass'] ?? '');
-    if (!defined('SMTP_ENCRYPTION')) define('SMTP_ENCRYPTION', $es['smtp_encryption'] ?: 'tls');
-    if (!defined('MAIL_FROM_ADDRESS')) define('MAIL_FROM_ADDRESS', $es['from_address'] ?: 'noreply@nisapps.com.ng');
-    if (!defined('MAIL_FROM_NAME')) define('MAIL_FROM_NAME', $es['from_name'] ?: 'Nigeria Immigration Service (NISREV)');
-} else {
-    if (!defined('SMTP_HOST')) define('SMTP_HOST', 'mail.nisapps.com.ng');
-    if (!defined('SMTP_PORT')) define('SMTP_PORT', 587);
-    if (!defined('SMTP_USER')) define('SMTP_USER', '');
-    if (!defined('SMTP_PASS')) define('SMTP_PASS', '');
-    if (!defined('SMTP_ENCRYPTION')) define('SMTP_ENCRYPTION', 'tls');
-    if (!defined('MAIL_FROM_ADDRESS')) define('MAIL_FROM_ADDRESS', 'noreply@nisapps.com.ng');
-    if (!defined('MAIL_FROM_NAME')) define('MAIL_FROM_NAME', 'Nigeria Immigration Service (NISREV)');
 }
 
 // Ensure activity_log table structure and normalize loopback IPs

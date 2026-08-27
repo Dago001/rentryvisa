@@ -87,7 +87,8 @@ if (isset($_GET['id']) && !empty($_GET['id'])) {
         $record = mysqli_fetch_assoc($result);
         
         // Authorization check for DataEntry role
-        if ($userRole === 'DataEntry' && (!isset($_GET['ref']) || $_GET['ref'] !== 'globalsearch') && isset($record['created_by']) && strcasecmp($record['created_by'], $username) !== 0) {
+        $isDataEntry = ($userRole === 'DataEntry' || strcasecmp($userRole, 'dataentry') === 0 || strcasecmp($userRole, 'data entry') === 0);
+        if ($isDataEntry && isset($record['created_by']) && strcasecmp($record['created_by'], $username) !== 0) {
             header("Location: re-entry-visa?error=Access Denied");
             exit();
         }
@@ -276,6 +277,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_record'])) {
                 'mfa_letter' => strtoupper(mysqli_real_escape_string($conn, $_POST['mfa_letter'] ?? '')),
                 'covering_letter' => strtoupper(mysqli_real_escape_string($conn, $_POST['covering_letter'] ?? '')),
                 'entry_stamp' => strtoupper(mysqli_real_escape_string($conn, $_POST['entry_stamp'] ?? '')),
+                'entry_stamp_date' => mysqli_real_escape_string($conn, $_POST['entry_stamp_date'] ?? ''),
                 'contract_duration' => strtoupper(mysqli_real_escape_string($conn, $_POST['contract_duration'] ?? '')),
                 'old_visa_number' => strtoupper(mysqli_real_escape_string($conn, $_POST['old_visa_number'] ?? '')),
                 'passport_date_of_issue' => mysqli_real_escape_string($conn, $_POST['passport_date_of_issue'] ?? ''),
@@ -493,24 +495,40 @@ $passport_date_of_expiry_exists = in_array('passport_date_of_expiry', $columns);
         }
         
         .user-avatar {
-            width: 38px;
-            height: 38px;
+            width: 48px;
+            height: 48px;
+            min-width: 48px;
+            max-width: 48px;
             border-radius: 50%;
-            background: linear-gradient(135deg, var(--primary), var(--secondary));
-            color: white;
-            display: flex;
+            background: #ffffff;
+            border: 2.5px solid #1a5c2e;
+            color: #1a5c2e;
+            display: inline-flex;
             align-items: center;
             justify-content: center;
-            font-weight: 600;
-            font-size: 1rem;
-            box-shadow: 0 2px 8px rgba(26, 92, 46, 0.2);
+            font-weight: 800;
+            font-size: 1.15rem;
+            box-shadow: 0 0 0 1px #ffffff, 0 3px 8px rgba(26, 92, 46, 0.35);
             overflow: hidden;
+            flex-shrink: 0;
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+        
+        .user-avatar:hover {
+            transform: scale(1.06);
+            border-color: #27ae60;
+            box-shadow: 0 0 0 2px #ffffff, 0 5px 14px rgba(26, 92, 46, 0.45);
         }
         
         .user-avatar img {
             width: 100%;
             height: 100%;
             object-fit: cover;
+            object-position: center top;
+            display: block;
+            image-rendering: -webkit-optimize-contrast;
+            image-rendering: crisp-edges;
+            filter: contrast(1.08) saturate(1.06) brightness(1.02);
         }
         
         .user-details {

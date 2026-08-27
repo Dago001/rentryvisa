@@ -231,6 +231,120 @@ $current_page = basename($_SERVER['PHP_SELF']);
     .password-field-wrapper input {
         text-transform: none !important;
     }
+
+    /* ==========================================================================
+       Master Uniform, Clear & Bold Profile Avatar Styling (System-Wide)
+       ========================================================================== */
+    .user-avatar {
+        width: 48px !important;
+        height: 48px !important;
+        min-width: 48px !important;
+        max-width: 48px !important;
+        border-radius: 50% !important;
+        background: #ffffff !important;
+        border: 2.5px solid #1a5c2e !important;
+        color: #1a5c2e !important;
+        display: inline-flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        font-weight: 800 !important;
+        font-size: 1.15rem !important;
+        box-shadow: 0 0 0 1px #ffffff, 0 3px 8px rgba(26, 92, 46, 0.35) !important;
+        overflow: hidden !important;
+        flex-shrink: 0 !important;
+        transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease !important;
+        position: relative !important;
+    }
+
+    .user-avatar:hover {
+        transform: scale(1.06) !important;
+        border-color: #27ae60 !important;
+        box-shadow: 0 0 0 2px #ffffff, 0 5px 14px rgba(26, 92, 46, 0.45) !important;
+    }
+
+    .user-avatar img {
+        width: 100% !important;
+        height: 100% !important;
+        min-width: 100% !important;
+        min-height: 100% !important;
+        object-fit: cover !important;
+        object-position: center top !important;
+        display: block !important;
+        image-rendering: -webkit-optimize-contrast !important;
+        image-rendering: crisp-edges !important;
+        filter: contrast(1.08) saturate(1.06) brightness(1.02) !important;
+    }
+
+    .avatar-circle {
+        width: 48px !important;
+        height: 48px !important;
+        min-width: 48px !important;
+        max-width: 48px !important;
+        border-radius: 50% !important;
+        border: 2.5px solid #1a5c2e !important;
+        background: #ffffff !important;
+        box-shadow: 0 0 0 1px #ffffff, 0 2px 8px rgba(26, 92, 46, 0.3) !important;
+        overflow: hidden !important;
+        display: inline-flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        font-weight: 800 !important;
+        font-size: 1.1rem !important;
+        color: #1a5c2e !important;
+        flex-shrink: 0 !important;
+    }
+
+    .avatar-circle img {
+        width: 100% !important;
+        height: 100% !important;
+        object-fit: cover !important;
+        object-position: center top !important;
+        display: block !important;
+        image-rendering: -webkit-optimize-contrast !important;
+        filter: contrast(1.08) saturate(1.06) brightness(1.02) !important;
+    }
+
+    .photo-preview-box {
+        width: 68px !important;
+        height: 68px !important;
+        min-width: 68px !important;
+        border-radius: 50% !important;
+        border: 3px solid #1a5c2e !important;
+        background: #ffffff !important;
+        box-shadow: 0 3px 10px rgba(26, 92, 46, 0.3) !important;
+        overflow: hidden !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        flex-shrink: 0 !important;
+    }
+
+    .photo-preview-box img {
+        width: 100% !important;
+        height: 100% !important;
+        object-fit: cover !important;
+        object-position: center top !important;
+        display: block !important;
+        image-rendering: -webkit-optimize-contrast !important;
+        filter: contrast(1.08) saturate(1.06) brightness(1.02) !important;
+    }
+
+    .profile-avatar, .user-avatar-large, .profile-avatar-outer {
+        border: 3.5px solid #1a5c2e !important;
+        box-shadow: 0 4px 15px rgba(26, 92, 46, 0.3) !important;
+        overflow: hidden !important;
+        background: #ffffff !important;
+    }
+
+    .profile-avatar img, .user-avatar-large img {
+        width: 100% !important;
+        height: 100% !important;
+        object-fit: cover !important;
+        object-position: center top !important;
+        display: block !important;
+        image-rendering: -webkit-optimize-contrast !important;
+        filter: contrast(1.08) saturate(1.06) brightness(1.02) !important;
+    }
 </style>
 
 <!-- Sidebar HTML Structure -->
@@ -258,17 +372,20 @@ $current_page = basename($_SERVER['PHP_SELF']);
                 <li><a href="new-record" class="<?php echo ($current_page === 'new-record.php') ? 'active' : ''; ?>"><i class="fa fa-plus"></i><span>New Re-Entry Visa</span></a></li>
                 <li><a href="re-entry-visa" class="<?php echo ($current_page === 're-entry-visa.php') ? 'active' : ''; ?>"><i class="fa fa-list"></i><span>View Re-Entry Visas</span></a></li>
                 <li><a href="print_visas" class="<?php echo ($current_page === 'print_visas.php') ? 'active' : ''; ?>"><i class="fa fa-print"></i><span>Print Re-Entry Visa</span></a></li>
+                <li><a href="globalsearch" class="<?php echo ($current_page === 'globalsearch.php') ? 'active' : ''; ?>"><i class="fa fa-globe"></i><span>Global Search</span></a></li>
                 <li><a href="report" class="<?php echo ($current_page === 'report.php') ? 'active' : ''; ?>"><i class="fa fa-bar-chart"></i><span>Reports</span></a></li>
                 <li><a href="createuser" class="<?php echo ($current_page === 'createuser.php') ? 'active' : ''; ?>"><i class="fa fa-users"></i><span>User Management</span></a></li>
             <?php elseif ($role === 'ViewOnly' || strcasecmp($role, 'viewonly') === 0 || strcasecmp($role, 'view only') === 0): ?>
                 <li><a href="index" class="<?php echo ($current_page === 'index.php') ? 'active' : ''; ?>"><i class="fa fa-dashboard"></i><span>Dashboard</span></a></li>
                 <li><a href="re-entry-visa" class="<?php echo ($current_page === 're-entry-visa.php') ? 'active' : ''; ?>"><i class="fa fa-list"></i><span>View Re-Entry Visas</span></a></li>
+                <li><a href="globalsearch" class="<?php echo ($current_page === 'globalsearch.php') ? 'active' : ''; ?>"><i class="fa fa-globe"></i><span>Global Search</span></a></li>
                 <li><a href="report" class="<?php echo ($current_page === 'report.php') ? 'active' : ''; ?>"><i class="fa fa-bar-chart"></i><span>Reports</span></a></li>
             <?php else: ?>
                 <li><a href="user_dashboard" class="<?php echo ($current_page === 'user_dashboard.php' || $current_page === 'index.php') ? 'active' : ''; ?>"><i class="fa fa-dashboard"></i><span>My Dashboard</span></a></li>
                 <li><a href="new-record" class="<?php echo ($current_page === 'new-record.php') ? 'active' : ''; ?>"><i class="fa fa-plus"></i><span>New Re-Entry Visa</span></a></li>
                 <li><a href="re-entry-visa" class="<?php echo ($current_page === 're-entry-visa.php') ? 'active' : ''; ?>"><i class="fa fa-list"></i><span>View My Visas</span></a></li>
                 <li><a href="print_visas" class="<?php echo ($current_page === 'print_visas.php') ? 'active' : ''; ?>"><i class="fa fa-print"></i><span>Print Re-Entry Visa</span></a></li>
+                <li><a href="globalsearch" class="<?php echo ($current_page === 'globalsearch.php') ? 'active' : ''; ?>"><i class="fa fa-globe"></i><span>Global Search</span></a></li>
             <?php endif; ?>
             <li><a href="profile" class="<?php echo ($current_page === 'profile.php') ? 'active' : ''; ?>"><i class="fa fa-user"></i><span>My Profile</span></a></li>
         </ul>

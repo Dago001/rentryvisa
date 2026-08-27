@@ -312,24 +312,40 @@ if (!empty($user['photo'])) {
         }
         
         .user-avatar {
-            width: 38px;
-            height: 38px;
+            width: 48px;
+            height: 48px;
+            min-width: 48px;
+            max-width: 48px;
             border-radius: 50%;
-            background: linear-gradient(135deg, var(--primary), var(--secondary));
-            color: white;
-            display: flex;
+            background: #ffffff;
+            border: 2.5px solid #1a5c2e;
+            color: #1a5c2e;
+            display: inline-flex;
             align-items: center;
             justify-content: center;
-            font-weight: 600;
-            font-size: 1rem;
-            box-shadow: 0 2px 8px rgba(26, 92, 46, 0.2);
+            font-weight: 800;
+            font-size: 1.15rem;
+            box-shadow: 0 0 0 1px #ffffff, 0 3px 8px rgba(26, 92, 46, 0.35);
             overflow: hidden;
+            flex-shrink: 0;
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+        
+        .user-avatar:hover {
+            transform: scale(1.06);
+            border-color: #27ae60;
+            box-shadow: 0 0 0 2px #ffffff, 0 5px 14px rgba(26, 92, 46, 0.45);
         }
         
         .user-avatar img {
             width: 100%;
             height: 100%;
             object-fit: cover;
+            object-position: center top;
+            display: block;
+            image-rendering: -webkit-optimize-contrast;
+            image-rendering: crisp-edges;
+            filter: contrast(1.08) saturate(1.06) brightness(1.02);
         }
         
         .user-details {
@@ -411,13 +427,14 @@ if (!empty($user['photo'])) {
         }
         
         .profile-avatar-outer {
-            width: 76px;
-            height: 76px;
+            width: 86px;
+            height: 86px;
             border-radius: 50%;
-            background: white;
-            padding: 3px;
+            background: #ffffff;
+            border: 3.5px solid #1a5c2e;
+            padding: 2px;
             display: inline-block;
-            box-shadow: 0 3px 10px rgba(0,0,0,0.15);
+            box-shadow: 0 4px 14px rgba(26, 92, 46, 0.3);
         }
         
         .profile-avatar {
@@ -425,19 +442,24 @@ if (!empty($user['photo'])) {
             height: 100%;
             border-radius: 50%;
             overflow: hidden;
-            background: var(--primary);
-            color: white;
+            background: #ffffff;
+            color: #1a5c2e;
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 1.6rem;
-            font-weight: 700;
+            font-size: 1.8rem;
+            font-weight: 800;
         }
         
         .profile-avatar img {
             width: 100%;
             height: 100%;
             object-fit: cover;
+            object-position: center top;
+            display: block;
+            image-rendering: -webkit-optimize-contrast;
+            image-rendering: crisp-edges;
+            filter: contrast(1.08) saturate(1.06) brightness(1.02);
         }
         
         .profile-title {
@@ -578,14 +600,14 @@ if (!empty($user['photo'])) {
         }
 
         .photo-preview-box {
-            width: 48px;
-            height: 48px;
-            min-width: 48px;
+            width: 68px;
+            height: 68px;
+            min-width: 68px;
             border-radius: 50%;
             overflow: hidden;
-            background: #e2e8f0;
-            border: 2px solid white;
-            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+            background: #ffffff;
+            border: 3px solid #1a5c2e;
+            box-shadow: 0 3px 10px rgba(26, 92, 46, 0.3);
             display: flex;
             align-items: center;
             justify-content: center;
@@ -597,6 +619,11 @@ if (!empty($user['photo'])) {
             width: 100%;
             height: 100%;
             object-fit: cover;
+            object-position: center top;
+            display: block;
+            image-rendering: -webkit-optimize-contrast;
+            image-rendering: crisp-edges;
+            filter: contrast(1.08) saturate(1.06) brightness(1.02);
         }
 
         .photo-placeholder i {

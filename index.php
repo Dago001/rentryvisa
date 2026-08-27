@@ -825,6 +825,20 @@ function showDashboard() {
             if ($check_daily && $row = mysqli_fetch_assoc($check_daily)) {
                 $daily_total = (int)$row['total'];
             }
+
+            // Count pending print visas (print_status = 0 or NULL)
+            $total_pending_print = 0;
+            $check_pending_print = mysqli_query($conn, "SELECT COUNT(*) as total FROM visa_applications WHERE print_status = 0 OR print_status IS NULL");
+            if ($check_pending_print && $row = mysqli_fetch_assoc($check_pending_print)) {
+                $total_pending_print = (int)$row['total'];
+            }
+
+            // Count printed visas (print_status = 1)
+            $total_printed = 0;
+            $check_printed = mysqli_query($conn, "SELECT COUNT(*) as total FROM visa_applications WHERE print_status = 1");
+            if ($check_printed && $row = mysqli_fetch_assoc($check_printed)) {
+                $total_printed = (int)$row['total'];
+            }
             
             $query = "SELECT COUNT(*) as monthly_visas FROM visa_applications 
                      WHERE MONTH(application_date) = MONTH(CURRENT_DATE()) 
@@ -1032,24 +1046,40 @@ function showDashboard() {
             }
             
             .user-avatar {
-                width: 38px;
-                height: 38px;
+                width: 48px;
+                height: 48px;
+                min-width: 48px;
+                max-width: 48px;
                 border-radius: 50%;
-                background: linear-gradient(135deg, var(--primary), var(--secondary));
-                color: white;
-                display: flex;
+                background: #ffffff;
+                border: 2.5px solid #1a5c2e;
+                color: #1a5c2e;
+                display: inline-flex;
                 align-items: center;
                 justify-content: center;
-                font-weight: 600;
-                font-size: 1rem;
-                box-shadow: 0 2px 8px rgba(26, 92, 46, 0.2);
+                font-weight: 800;
+                font-size: 1.15rem;
+                box-shadow: 0 0 0 1px #ffffff, 0 3px 8px rgba(26, 92, 46, 0.35);
                 overflow: hidden;
+                flex-shrink: 0;
+                transition: transform 0.2s ease, box-shadow 0.2s ease;
+            }
+            
+            .user-avatar:hover {
+                transform: scale(1.06);
+                border-color: #27ae60;
+                box-shadow: 0 0 0 2px #ffffff, 0 5px 14px rgba(26, 92, 46, 0.45);
             }
             
             .user-avatar img {
                 width: 100%;
                 height: 100%;
                 object-fit: cover;
+                object-position: center top;
+                display: block;
+                image-rendering: -webkit-optimize-contrast;
+                image-rendering: crisp-edges;
+                filter: contrast(1.08) saturate(1.06) brightness(1.02);
             }
             
             .user-details {
@@ -1187,9 +1217,14 @@ function showDashboard() {
             /* Statistics Grid */
             .stats-grid {
                 display: grid;
-                grid-template-columns: repeat(3, 1fr);
+                grid-template-columns: repeat(4, 1fr);
                 gap: 15px;
                 margin-bottom: 20px;
+            }
+            @media (max-width: 1200px) {
+                .stats-grid {
+                    grid-template-columns: repeat(3, 1fr);
+                }
             }
             @media (max-width: 992px) {
                 .stats-grid {
@@ -1576,6 +1611,17 @@ function showDashboard() {
                         <i class="fa fa-calendar-check-o stat-icon" style="color: var(--secondary);"></i>
                         <div class="stat-number"><?php echo number_format($stats['monthly_visas']); ?></div>
                         <div class="stat-label">This Month</div>
+                    </div>
+                    <div class="stat-card">
+                        <i class="fa fa-check-circle-o stat-icon" style="color: #059669;"></i>
+                        <div class="stat-number"><?php echo number_format($total_printed); ?></div>
+                        <div class="stat-label">Total Printed Visas</div>
+                    </div>
+                    <!-- Visas Pending Print Metric Card -->
+                    <div class="stat-card">
+                        <i class="fa fa-print stat-icon" style="color: #d97706;"></i>
+                        <div class="stat-number" style="color: #d97706;"><?php echo number_format($total_pending_print); ?></div>
+                        <div class="stat-label">Visas Pending Print</div>
                     </div>
                 </div>
 

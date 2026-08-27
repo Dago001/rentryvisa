@@ -245,24 +245,40 @@ if(isset($_GET['id'])) {
         }
         
         .user-avatar {
-            width: 38px;
-            height: 38px;
+            width: 48px;
+            height: 48px;
+            min-width: 48px;
+            max-width: 48px;
             border-radius: 50%;
-            background: linear-gradient(135deg, var(--primary), var(--secondary));
-            color: white;
-            display: flex;
+            background: #ffffff;
+            border: 2.5px solid #1a5c2e;
+            color: #1a5c2e;
+            display: inline-flex;
             align-items: center;
             justify-content: center;
-            font-weight: 600;
-            font-size: 1rem;
-            box-shadow: 0 2px 8px rgba(26, 92, 46, 0.2);
+            font-weight: 800;
+            font-size: 1.15rem;
+            box-shadow: 0 0 0 1px #ffffff, 0 3px 8px rgba(26, 92, 46, 0.35);
             overflow: hidden;
+            flex-shrink: 0;
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+        
+        .user-avatar:hover {
+            transform: scale(1.06);
+            border-color: #27ae60;
+            box-shadow: 0 0 0 2px #ffffff, 0 5px 14px rgba(26, 92, 46, 0.45);
         }
         
         .user-avatar img {
             width: 100%;
             height: 100%;
             object-fit: cover;
+            object-position: center top;
+            display: block;
+            image-rendering: -webkit-optimize-contrast;
+            image-rendering: crisp-edges;
+            filter: contrast(1.08) saturate(1.06) brightness(1.02);
         }
         
         .user-details {
@@ -637,15 +653,27 @@ if(isset($_GET['id'])) {
 
         <div class="page-content container-fluid">
             <!-- Actions Header -->
-            <div class="action-header" style="display: flex; justify-content: flex-end; gap: 15px; margin-bottom: 20px; width: 100%;">
-                <?php if ($_SESSION['role'] !== 'ViewOnly'): ?>
-                <a href="card?id=<?php echo urlencode($visa_number); ?>" class="btn btn-action btn-gold text-dark">
-                    <i class="fa fa-id-card"></i>Print Vignette
-                </a>
+            <?php 
+            $is_from_globalsearch = (isset($_GET['ref']) && $_GET['ref'] === 'globalsearch');
+            ?>
+            <div class="action-header" style="display: flex; justify-content: <?php echo $is_from_globalsearch ? 'space-between' : 'flex-end'; ?>; align-items: center; gap: 15px; margin-bottom: 20px; width: 100%;">
+                <?php if ($is_from_globalsearch): ?>
+                    <a href="globalsearch<?php echo isset($_GET['q']) ? '?q=' . urlencode($_GET['q']) : ''; ?>" class="btn btn-secondary d-inline-flex align-items-center gap-1" style="font-weight: 600; padding: 8px 16px; border-radius: 6px;">
+                        <i class="fa fa-arrow-left"></i> Back to Global Search
+                    </a>
+                    <span class="badge bg-light text-muted border px-3 py-2" style="font-size: 0.82rem;">
+                        <i class="fa fa-lock me-1"></i> Read-Only View (Global Search)
+                    </span>
+                <?php else: ?>
+                    <?php if ($_SESSION['role'] !== 'ViewOnly'): ?>
+                    <a href="card?id=<?php echo urlencode($visa_number); ?>" class="btn btn-action btn-gold text-dark">
+                        <i class="fa fa-id-card"></i>Print Vignette
+                    </a>
+                    <?php endif; ?>
+                    <button class="btn btn-action btn-green" onclick="window.print()">
+                        <i class="fa fa-print"></i>Print Details
+                    </button>
                 <?php endif; ?>
-                <button class="btn btn-action btn-green" onclick="window.print()">
-                    <i class="fa fa-print"></i>Print Details
-                </button>
             </div>
 
             <!-- Visa Application Card matching new-record.php layout structure -->

@@ -33,13 +33,16 @@ $fullName = $_SESSION['full_name'] ?? $username;
 
 // Fetch user-specific data only
 $numb = 0;
-$stats = [
-    'monthly_visas' => 0,
-    'pending_visas' => 0,
-    'recent_visas' => 0,
-    'today_visas' => 0
-];
+$total_fresh = 0;
+$total_renewal = 0;
+$today_visas = 0;
+$recent_visas = 0;
+$monthly_visas = 0;
+$total_printed = 0;
+$total_pending_print = 0;
 $recent_applications = [];
+$last_month_labels = [];
+$last_month_counts = [];
 
 try {
     if (!$conn) {
@@ -49,59 +52,36 @@ try {
     $table_check = mysqli_query($conn, "SHOW TABLES LIKE 'visa_applications'");
     
     if ($table_check && mysqli_num_rows($table_check) > 0) {
-        // User's total applications
-        $sqluse = "SELECT COUNT(*) as total FROM visa_applications WHERE created_by = '$username'";
-        $retrieve = mysqli_query($conn, $sqluse);
-        if ($retrieve && mysqli_num_rows($retrieve) > 0) {
-            $total_result = mysqli_fetch_assoc($retrieve);
-            $numb = $total_result['total'] ?? 0;
-        }
+        // Fetch all comprehensive user statistics in one robust query
+        $stats_sql = "SELECT 
+            COUNT(*) as total_records,
+            COALESCE(SUM(CASE WHEN LOWER(application_type) = 'fresh' OR application_type IS NULL OR application_type = '' THEN 1 ELSE 0 END), 0) as total_fresh,
+            COALESCE(SUM(CASE WHEN LOWER(application_type) = 'renewal' THEN 1 ELSE 0 END), 0) as total_renewal,
+            COALESCE(SUM(CASE WHEN DATE(application_date) = CURDATE() THEN 1 ELSE 0 END), 0) as today_visas,
+            COALESCE(SUM(CASE WHEN DATE(application_date) >= DATE_SUB(CURDATE(), INTERVAL 7 DAY) THEN 1 ELSE 0 END), 0) as recent_visas,
+            COALESCE(SUM(CASE WHEN MONTH(application_date) = MONTH(CURRENT_DATE()) AND YEAR(application_date) = YEAR(CURRENT_DATE()) THEN 1 ELSE 0 END), 0) as monthly_visas,
+            COALESCE(SUM(CASE WHEN print_status = 1 THEN 1 ELSE 0 END), 0) as total_printed,
+            COALESCE(SUM(CASE WHEN print_status = 0 OR print_status IS NULL THEN 1 ELSE 0 END), 0) as total_pending_print
+        FROM visa_applications 
+        WHERE created_by = '$username'";
         
-        // User's monthly applications
-        $query = "SELECT COUNT(*) as monthly_visas FROM visa_applications 
-                 WHERE MONTH(application_date) = MONTH(CURRENT_DATE()) 
-                 AND YEAR(application_date) = YEAR(CURRENT_DATE())
-                 AND created_by = '$username'";
-        $result = mysqli_query($conn, $query);
-        if ($result && mysqli_num_rows($result) > 0) {
-            $monthly_data = mysqli_fetch_assoc($result);
-            $stats['monthly_visas'] = $monthly_data['monthly_visas'] ?? 0;
-        }
-        
-        // User's pending applications
-        $query = "SELECT COUNT(*) as pending_visas FROM visa_applications 
-                 WHERE status = 'pending' AND created_by = '$username'";
-        $result = mysqli_query($conn, $query);
-        if ($result && mysqli_num_rows($result) > 0) {
-            $pending_data = mysqli_fetch_assoc($result);
-            $stats['pending_visas'] = $pending_data['pending_visas'] ?? 0;
-        }
-        
-        // User's recent applications (last 7 days)
-        $query2 = "SELECT COUNT(*) as recent_visas FROM visa_applications 
-                  WHERE DATE(application_date) >= DATE_SUB(CURDATE(), INTERVAL 7 DAY)
-                  AND created_by = '$username'";
-        $result2 = mysqli_query($conn, $query2);
-        if ($result2 && mysqli_num_rows($result2) > 0) {
-            $recent_data = mysqli_fetch_assoc($result2);
-            $stats['recent_visas'] = $recent_data['recent_visas'] ?? 0;
-        }
-        
-        // User's today applications
-        $query3 = "SELECT COUNT(*) as today_visas FROM visa_applications 
-                  WHERE DATE(application_date) = CURDATE()
-                  AND created_by = '$username'";
-        $result3 = mysqli_query($conn, $query3);
-        if ($result3 && mysqli_num_rows($result3) > 0) {
-            $today_data = mysqli_fetch_assoc($result3);
-            $stats['today_visas'] = $today_data['today_visas'] ?? 0;
+        $stats_res = mysqli_query($conn, $stats_sql);
+        if ($stats_res && $stats_data = mysqli_fetch_assoc($stats_res)) {
+            $numb = intval($stats_data['total_records'] ?? 0);
+            $total_fresh = intval($stats_data['total_fresh'] ?? 0);
+            $total_renewal = intval($stats_data['total_renewal'] ?? 0);
+            $today_visas = intval($stats_data['today_visas'] ?? 0);
+            $recent_visas = intval($stats_data['recent_visas'] ?? 0);
+            $monthly_visas = intval($stats_data['monthly_visas'] ?? 0);
+            $total_printed = intval($stats_data['total_printed'] ?? 0);
+            $total_pending_print = intval($stats_data['total_pending_print'] ?? 0);
         }
         
         // User's recent applications details (only their own)
-        $query4 = "SELECT visa_number, surname, given_name, passport_number, application_date, status 
+        $query4 = "SELECT visa_number, surname, given_name, passport_number, application_type, application_date, status, print_status 
                   FROM visa_applications 
                   WHERE created_by = '$username'
-                  ORDER BY application_date DESC 
+                  ORDER BY application_date DESC, id DESC 
                   LIMIT 10";
         $result4 = mysqli_query($conn, $query4);
         if ($result4 && mysqli_num_rows($result4) > 0) {
@@ -109,51 +89,28 @@ try {
                 $recent_applications[] = $row;
             }
         }
-        
-        // Get user's performance data (last 30 days)
-        $performance_query = "SELECT 
-            DATE(application_date) as date,
-            COUNT(*) as count
-            FROM visa_applications 
-            WHERE created_by = '$username'
-            AND application_date >= DATE_SUB(CURDATE(), INTERVAL 30 DAY)
-            GROUP BY DATE(application_date)
-            ORDER BY date ASC";
-        $performance_result = mysqli_query($conn, $performance_query);
-        $performance_data = [];
-        if ($performance_result && mysqli_num_rows($performance_result) > 0) {
-            while ($row = mysqli_fetch_assoc($performance_result)) {
-                $performance_data[] = $row;
-            }
-        }
 
-        // Query user status distribution (only their own applications)
-        $status_data = ['ACTIVE' => 0, 'PENDING' => 0, 'EXPIRED' => 0];
-        $status_query = "SELECT status, COUNT(*) as count FROM visa_applications WHERE created_by = '$username' GROUP BY status";
-        $status_result = mysqli_query($conn, $status_query);
-        if ($status_result && mysqli_num_rows($status_result) > 0) {
-            while ($row = mysqli_fetch_assoc($status_result)) {
-                $status_data[strtoupper($row['status'])] = (int)$row['count'];
-            }
-        }
-
-        // Query user monthly distribution for the last 6 months
-        $monthly_labels = [];
-        $monthly_counts = [];
+        // Query user issuance for the Last Month (Daily issuance grouped by date)
         $month_query = "SELECT 
-                            DATE_FORMAT(application_date, '%b %Y') as month, 
+                            DATE_FORMAT(application_date, '%d %b') as day_label, 
                             COUNT(*) as count 
                         FROM visa_applications 
                         WHERE created_by = '$username'
-                        AND application_date >= DATE_SUB(CURDATE(), INTERVAL 6 MONTH)
-                        GROUP BY YEAR(application_date), MONTH(application_date)
-                        ORDER BY YEAR(application_date) ASC, MONTH(application_date) ASC";
+                        AND application_date >= DATE_SUB(CURDATE(), INTERVAL 30 DAY)
+                        GROUP BY DATE(application_date)
+                        ORDER BY DATE(application_date) ASC";
         $month_result = mysqli_query($conn, $month_query);
         if ($month_result && mysqli_num_rows($month_result) > 0) {
             while ($row = mysqli_fetch_assoc($month_result)) {
-                $monthly_labels[] = strtoupper($row['month']);
-                $monthly_counts[] = (int)$row['count'];
+                $last_month_labels[] = $row['day_label'];
+                $last_month_counts[] = (int)$row['count'];
             }
+        }
+        
+        // If empty in last 30 days, populate with friendly label
+        if (empty($last_month_labels)) {
+            $last_month_labels = [date('d M', strtotime('-7 days')), date('d M')];
+            $last_month_counts = [0, 0];
         }
     }
     
@@ -269,24 +226,40 @@ $hasData = $numb > 0 || !empty($recent_applications);
         }
         
         .user-avatar {
-            width: 38px;
-            height: 38px;
+            width: 48px;
+            height: 48px;
+            min-width: 48px;
+            max-width: 48px;
             border-radius: 50%;
-            background: linear-gradient(135deg, var(--primary), var(--secondary));
-            color: white;
-            display: flex;
+            background: #ffffff;
+            border: 2.5px solid #1a5c2e;
+            color: #1a5c2e;
+            display: inline-flex;
             align-items: center;
             justify-content: center;
-            font-weight: 600;
-            font-size: 1rem;
-            box-shadow: 0 2px 8px rgba(26, 92, 46, 0.2);
+            font-weight: 800;
+            font-size: 1.15rem;
+            box-shadow: 0 0 0 1px #ffffff, 0 3px 8px rgba(26, 92, 46, 0.35);
             overflow: hidden;
+            flex-shrink: 0;
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+        
+        .user-avatar:hover {
+            transform: scale(1.06);
+            border-color: #27ae60;
+            box-shadow: 0 0 0 2px #ffffff, 0 5px 14px rgba(26, 92, 46, 0.45);
         }
         
         .user-avatar img {
             width: 100%;
             height: 100%;
             object-fit: cover;
+            object-position: center top;
+            display: block;
+            image-rendering: -webkit-optimize-contrast;
+            image-rendering: crisp-edges;
+            filter: contrast(1.08) saturate(1.06) brightness(1.02);
         }
         
         .user-details {
@@ -376,16 +349,22 @@ $hasData = $numb > 0 || !empty($recent_applications);
         /* User Stats Grid - DIFFERENT FROM ADMIN */
         .stats-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
             gap: 15px;
             margin-bottom: 20px;
+        }
+
+        @media (min-width: 1200px) {
+            .stats-grid {
+                grid-template-columns: repeat(4, 1fr);
+            }
         }
         
         .user-stat-card {
             background: white;
             padding: 18px;
             border-radius: 10px;
-            box-shadow: 0 3px 10px rgba(0, 0, 0, 0.08);
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
             text-align: center;
             border: 1px solid #e1e5e9;
             transition: all 0.3s ease;
@@ -395,33 +374,28 @@ $hasData = $numb > 0 || !empty($recent_applications);
         
         .user-stat-card:hover {
             transform: translateY(-3px);
-            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.1);
+            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.08);
         }
         
         .user-stat-icon {
             font-size: 1.8rem;
-            margin-bottom: 12px;
+            margin-bottom: 10px;
             opacity: 0.9;
         }
         
         .user-stat-number {
             font-size: 1.7rem;
             font-weight: 700;
-            margin: 8px 0;
+            margin: 6px 0;
             color: var(--dark);
             line-height: 1;
         }
-        
-        .user-stat-card.success .user-stat-number { color: var(--secondary); }
-        .user-stat-card.warning .user-stat-number { color: var(--warning); }
-        .user-stat-card.info .user-stat-number { color: var(--info); }
-        .user-stat-card.danger .user-stat-number { color: var(--danger); }
         
         .user-stat-label {
             color: var(--gray);
             font-weight: 600;
             text-transform: uppercase;
-            font-size: 0.8rem;
+            font-size: 0.78rem;
             letter-spacing: 0.5px;
         }
         
@@ -534,20 +508,25 @@ $hasData = $numb > 0 || !empty($recent_applications);
         }
         
         .view-all-btn {
-            background: linear-gradient(135deg, #1e293b, #334155);
-            color: white;
-            padding: 6px 15px;
+            background: #1a5c2e !important;
+            color: #ffffff !important;
+            padding: 7px 18px;
             border-radius: 6px;
             text-decoration: none;
             font-size: 0.85rem;
-            font-weight: 500;
+            font-weight: 600;
             transition: all 0.3s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            border: none;
         }
         
         .view-all-btn:hover {
+            background: #144824 !important;
             transform: translateY(-1px);
-            box-shadow: 0 4px 12px rgba(26, 92, 46, 0.3);
-            color: white;
+            box-shadow: 0 4px 12px rgba(26, 92, 46, 0.35);
+            color: #ffffff !important;
             text-decoration: none;
         }
         
@@ -654,18 +633,31 @@ $hasData = $numb > 0 || !empty($recent_applications);
         }
         
         .user-avatar-large {
-            width: 80px;
-            height: 80px;
+            width: 84px;
+            height: 84px;
             border-radius: 50%;
-            background: linear-gradient(135deg, var(--primary), var(--secondary));
-            color: white;
+            background: #ffffff;
+            border: 3.5px solid #1a5c2e;
+            color: #1a5c2e;
             display: flex;
             align-items: center;
             justify-content: center;
-            font-weight: 700;
+            font-weight: 800;
             font-size: 1.8rem;
             box-shadow: 0 4px 15px rgba(26, 92, 46, 0.3);
+            overflow: hidden;
             flex-shrink: 0;
+        }
+
+        .user-avatar-large img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            object-position: center top;
+            display: block;
+            image-rendering: -webkit-optimize-contrast;
+            image-rendering: crisp-edges;
+            filter: contrast(1.08) saturate(1.06) brightness(1.02);
         }
         
         .user-details-large {
@@ -915,28 +907,52 @@ $hasData = $numb > 0 || !empty($recent_applications);
             <!-- My Statistics - ONLY USER'S DATA -->
             <div class="stats-grid">
                 <div class="user-stat-card">
-                    <i class="fa fa-file-alt user-stat-icon" style="color: var(--primary);"></i>
+                    <i class="fa fa-folder-open-o user-stat-icon" style="color: var(--primary);"></i>
                     <div class="user-stat-number"><?php echo number_format($numb); ?></div>
                     <div class="user-stat-label">Total Applications</div>
                     <small class="text-muted">Your total visa applications</small>
                 </div>
-                <div class="user-stat-card success">
-                    <i class="fa fa-calendar-check user-stat-icon" style="color: var(--secondary);"></i>
-                    <div class="user-stat-number"><?php echo number_format($stats['today_visas']); ?></div>
+                <div class="user-stat-card">
+                    <i class="fa fa-file-o user-stat-icon" style="color: #16a34a;"></i>
+                    <div class="user-stat-number" style="color: #16a34a;"><?php echo number_format($total_fresh); ?></div>
+                    <div class="user-stat-label">Total Fresh</div>
+                    <small class="text-muted">Fresh applications created</small>
+                </div>
+                <div class="user-stat-card">
+                    <i class="fa fa-refresh user-stat-icon" style="color: #d97706;"></i>
+                    <div class="user-stat-number" style="color: #d97706;"><?php echo number_format($total_renewal); ?></div>
+                    <div class="user-stat-label">Total Renewal</div>
+                    <small class="text-muted">Renewal applications created</small>
+                </div>
+                <div class="user-stat-card">
+                    <i class="fa fa-calendar-check-o user-stat-icon" style="color: #3b82f6;"></i>
+                    <div class="user-stat-number" style="color: #3b82f6;"><?php echo number_format($today_visas); ?></div>
                     <div class="user-stat-label">Today</div>
                     <small class="text-muted">Applications created today</small>
                 </div>
-                <div class="user-stat-card warning">
-                    <i class="fa fa-clock-o user-stat-icon" style="color: var(--warning);"></i>
-                    <div class="user-stat-number"><?php echo number_format($stats['pending_visas']); ?></div>
-                    <div class="user-stat-label">Pending</div>
-                    <small class="text-muted">Awaiting processing</small>
+                <div class="user-stat-card">
+                    <i class="fa fa-line-chart user-stat-icon" style="color: #0ea5e9;"></i>
+                    <div class="user-stat-number" style="color: #0ea5e9;"><?php echo number_format($recent_visas); ?></div>
+                    <div class="user-stat-label">Last 7 Days</div>
+                    <small class="text-muted">Recent weekly activity</small>
                 </div>
-                <div class="user-stat-card info">
-                    <i class="fa fa-chart-line user-stat-icon" style="color: var(--info);"></i>
-                    <div class="user-stat-number"><?php echo number_format($stats['monthly_visas']); ?></div>
+                <div class="user-stat-card">
+                    <i class="fa fa-calendar user-stat-icon" style="color: #8b5cf6;"></i>
+                    <div class="user-stat-number" style="color: #8b5cf6;"><?php echo number_format($monthly_visas); ?></div>
                     <div class="user-stat-label">This Month</div>
                     <small class="text-muted">Monthly performance</small>
+                </div>
+                <div class="user-stat-card">
+                    <i class="fa fa-check-circle-o user-stat-icon" style="color: #059669;"></i>
+                    <div class="user-stat-number" style="color: #059669;"><?php echo number_format($total_printed); ?></div>
+                    <div class="user-stat-label">Total Printed Visas</div>
+                    <small class="text-muted">Completed vignette prints</small>
+                </div>
+                <div class="user-stat-card">
+                    <i class="fa fa-print user-stat-icon" style="color: #d97706;"></i>
+                    <div class="user-stat-number" style="color: #d97706;"><?php echo number_format($total_pending_print); ?></div>
+                    <div class="user-stat-label">Visas Pending Print</div>
+                    <small class="text-muted">Awaiting vignette print</small>
                 </div>
             </div>
 
@@ -944,8 +960,8 @@ $hasData = $numb > 0 || !empty($recent_applications);
             <div class="row mb-4">
                 <div class="col-md-6 mb-3">
                     <div style="background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.05); border: 1px solid #e1e5e9; height: 100%;">
-                        <h5 class="fw-bold mb-3" style="font-size: 1.1rem; color: #5c3c1e;">
-                            <i class="fa fa-pie-chart me-2" style="color: #5c3c1e;"></i>My Visa Status Distribution
+                        <h5 class="fw-bold mb-3" style="font-size: 1.05rem; color: #5c3c1e;">
+                            <i class="fa fa-pie-chart me-2" style="color: #5c3c1e;"></i>My Re-entry Visa Status Distribution
                         </h5>
                         <div style="position: relative; height: 250px; width: 100%;">
                             <canvas id="statusChart"></canvas>
@@ -954,8 +970,8 @@ $hasData = $numb > 0 || !empty($recent_applications);
                 </div>
                 <div class="col-md-6 mb-3">
                     <div style="background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.05); border: 1px solid #e1e5e9; height: 100%;">
-                        <h5 class="fw-bold mb-3" style="font-size: 1.1rem; color: #5c3c1e;">
-                            <i class="fa fa-bar-chart me-2" style="color: #5c3c1e;"></i>My Visa Issuance (Last 6 Months)
+                        <h5 class="fw-bold mb-3" style="font-size: 1.05rem; color: #5c3c1e;">
+                            <i class="fa fa-bar-chart me-2" style="color: #5c3c1e;"></i>My Re-entry Visa Issuance (last Month)
                         </h5>
                         <div style="position: relative; height: 250px; width: 100%;">
                             <canvas id="issuanceChart"></canvas>
@@ -968,7 +984,7 @@ $hasData = $numb > 0 || !empty($recent_applications);
             <div class="recent-activities" style="margin-top: 3rem !important;">
                 <div class="activities-header">
                     <h5 style="color: #5c3c1e;"><i class="fa fa-history" style="color: #5c3c1e;"></i> My Recent Activities</h5>
-                    <a href="re-entry-visa" class="view-all-btn">View All Applications</a>
+                    <a href="re-entry-visa" class="view-all-btn"><i class="fa fa-list"></i> View All Applications</a>
                 </div>
                 
                 <?php if (!empty($recent_applications)): ?>
@@ -1008,7 +1024,7 @@ $hasData = $numb > 0 || !empty($recent_applications);
                                         <td>
                                             <?php 
                                                 if (!empty($app['application_date'])) {
-                                                    echo date('M j, Y', strtotime($app['application_date']));
+                                                     echo date('M j, Y', strtotime($app['application_date']));
                                                 } else {
                                                     echo 'N/A';
                                                 }
@@ -1029,14 +1045,14 @@ $hasData = $numb > 0 || !empty($recent_applications);
                         <i class="fa fa-inbox"></i>
                         <h5>No Applications Yet</h5>
                         <p class="mb-3">You haven't created any visa applications.</p>
-                        <a href="new-record" class="view-all-btn">Create Your First Application</a>
+                        <a href="new-record" class="view-all-btn"><i class="fa fa-plus-circle"></i> Create Your First Application</a>
                     </div>
                 <?php else: ?>
                     <div class="no-data">
                         <i class="fa fa-inbox"></i>
                         <h5>No Recent Activities</h5>
                         <p class="mb-3">You have no recent activities to display.</p>
-                        <a href="new-record" class="view-all-btn">Create New Application</a>
+                        <a href="new-record" class="view-all-btn"><i class="fa fa-plus-circle"></i> Create New Application</a>
                     </div>
                 <?php endif; ?>
             </div>
@@ -1062,21 +1078,18 @@ $hasData = $numb > 0 || !empty($recent_applications);
             updateDateTime();
             setInterval(updateDateTime, 60000); // Update every minute
             
-
-            
-            // Status Chart (Pie/Doughnut) - Scoped to User
+            // Status Chart (Pie/Doughnut) - Fresh vs Renewal
             const statusCtx = document.getElementById('statusChart').getContext('2d');
             new Chart(statusCtx, {
                 type: 'doughnut',
                 data: {
-                    labels: ['ACTIVE', 'PENDING', 'EXPIRED'],
+                    labels: ['Fresh Applications', 'Renewal Applications'],
                     datasets: [{
                         data: [
-                            <?php echo $status_data['ACTIVE']; ?>,
-                            <?php echo $status_data['PENDING']; ?>,
-                            <?php echo $status_data['EXPIRED']; ?>
+                            <?php echo $total_fresh; ?>,
+                            <?php echo $total_renewal; ?>
                         ],
-                        backgroundColor: ['#1a5c2e', '#2e7d46', '#86efac'],
+                        backgroundColor: ['#16a34a', '#d97706'],
                         borderWidth: 2,
                         borderColor: '#ffffff'
                     }]
@@ -1097,15 +1110,15 @@ $hasData = $numb > 0 || !empty($recent_applications);
                 }
             });
 
-            // Issuance Chart (Bar Chart) - Scoped to User
+            // Issuance Chart (Bar Chart) - Last Month Daily Trends
             const issuanceCtx = document.getElementById('issuanceChart').getContext('2d');
             new Chart(issuanceCtx, {
                 type: 'bar',
                 data: {
-                    labels: <?php echo json_encode($monthly_labels); ?>,
+                    labels: <?php echo json_encode($last_month_labels); ?>,
                     datasets: [{
-                        label: 'Visas Issued',
-                        data: <?php echo json_encode($monthly_counts); ?>,
+                        label: 'Visas Created',
+                        data: <?php echo json_encode($last_month_counts); ?>,
                         backgroundColor: 'rgba(26, 92, 46, 0.85)',
                         borderColor: '#1a5c2e',
                         borderWidth: 1.5,

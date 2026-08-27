@@ -9,10 +9,10 @@ if (!isset($_SESSION['user_id']) && !isset($_SESSION['username'])) {
     exit();
 }
 
-// Block ViewOnly role from accessing printing card
+// Block ViewOnly role or requests from Global Search from accessing printing card
 $userRole = $_SESSION['role'] ?? 'DataEntry';
-if ($userRole === 'ViewOnly' || strcasecmp($userRole, 'viewonly') === 0 || strcasecmp($userRole, 'view only') === 0) {
-    header("Location: index");
+if ($userRole === 'ViewOnly' || strcasecmp($userRole, 'viewonly') === 0 || strcasecmp($userRole, 'view only') === 0 || (isset($_GET['ref']) && $_GET['ref'] === 'globalsearch')) {
+    header("Location: globalsearch");
     exit();
 }
 
@@ -31,20 +31,33 @@ if (isset($_GET['id'])) {
     $id = mysqli_real_escape_string($conn, $_GET['id']);
     
     // Use prepared statement
-    $stmt = $conn->prepare("SELECT * FROM visa_applications WHERE visa_number = ?");
-    $stmt->bind_param("s", $id);
+    $stmt = $conn->prepare("SELECT * FROM visa_applications WHERE visa_number = ? OR id = ? LIMIT 1");
+    $stmt->bind_param("ss", $id, $id);
     $stmt->execute();
     $retrieve = $stmt->get_result();
     $numb = $retrieve->num_rows;
     
     if ($numb > 0) {
         $foundk = $retrieve->fetch_assoc();
+        $target_visa_no = $foundk['visa_number'];
+        $created_by_user = $foundk['created_by'] ?? '';
+        $printed_by_user = $foundk['printed_by'] ?? '';
+        
+        // Ensure DataEntry officers can only print their own work
+        $isDataEntry = ($userRole === 'DataEntry' || strcasecmp($userRole, 'dataentry') === 0 || strcasecmp($userRole, 'data entry') === 0);
+        $current_user = $_SESSION['username'] ?? '';
+        if ($isDataEntry && $created_by_user !== $current_user && $printed_by_user !== $current_user) {
+            header("Location: print_visas");
+            exit();
+        }
         
         // Assign variables (force uppercase for display)
         $profile = strtoupper(htmlspecialchars($foundk['visa_number']));
         $passportnumber = strtoupper(htmlspecialchars($foundk['passport_number']));
         $surname = strtoupper(htmlspecialchars($foundk['surname']));
         $firstname = strtoupper(htmlspecialchars($foundk['given_name']));
+        $fullName = trim($surname . ', ' . $firstname);
+        $category = isset($foundk['category']) ? strtoupper(htmlspecialchars($foundk['category'])) : '';
         $fees = strtoupper(htmlspecialchars($foundk['fees']));
         $validuntil = formatNISDate($foundk['within']);
         $journey = strtoupper(htmlspecialchars($foundk['journey']));
@@ -52,7 +65,14 @@ if (isset($_GET['id'])) {
         $date_of_issue = formatNISDate($foundk['date_of_issue']);
         $authority = strtoupper(htmlspecialchars($foundk['authority']));
         $embassy = isset($foundk['embassy']) ? strtoupper(htmlspecialchars($foundk['embassy'])) : '';
-        $category = isset($foundk['category']) ? strtoupper(htmlspecialchars($foundk['category'])) : 'NONE';
+        // Update print tracking in visa_applications
+        $print_operator = $_SESSION['username'] ?? 'System';
+        $update_print = $conn->prepare("UPDATE visa_applications SET print_status = 1, printed_by = ?, printed_at = NOW() WHERE visa_number = ?");
+        if ($update_print) {
+            $update_print->bind_param("ss", $print_operator, $target_visa_no);
+            $update_print->execute();
+            $update_print->close();
+        }
         
         // Log this card generation/printing activity in the audit trail
         logActivity($conn, "PRINT_VISA_CARD", "Generated/Printed visa vignette card for $surname, $firstname (Visa: $profile, Passport: $passportnumber)");
@@ -72,8 +92,9 @@ if (isset($_GET['id'])) {
     <link rel="icon" href="assets/images/favicon.ico" type="image/x-icon">
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link href="vendors/bootstrap/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="vendors/font-awesome/css/font-awesome.min.css" rel="stylesheet">
     <link rel="stylesheet" href="dist/css/style.css">
-    <!--<link href="dist/css/imperator.css" rel="stylesheet">-->
     <style>
         * {
             box-sizing: border-box;
@@ -306,189 +327,123 @@ if (isset($_GET['id'])) {
             font-size: 14px;
             transition: background-color 0.3s ease;
         }
-        
-        .print-button:hover,
-        .back-button:hover {
-            background-color: #113f1f;
+        /* Screen Wrapper */
+        .card-wrapper {
+            margin: 0;
+            padding: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            width: 100%;
         }
         
-        /* Responsive adjustments for screen view */
-        @media screen and (max-width: 600px) {
-            body {
-                padding: 20px;
-            }
-            
+        @media screen and (max-width: 768px) {
             .print-area {
-                transform: scale(0.8);
+                transform: scale(0.65);
                 transform-origin: top center;
-            }
-            
-            .button-container {
-                flex-direction: column;
-                top: 10px;
-                right: 10px;
-            }
-        }
-        
-        @media screen and (max-width: 400px) {
-            .print-area {
-                transform: scale(0.6);
-            }
-        }
-        
-        /* Hide print preview and button controls on screen */
-        @media screen {
-            .print-area, .button-container {
-                visibility: hidden !important;
-                opacity: 0 !important;
-                display: none !important;
-            }
-            body {
-                background-color: white !important;
-                background: white !important;
             }
         }
         
         @media print {
+            body {
+                background: transparent !important;
+            }
+            .card-wrapper {
+                margin: 0 !important;
+                padding: 0 !important;
+                min-height: auto !important;
+            }
             .print-area {
                 visibility: visible !important;
                 opacity: 1 !important;
                 display: block !important;
+                box-shadow: none !important;
             }
         }
     </style>
 </head>
 <body>
-    <!-- Button container for both buttons -->
-    <div class="button-container no-print">
-        <button class="print-button" onclick="printWithScaling()">
-            Print Visa
-        </button>
-        <button class="back-button" onclick="window.location.href='print_visas'">
-            Back to Dashboard
-        </button>
-    </div>
-    
-    <div class="print-area">
-        <div class="visa-container">
-
-            
-            <!-- Category (DIPLOMAT/INT/ORG) -->
-            <div class="visa-text category">
-                <?php 
-                    if (!empty($category) && $category !== 'NONE') {
-                        echo $category; 
-                    }
-                ?>
+    <div class="card-wrapper">
+        <div class="print-area">
+            <div class="visa-container">
+                <!-- Category (DIPLOMAT/INT/ORG) -->
+                <div class="visa-text category">
+                    <?php 
+                        if (!empty($category) && $category !== 'NONE') {
+                            echo $category; 
+                        }
+                    ?>
+                </div>
+                
+                <!-- Embassy Field -->
+                <div class="visa-text unicef-tag">
+                    <?php 
+                        if (!empty($embassy)) {
+                            echo $embassy; 
+                        }
+                    ?>
+                </div>
+                
+                <!-- Full Name -->
+                <div class="visa-text full-name">
+                    <?php echo $fullName; ?>
+                </div>
+                
+                <!-- Passport Number -->
+                <div class="visa-text passport-number">
+                    <?php echo $passportnumber; ?>
+                </div>
+                
+                <!-- Authority -->
+                <div class="visa-text authority">
+                    <?php echo $authority; ?>
+                </div>
+                
+                <!-- Place of Issue -->
+                <div class="visa-text place-of-issue">
+                    <?php echo $place_of_issue; ?>
+                </div>
+                
+                <!-- Fees -->
+                <div class="visa-text fees">
+                    <?php echo $fees; ?>
+                </div>
+                
+                <!-- Journey -->
+                <div class="visa-text journey">
+                    <?php echo !empty($journey) ? ($journey . '<span style="display: inline-block; margin-left: 155px;">TO NIGERIA</span>') : ''; ?>
+                </div>
+                
+                <!-- Valid Until -->
+                <div class="visa-text valid-until">
+                    <?php echo $validuntil; ?>
+                </div>
+                
+                <!-- Date of Issue -->
+                <div class="visa-text date-of-issue">
+                    <?php echo $date_of_issue; ?>
+                </div>
             </div>
-            
-            <!-- Embassy Field (Replaces Static UNICEF Tag) -->
-            <div class="visa-text unicef-tag">
-                <?php 
-                    if (!empty($embassy)) {
-                        echo $embassy; 
-                    }
-                ?>
-            </div>
-            
-            <!-- Full Name -->
-            <div class="visa-text full-name">
-                <?php 
-                    $fullName = strtoupper($surname) . ', ' . strtoupper($firstname);
-                    echo $fullName;
-                ?>
-            </div>
-            
-            <!-- Passport Number -->
-            <div class="visa-text passport-number">
-                <?php echo $passportnumber; ?>
-            </div>
-            
-            <!-- Authority -->
-            <div class="visa-text authority">
-                <?php echo $authority; ?>
-            </div>
-            
-            <!-- Place of Issue -->
-            <div class="visa-text place-of-issue">
-                <?php echo $place_of_issue; ?>
-            </div>
-            
-            <!-- Fees -->
-            <div class="visa-text fees">
-                <?php echo $fees; ?>
-            </div>
-            
-           <!-- Journey -->
-<div class="visa-text journey">
-    <?php echo !empty($journey) ? ($journey . '<span style="display: inline-block; margin-left: 155px;">TO NIGERIA</span>') : ''; ?>
-</div>
-            
-            <!-- Valid Until -->
-            <div class="visa-text valid-until">
-                <?php echo $validuntil; ?>
-            </div>
-            
-            <!-- Date of Issue -->
-            <div class="visa-text date-of-issue">
-                <?php echo $date_of_issue; ?>
-            </div>
-
-
         </div>
     </div>
 
     <script>
-        // Always auto-print on page load
-        window.onload = function() {
-            setTimeout(() => {
-                printWithScaling();
-            }, 300);
-            
-            // Go back automatically after printing / cancellation
-            window.onafterprint = function() {
-                const destination = (document.referrer && document.referrer.includes('print_visas')) ? document.referrer : 'print_visas';
-                window.location.href = destination;
-            };
-        };
-        
-        // Function to handle printing
-        function printWithScaling() {
-            // Hide visa number during printing (if it exists)
-            const visaNumberElement = document.querySelector('.visa-number');
-            let originalVisaNumberStyle = '';
-            if (visaNumberElement) {
-                originalVisaNumberStyle = visaNumberElement.style.cssText;
-                visaNumberElement.style.cssText = `
-                    display: none !important;
-                    visibility: hidden !important;
-                    opacity: 0 !important;
-                `;
-            }
-            
-            // Print
-            setTimeout(() => {
+        // Trigger browser print dialog immediately
+        window.addEventListener('DOMContentLoaded', function() {
+            setTimeout(function() {
                 window.print();
-                
-                // Restore original styles
-                setTimeout(() => {
-                    if (visaNumberElement) {
-                        visaNumberElement.style.cssText = originalVisaNumberStyle;
-                    }
-                    
-                    // Fallback redirect if window hasn't transitioned
-                    setTimeout(() => {
-                        const destination = (document.referrer && document.referrer.includes('print_visas')) ? document.referrer : 'print_visas';
-                        window.location.href = destination;
-                    }, 500);
-                }, 500);
             }, 100);
-        }
+        });
+
+        // Automatically return to print queue when print dialog finishes or is closed
+        window.addEventListener('afterprint', function() {
+            window.location.href = 'print_visas';
+        });
     </script>
 </body>
 </html>
 <?php
-// Close database connection
 if (isset($stmt)) {
     $stmt->close();
 }
