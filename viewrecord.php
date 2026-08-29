@@ -544,48 +544,195 @@ if(isset($_GET['id'])) {
             text-decoration: underline;
         }
         
-        /* Professional print layout stylesheet overrides */
+        .print-official-header,
+        .print-official-endorsement {
+            display: none;
+        }
+
+        /* Professional Government-Grade Print Layout Overrides */
         @media print {
+            @page {
+                size: A4 portrait;
+                margin: 10mm 12mm 12mm 12mm;
+            }
+
             .sidebar,
             .top-nav,
             .action-header,
-            .main-footer {
+            .main-footer,
+            .mobile-menu-btn {
                 display: none !important;
             }
-            
+
             .main-content {
                 margin-left: 0 !important;
                 padding: 0 !important;
+                width: 100% !important;
             }
-            
+
             .page-content {
                 padding: 0 !important;
+                max-width: 100% !important;
             }
-            
+
             body {
-                background: white !important;
+                background: #ffffff !important;
+                color: #0f172a !important;
+                font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif !important;
+                font-size: 9.5pt !important;
+                -webkit-print-color-adjust: exact !important;
+                print-color-adjust: exact !important;
             }
-            
+
+            .print-official-header {
+                display: block !important;
+                margin-bottom: 14px !important;
+                padding-bottom: 8px !important;
+                border-bottom: 2px solid #1a5c2e !important;
+            }
+
+            .print-header-content {
+                display: flex !important;
+                align-items: center !important;
+                justify-content: space-between !important;
+                gap: 15px !important;
+            }
+
             .visa-application-container {
                 box-shadow: none !important;
-                border: 1px solid #ddd !important;
-                border-radius: 0 !important;
-                padding: 15px !important;
+                border: 1px solid #94a3b8 !important;
+                border-radius: 4px !important;
+                padding: 14px 16px !important;
+                background: #ffffff !important;
+                margin: 0 !important;
             }
-            
+
             .form-header {
-                border-bottom: 2px solid #000 !important;
+                border-bottom: 1.5px solid #cbd5e1 !important;
+                padding-bottom: 8px !important;
+                margin-bottom: 12px !important;
             }
-            
+
+            .visa-application-title {
+                font-size: 1.05rem !important;
+                color: #1a5c2e !important;
+                font-weight: 700 !important;
+            }
+
             .section {
-                background: white !important;
-                border: 1px solid #ddd !important;
-                page-break-inside: avoid;
+                background: #ffffff !important;
+                border: 1px solid #cbd5e1 !important;
+                border-radius: 4px !important;
+                padding: 10px 12px !important;
+                margin-bottom: 12px !important;
+                page-break-inside: avoid !important;
             }
-            
+
+            .section-title {
+                font-size: 0.86rem !important;
+                font-weight: 700 !important;
+                color: #1a5c2e !important;
+                border-bottom: 1px solid #e2e8f0 !important;
+                padding-bottom: 4px !important;
+                margin-bottom: 8px !important;
+                text-transform: uppercase !important;
+            }
+
+            .form-row {
+                display: grid !important;
+                grid-template-columns: repeat(2, 1fr) !important;
+                gap: 8px 14px !important;
+                margin-bottom: 6px !important;
+            }
+
+            .form-group {
+                margin-bottom: 4px !important;
+            }
+
+            .form-group label {
+                font-size: 0.72rem !important;
+                font-weight: 700 !important;
+                color: #475569 !important;
+                text-transform: uppercase !important;
+                margin-bottom: 2px !important;
+                display: block !important;
+            }
+
             .detail-value-field {
-                background: white !important;
-                border: 1px solid #ddd !important;
+                background: #f8fafc !important;
+                border: 1px solid #cbd5e1 !important;
+                border-radius: 3px !important;
+                padding: 4px 8px !important;
+                font-size: 0.82rem !important;
+                font-weight: 600 !important;
+                color: #0f172a !important;
+                min-height: 28px !important;
+                line-height: 1.3 !important;
+            }
+
+            .status-pill {
+                border: 1px solid #16a34a !important;
+                background: #f0fdf4 !important;
+                color: #166534 !important;
+                font-size: 0.75rem !important;
+                font-weight: 700 !important;
+                padding: 3px 8px !important;
+            }
+
+            .print-official-endorsement {
+                display: block !important;
+                margin-top: 14px !important;
+                padding-top: 10px !important;
+                border-top: 1px dashed #94a3b8 !important;
+                page-break-inside: avoid !important;
+            }
+
+            .print-endorsement-grid {
+                display: flex !important;
+                justify-content: space-between !important;
+                align-items: flex-end !important;
+            }
+
+            .endorsement-col {
+                flex: 1 !important;
+            }
+
+            .endorsement-title {
+                font-size: 0.72rem !important;
+                font-weight: 700 !important;
+                color: #334155 !important;
+                text-transform: uppercase !important;
+            }
+
+            .endorsement-name {
+                font-size: 0.82rem !important;
+                font-weight: 700 !important;
+                color: #0f172a !important;
+                margin: 2px 0 15px 0 !important;
+            }
+
+            .endorsement-line {
+                width: 140px !important;
+                border-bottom: 1px solid #0f172a !important;
+                margin-bottom: 3px !important;
+            }
+
+            .endorsement-sub {
+                font-size: 0.68rem !important;
+                color: #64748b !important;
+            }
+
+            .endorsement-stamp-box {
+                display: inline-block !important;
+                width: 130px !important;
+                height: 50px !important;
+                border: 1px dashed #94a3b8 !important;
+                color: #94a3b8 !important;
+                font-size: 0.68rem !important;
+                line-height: 50px !important;
+                text-align: center !important;
+                font-weight: 700 !important;
+                border-radius: 4px !important;
             }
         }
     </style>
@@ -656,7 +803,7 @@ if(isset($_GET['id'])) {
             <?php 
             $is_from_globalsearch = (isset($_GET['ref']) && $_GET['ref'] === 'globalsearch');
             ?>
-            <div class="action-header" style="display: flex; justify-content: <?php echo $is_from_globalsearch ? 'space-between' : 'flex-end'; ?>; align-items: center; gap: 15px; margin-bottom: 20px; width: 100%;">
+            <div class="action-header" style="display: flex; justify-content: <?php echo $is_from_globalsearch ? 'space-between' : 'space-between'; ?>; align-items: center; gap: 15px; margin-bottom: 20px; width: 100%;">
                 <?php if ($is_from_globalsearch): ?>
                     <a href="globalsearch<?php echo isset($_GET['q']) ? '?q=' . urlencode($_GET['q']) : ''; ?>" class="btn btn-secondary d-inline-flex align-items-center gap-1" style="font-weight: 600; padding: 8px 16px; border-radius: 6px;">
                         <i class="fa fa-arrow-left"></i> Back to Global Search
@@ -665,19 +812,34 @@ if(isset($_GET['id'])) {
                         <i class="fa fa-lock me-1"></i> Read-Only View (Global Search)
                     </span>
                 <?php else: ?>
-                    <?php if ($_SESSION['role'] !== 'ViewOnly'): ?>
-                    <a href="card?id=<?php echo urlencode($visa_number); ?>" class="btn btn-action btn-gold text-dark">
-                        <i class="fa fa-id-card"></i>Print Vignette
+                    <a href="re-entry-visa" class="btn btn-outline-secondary d-inline-flex align-items-center gap-1" style="font-weight: 600; padding: 8px 16px; border-radius: 6px;">
+                        <i class="fa fa-arrow-left"></i> Back to Re-Entry Visas
                     </a>
-                    <?php endif; ?>
-                    <button class="btn btn-action btn-green" onclick="window.print()">
-                        <i class="fa fa-print"></i>Print Details
+                    <button class="btn btn-action btn-green" onclick="window.print()" style="font-weight: 600; padding: 8px 18px; border-radius: 6px; display: inline-flex; align-items: center; gap: 6px;">
+                        <i class="fa fa-print"></i> Print Details
                     </button>
                 <?php endif; ?>
             </div>
 
             <!-- Visa Application Card matching new-record.php layout structure -->
             <div class="visa-application-container">
+                <!-- Official Government Print Header (Visible during Print only) -->
+                <div class="print-official-header">
+                    <div class="print-header-content">
+                        <img src="assets/images/logo.png" alt="NIS Logo" class="print-logo" style="height: 60px; width: auto;">
+                        <div class="print-header-titles" style="flex: 1; margin: 0 15px;">
+                            <h3 style="font-size: 1.15rem; font-weight: 800; text-transform: uppercase; margin: 0; color: #1a5c2e; letter-spacing: 0.5px;">Nigeria Immigration Service</h3>
+                            <h4 style="font-size: 0.92rem; font-weight: 700; text-transform: uppercase; margin: 2px 0; color: #0f172a;">Re-Entry Visa Application Dossier Slip</h4>
+                            <div style="font-size: 0.78rem; color: #475569; font-weight: 500;">NIS Headquarters, Shehu Shagari Way, Airport Road, Sauka, Abuja</div>
+                        </div>
+                        <div class="print-header-meta" style="text-align: right; font-size: 0.75rem; color: #334155;">
+                            <div><strong>Print Date:</strong> <?php echo date('d/m/Y'); ?></div>
+                            <div><strong>Print Time:</strong> <?php echo date('h:i A'); ?></div>
+                            <div><strong>Ref No:</strong> <span style="font-family: monospace; font-weight: 700; color: #1a5c2e;"><?php echo htmlspecialchars($visa_number); ?></span></div>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- Header block matching new-record.php -->
                 <div class="form-header flex-column flex-md-row gap-3">
                     <div>
@@ -888,7 +1050,30 @@ if(isset($_GET['id'])) {
                         </div>
                     </div>
                 </div>
-        </div>
+
+                <!-- Official Government Print Endorsement & Verification Footer (Visible during Print only) -->
+                <div class="print-official-endorsement">
+                    <div class="print-endorsement-grid">
+                        <div class="endorsement-col">
+                            <div class="endorsement-title">Processed / Verified By:</div>
+                            <div class="endorsement-name"><?php echo htmlspecialchars(!empty($foundk['created_by']) ? $foundk['created_by'] : $_SESSION['username']); ?></div>
+                            <div class="endorsement-line"></div>
+                            <div class="endorsement-sub">Authorised Processing Officer Signature & Date</div>
+                        </div>
+                        <div class="endorsement-col" style="text-align: center;">
+                            <div class="endorsement-stamp-box">
+                                OFFICIAL NIS STAMP
+                            </div>
+                        </div>
+                        <div class="endorsement-col" style="text-align: right;">
+                            <div class="endorsement-title">System Verification Audit:</div>
+                            <div class="endorsement-sub">Generated from NISREV Portal</div>
+                            <div class="endorsement-sub">Security Reference: <span style="font-family: monospace; font-weight: 700;"><?php echo substr(hash('sha256', $visa_number . $passport_number . $surname), 0, 16); ?></span></div>
+                            <div class="endorsement-sub">Application Status: <strong><?php echo strtoupper($status); ?></strong></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
         
         <!-- Footer Section -->
         <?php 

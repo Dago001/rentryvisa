@@ -798,14 +798,20 @@ $numb = $retrieve ? mysqli_num_rows($retrieve) : 0;
             <!-- Welcome Banner -->
             <div class="welcome-banner">
                 <div class="row align-items-center">
-                    <div class="col-md-8">
-                        <h2>Welcome, <?php echo htmlspecialchars($fullName); ?></h2>
-                        <p>View, manage, and search processed Re-Entry Visa applications.</p>
+                    <div class="col-lg-7 col-md-7">
+                        <div class="welcome-text">
+                            <h2 style="font-size: 1.45rem; font-weight: 700; letter-spacing: -0.3px; margin-bottom: 6px;">Welcome, <?php echo htmlspecialchars(strtoupper($fullName)); ?></h2>
+                            <p style="font-size: 0.88rem; color: #cbd5e1; font-weight: 500; margin-bottom: 0;">
+                                <i class="fa fa-shield" style="color: #22c55e; margin-right: 6px;"></i>View, manage, and search processed Re-Entry Visa applications
+                            </p>
+                        </div>
                     </div>
-                    <div class="col-md-4">
+                    <div class="col-lg-5 col-md-5">
                         <div class="datetime-display">
-                            <div id="currentDateTime">Loading date...</div>
-                            <div class="location"><i class="fa fa-map-marker text-danger me-1"></i> NIS Headquarters, Abuja</div>
+                            <div id="currentDateTime" style="font-size: 0.98rem; font-weight: 700; letter-spacing: 0.2px; color: #f8fafc; margin-bottom: 4px;">Loading date...</div>
+                            <div class="location" style="font-size: 0.84rem; color: #94a3b8; font-weight: 600; display: inline-flex; align-items: center; gap: 5px;">
+                                <i class="fa fa-map-marker" style="color: #ef4444;"></i> NIS Headquarters, Abuja
+                            </div>
                         </div>
                     </div>
                 </div>
