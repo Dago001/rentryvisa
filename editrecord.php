@@ -154,11 +154,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_record'])) {
         if (empty($error_message)) {
             // Check if new visa number already exists (if changed)
             if (!empty($new_visa_number) && $new_visa_number != $current_visa_number) {
-                $check_sql = "SELECT visa_number FROM visa_applications WHERE visa_number = '$new_visa_number'";
+                $clean_new = preg_replace('/\s+/', '', $new_visa_number);
+                $clean_curr = preg_replace('/\s+/', '', $current_visa_number);
+                $check_sql = "SELECT visa_number FROM visa_applications WHERE (REPLACE(visa_number, ' ', '') = '$clean_new' OR visa_number = '$new_visa_number') AND REPLACE(visa_number, ' ', '') != '$clean_curr'";
                 $check_result = mysqli_query($conn, $check_sql);
                 
                 if ($check_result && mysqli_num_rows($check_result) > 0) {
-                    $error_message = "Visa Number '$new_visa_number' already exists. Please use a different number.";
+                    $error_message = "Re-Entry Visa Number '$new_visa_number' already exists in the system. Re-Entry Visa Numbers cannot be repeated.";
                 } else {
                     // Build dynamic update query based on available columns
                     $updateFields = [

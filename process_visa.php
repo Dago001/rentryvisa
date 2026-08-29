@@ -203,16 +203,17 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     
     // Check if visa number already exists (prevent duplicate / repeated visa numbers)
     $clean_visa = preg_replace('/\s+/', '', $visa_number);
-    $check_sql = "SELECT id FROM visa_applications WHERE REPLACE(visa_number, ' ', '') = ?";
+    $check_sql = "SELECT id FROM visa_applications WHERE REPLACE(visa_number, ' ', '') = ? OR visa_number = ? LIMIT 1";
     $check_stmt = mysqli_prepare($conn, $check_sql);
-    mysqli_stmt_bind_param($check_stmt, "s", $clean_visa);
+    mysqli_stmt_bind_param($check_stmt, "ss", $clean_visa, $visa_number);
     mysqli_stmt_execute($check_stmt);
     mysqli_stmt_store_result($check_stmt);
     
     if (mysqli_stmt_num_rows($check_stmt) > 0) {
         $_SESSION['message'] = [
             'type' => 'error',
-            'text' => "Re-Entry Visa Number '{$visa_number}' already exists in the system! Re-Entry Visa Numbers cannot be repeated."
+            'title' => 'Duplicate Visa Number Detected',
+            'text' => "Re-Entry Visa Number '<strong>" . htmlspecialchars($visa_number) . "</strong>' already exists in the system. Re-Entry Visa Numbers must be unique and cannot be repeated."
         ];
         mysqli_stmt_close($check_stmt);
         header("Location: new-record");

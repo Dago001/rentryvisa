@@ -926,49 +926,41 @@ $hasData = $numb > 0 || !empty($recent_applications);
                     <i class="fa fa-folder-open-o user-stat-icon" style="color: #1a5c2e;"></i>
                     <div class="user-stat-number" style="color: #1a5c2e;"><?php echo number_format($numb); ?></div>
                     <div class="user-stat-label">Total Applications</div>
-                    <small class="text-muted">Your total visa applications</small>
                 </div>
                 <div class="user-stat-card">
                     <i class="fa fa-file-o user-stat-icon" style="color: #16a34a;"></i>
                     <div class="user-stat-number" style="color: #16a34a;"><?php echo number_format($total_fresh); ?></div>
                     <div class="user-stat-label">Total Fresh</div>
-                    <small class="text-muted">Fresh applications created</small>
                 </div>
                 <div class="user-stat-card">
                     <i class="fa fa-refresh user-stat-icon" style="color: #d97706;"></i>
                     <div class="user-stat-number" style="color: #d97706;"><?php echo number_format($total_renewal); ?></div>
                     <div class="user-stat-label">Total Renewal</div>
-                    <small class="text-muted">Renewal applications created</small>
                 </div>
                 <div class="user-stat-card">
                     <i class="fa fa-calendar-check-o user-stat-icon" style="color: #2563eb;"></i>
                     <div class="user-stat-number" style="color: #2563eb;"><?php echo number_format($today_visas); ?></div>
                     <div class="user-stat-label">Today</div>
-                    <small class="text-muted">Applications created today</small>
                 </div>
                 <div class="user-stat-card">
                     <i class="fa fa-line-chart user-stat-icon" style="color: #0284c7;"></i>
                     <div class="user-stat-number" style="color: #0284c7;"><?php echo number_format($recent_visas); ?></div>
                     <div class="user-stat-label">Last 7 Days</div>
-                    <small class="text-muted">Recent weekly activity</small>
                 </div>
                 <div class="user-stat-card">
                     <i class="fa fa-calendar user-stat-icon" style="color: #7c3aed;"></i>
                     <div class="user-stat-number" style="color: #7c3aed;"><?php echo number_format($monthly_visas); ?></div>
                     <div class="user-stat-label">This Month</div>
-                    <small class="text-muted">Monthly performance</small>
                 </div>
                 <div class="user-stat-card">
                     <i class="fa fa-check-circle-o user-stat-icon" style="color: #059669;"></i>
                     <div class="user-stat-number" style="color: #059669;"><?php echo number_format($total_printed); ?></div>
                     <div class="user-stat-label">Total Printed Visas</div>
-                    <small class="text-muted">Completed vignette prints</small>
                 </div>
                 <div class="user-stat-card">
                     <i class="fa fa-print user-stat-icon" style="color: #ea580c;"></i>
                     <div class="user-stat-number" style="color: #ea580c;"><?php echo number_format($total_pending_print); ?></div>
                     <div class="user-stat-label">Visas Pending Print</div>
-                    <small class="text-muted">Awaiting vignette print</small>
                 </div>
             </div>
 

@@ -9,27 +9,39 @@ if (!isset($_SESSION['username'])) {
     exit();
 }
 
-$visa_no = isset($_REQUEST['visa_number']) ? trim($_REQUEST['visa_number']) : '';
+$raw_visa = isset($_REQUEST['visa_number']) ? trim($_REQUEST['visa_number']) : '';
+$exclude_id = isset($_REQUEST['exclude_id']) ? intval($_REQUEST['exclude_id']) : 0;
 
-if (empty($visa_no)) {
+if (empty($raw_visa)) {
     echo json_encode(['exists' => false]);
     exit();
 }
 
-// Strip spaces and special characters for safety/consistency
-$visa_no = preg_replace('/[^a-zA-Z0-9]/', '', $visa_no);
-$visa_no = mysqli_real_escape_string($conn, $visa_no);
+$clean_visa = preg_replace('/\s+/', '', $raw_visa);
 
-// Query to find if the visa number already exists in the database
-$query = "SELECT id FROM visa_applications 
-          WHERE REPLACE(visa_number, ' ', '') = '$visa_no' 
-          LIMIT 1";
+if ($exclude_id > 0) {
+    $stmt = mysqli_prepare($conn, "SELECT id, visa_number FROM visa_applications WHERE (REPLACE(visa_number, ' ', '') = ? OR visa_number = ?) AND id != ? LIMIT 1");
+    mysqli_stmt_bind_param($stmt, "ssi", $clean_visa, $raw_visa, $exclude_id);
+} else {
+    $stmt = mysqli_prepare($conn, "SELECT id, visa_number FROM visa_applications WHERE REPLACE(visa_number, ' ', '') = ? OR visa_number = ? LIMIT 1");
+    mysqli_stmt_bind_param($stmt, "ss", $clean_visa, $raw_visa);
+}
 
-$result = mysqli_query($conn, $query);
+mysqli_stmt_execute($stmt);
+$result = mysqli_stmt_get_result($stmt);
 
 if ($result && mysqli_num_rows($result) > 0) {
-    echo json_encode(['exists' => true]);
+    $row = mysqli_fetch_assoc($result);
+    echo json_encode([
+        'exists' => true,
+        'visa_number' => $row['visa_number'],
+        'message' => 'This Re-Entry Visa Number already exists in the system!'
+    ]);
 } else {
-    echo json_encode(['exists' => false]);
+    echo json_encode([
+        'exists' => false,
+        'message' => 'Re-Entry Visa Number is unique and available.'
+    ]);
 }
+mysqli_stmt_close($stmt);
 ?>
