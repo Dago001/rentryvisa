@@ -16,13 +16,11 @@ if (empty($passport_no)) {
     exit();
 }
 
-// Strip spaces and special characters for safety/consistency
-$passport_no = preg_replace('/[^a-zA-Z0-9]/', '', $passport_no);
 $passport_no = mysqli_real_escape_string($conn, $passport_no);
 
 // Query to find if the passport number already exists in the database
 $query = "SELECT * FROM visa_applications 
-          WHERE REPLACE(passport_number, ' ', '') = '$passport_no' 
+          WHERE passport_number = '$passport_no' 
           ORDER BY application_date DESC LIMIT 1";
 
 $result = mysqli_query($conn, $query);

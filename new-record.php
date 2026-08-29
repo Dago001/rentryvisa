@@ -884,7 +884,7 @@ $current_page = basename($_SERVER['PHP_SELF']);
                                 </div>
                                 <div class="form-group">
                                     <label for="passport_number">Passport Number</label>
-                                    <input type="text" id="passport-number" name="passport_number" required
+                                    <input type="text" id="passport-number" name="passport_number" class="no-uppercase" data-no-uppercase="true" required
                                            oninput="validatePassportNo(this)" placeholder="enter passport number">
                                     <div id="passport-status" style="margin-top: 5px; font-size: 0.85rem; font-weight: 600;"></div>
                                 </div>
@@ -1168,8 +1168,14 @@ $current_page = basename($_SERVER['PHP_SELF']);
                             <div class="form-row">
                                 <div class="form-group">
                                     <label for="visa_number">Re-Entry Visa Number</label>
-                                    <input type="text" id="visa-number" name="visa_number" required 
-                                           oninput="validateAlphaNumeric(this)" placeholder="e.g., R 1267693">
+                                    <div style="display: flex; gap: 8px; align-items: center;">
+                                        <input type="text" id="visa-number" name="visa_number" required 
+                                               oninput="handleVisaInput(this)" placeholder="e.g., R 1267693" style="flex: 1;">
+                                        <button type="button" id="btn-unlock-visa" class="btn" style="display: none; height: 38px; padding: 0 12px; font-size: 0.8rem; font-weight: 700; background: #e2e8f0; color: #334155; border: 1px solid #cbd5e1; border-radius: 6px; align-items: center; gap: 4px; cursor: pointer; white-space: nowrap;" title="Click to unlock and edit visa number">
+                                            <i class="fa fa-unlock"></i> Edit
+                                        </button>
+                                    </div>
+                                    <div id="visa-status" style="margin-top: 5px; font-size: 0.82rem; font-weight: 700;"></div>
                                 </div>
                                 <div class="form-group">
                                     <label for="embassy">Embassy/High Commission</label>
@@ -1345,14 +1351,8 @@ $current_page = basename($_SERVER['PHP_SELF']);
             }
         }
 
-        // Function to validate and capitalize passport number fields (no spaces)
+        // Function to validate passport number fields (accepts all characters, upper & lower case, special characters)
         function validatePassportNo(input) {
-            // Remove any non-alphanumeric characters (no spaces)
-            input.value = input.value.replace(/[^a-zA-Z0-9]/g, '');
-            
-            // Convert to uppercase
-            input.value = input.value.toUpperCase();
-            
             // Remove invalid class if value exists
             if (input.value.trim()) {
                 input.classList.remove('is-invalid');
@@ -1489,6 +1489,17 @@ $current_page = basename($_SERVER['PHP_SELF']);
                     input.classList.remove('is-invalid');
                 }
             });
+
+            if (!isVisaNumberValid) {
+                alert("The Re-Entry Visa Number entered is already registered in the system! Visa Numbers cannot be repeated.");
+                const vInput = document.getElementById('visa-number');
+                if (vInput) {
+                    goToStep(2);
+                    vInput.readOnly = false;
+                    vInput.focus();
+                }
+                return false;
+            }
 
             if (!isValid) {
                 if (firstInvalidInStep1) {
@@ -1637,8 +1648,7 @@ $current_page = basename($_SERVER['PHP_SELF']);
         }
 
         passportInput.addEventListener('change', function() {
-            const passport = this.value.trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
-            this.value = passport;
+            const passport = this.value.trim();
             if (!passport) {
                 passportStatus.innerHTML = '';
                 passportExists = false;
@@ -1706,6 +1716,110 @@ $current_page = basename($_SERVER['PHP_SELF']);
             makeFieldsStatic(false);
             toggleSubmitButton();
         });
+
+        // Re-Entry Visa Number Validation & Protection (Cannot be repeated or deleted once typed)
+        let visaDebounceTimer;
+        let isVisaNumberValid = true;
+
+        function handleVisaInput(input) {
+            const statusEl = document.getElementById('visa-status');
+            clearTimeout(visaDebounceTimer);
+            
+            const val = input.value.trim();
+            if (!val) {
+                if (statusEl) statusEl.innerHTML = '';
+                input.style.borderColor = '';
+                input.style.backgroundColor = '';
+                isVisaNumberValid = false;
+                return;
+            }
+            
+            if (statusEl) {
+                statusEl.innerHTML = '<span style="color: #64748b;"><i class="fa fa-spinner fa-spin"></i> Validating Visa Number...</span>';
+            }
+            
+            visaDebounceTimer = setTimeout(() => {
+                checkVisaUniqueness(val, false);
+            }, 400);
+        }
+
+        function checkVisaUniqueness(visaNo, shouldLock = true) {
+            const visaInput = document.getElementById('visa-number');
+            const statusEl = document.getElementById('visa-status');
+            const unlockBtn = document.getElementById('btn-unlock-visa');
+            
+            if (!visaNo) return;
+            
+            fetch('check_visa', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: 'visa_number=' + encodeURIComponent(visaNo)
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.exists) {
+                    isVisaNumberValid = false;
+                    if (statusEl) {
+                        statusEl.innerHTML = '<span style="color: #dc2626;"><i class="fa fa-times-circle"></i> This Visa Number already exists in the system! Visa Numbers cannot be repeated.</span>';
+                    }
+                    if (visaInput) {
+                        visaInput.style.borderColor = '#dc2626';
+                        visaInput.style.backgroundColor = '#fef2f2';
+                        visaInput.readOnly = false;
+                    }
+                    if (unlockBtn) unlockBtn.style.display = 'none';
+                } else {
+                    isVisaNumberValid = true;
+                    if (statusEl) {
+                        statusEl.innerHTML = '<span style="color: #15803d;"><i class="fa fa-check-circle"></i> Visa Number is valid & unique.</span>';
+                    }
+                    if (visaInput) {
+                        visaInput.style.borderColor = '#16a34a';
+                        visaInput.style.backgroundColor = '#f0fdf4';
+                        if (shouldLock) {
+                            visaInput.readOnly = true;
+                            if (unlockBtn) unlockBtn.style.display = 'inline-flex';
+                        }
+                    }
+                }
+            })
+            .catch(err => {
+                console.error('Error validating visa:', err);
+            });
+        }
+
+        const visaInputField = document.getElementById('visa-number');
+        const unlockBtnField = document.getElementById('btn-unlock-visa');
+        
+        if (visaInputField) {
+            visaInputField.addEventListener('blur', function() {
+                if (this.value.trim()) {
+                    checkVisaUniqueness(this.value.trim(), true);
+                }
+            });
+            
+            // Prevent accidental deletion (Backspace / Delete) if field is locked
+            visaInputField.addEventListener('keydown', function(e) {
+                if (this.readOnly && (e.key === 'Backspace' || e.key === 'Delete')) {
+                    e.preventDefault();
+                }
+            });
+        }
+        
+        if (unlockBtnField) {
+            unlockBtnField.addEventListener('click', function() {
+                if (visaInputField) {
+                    visaInputField.readOnly = false;
+                    visaInputField.style.backgroundColor = '#ffffff';
+                    visaInputField.focus();
+                    unlockBtnField.style.display = 'none';
+                    const statusEl = document.getElementById('visa-status');
+                    if (statusEl) {
+                        statusEl.innerHTML = '<span style="color: #d97706;"><i class="fa fa-pencil"></i> Editing Visa Number...</span>';
+                    }
+                }
+            });
+        }
 
         // Authority number validation
         const authorityInputGlobal = document.getElementById('authority');
@@ -1802,6 +1916,7 @@ $current_page = basename($_SERVER['PHP_SELF']);
                 .then(data => {
                     if (data.exists) {
                         alert("Visa number already exists in the system! Please edit the Visa Number.");
+                        visaInput.readOnly = false;
                         visaInput.focus();
                         visaInput.style.borderColor = '#d9534f';
                         visaInput.style.backgroundColor = '#fdf2f2';

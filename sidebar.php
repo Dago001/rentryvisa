@@ -221,6 +221,57 @@ $current_page = basename($_SERVER['PHP_SELF']);
         font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace !important;
     }
 
+    /* ==========================================================================
+       Master Uniform Stat Card Styling (System-Wide: index, user_dashboard, etc.)
+       ========================================================================== */
+    .stat-card, .user-stat-card {
+        background: #ffffff !important;
+        padding: 18px 14px !important;
+        border-radius: 10px !important;
+        box-shadow: 0 3px 10px rgba(0, 0, 0, 0.06) !important;
+        text-align: center !important;
+        border: 1px solid #e1e5e9 !important;
+        transition: transform 0.25s ease, box-shadow 0.25s ease !important;
+        display: flex !important;
+        flex-direction: column !important;
+        align-items: center !important;
+        justify-content: center !important;
+        min-height: 120px !important;
+    }
+
+    .stat-card:hover, .user-stat-card:hover {
+        transform: translateY(-2px) !important;
+        box-shadow: 0 8px 20px rgba(0, 0, 0, 0.1) !important;
+        border-color: #cbd5e1 !important;
+    }
+
+    .stat-icon, .stat-card-icon, .user-stat-icon {
+        font-size: 1.75rem !important;
+        margin-bottom: 8px !important;
+        line-height: 1 !important;
+        display: inline-block !important;
+    }
+
+    .stat-number, .user-stat-number {
+        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif !important;
+        font-size: 1.75rem !important;
+        font-weight: 800 !important;
+        margin: 4px 0 !important;
+        line-height: 1 !important;
+        letter-spacing: -0.5px !important;
+    }
+
+    .stat-label, .user-stat-label {
+        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif !important;
+        color: #64748b !important;
+        font-weight: 700 !important;
+        text-transform: uppercase !important;
+        font-size: 0.76rem !important;
+        letter-spacing: 0.5px !important;
+        margin-top: 4px !important;
+        line-height: 1.2 !important;
+    }
+
     /* Force standard text inputs to uppercase, while strictly preserving passwords, emails, and special fields */
     input[type="text"]:not(.no-uppercase):not([data-no-uppercase="true"]):not([data-password-field="true"]):not([name*="password"]):not([id*="password"]):not([name*="email"]):not([id*="email"]):not([name*="search"]):not([id*="search"]), 
     textarea:not(.no-uppercase):not([data-no-uppercase="true"]), 

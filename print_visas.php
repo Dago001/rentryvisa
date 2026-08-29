@@ -298,45 +298,50 @@ $retrieve = mysqli_query($conn, $sqluse);
         
         .stat-card {
             background: #ffffff;
-            padding: 18px 20px;
+            padding: 18px 14px;
             border-radius: 10px;
-            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+            box-shadow: 0 3px 10px rgba(0, 0, 0, 0.06);
             text-align: center;
-            border: 1px solid #e2e8f0;
-            transition: transform 0.2s ease, box-shadow 0.2s ease;
+            border: 1px solid #e1e5e9;
+            transition: transform 0.25s ease, box-shadow 0.25s ease;
             display: flex;
             flex-direction: column;
             align-items: center;
             justify-content: center;
+            min-height: 120px;
         }
         
         .stat-card:hover {
             transform: translateY(-2px);
-            box-shadow: 0 6px 16px rgba(0, 0, 0, 0.08);
+            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.1);
             border-color: #cbd5e1;
         }
         
         .stat-card-icon {
             font-size: 1.75rem;
-            margin-bottom: 6px;
+            margin-bottom: 8px;
             line-height: 1;
+            display: inline-block;
         }
         
         .stat-number {
-            font-size: 1.8rem;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            font-size: 1.75rem;
             font-weight: 800;
             margin: 4px 0;
             line-height: 1;
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             letter-spacing: -0.5px;
         }
         
         .stat-label {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             color: #64748b;
-            font-weight: 600;
+            font-weight: 700;
             text-transform: uppercase;
-            font-size: 0.74rem;
+            font-size: 0.76rem;
             letter-spacing: 0.5px;
+            margin-top: 4px;
+            line-height: 1.2;
         }
 
         .stat-card.card-total .stat-number { color: #1a5c2e; }

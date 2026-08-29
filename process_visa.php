@@ -66,9 +66,9 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
         exit();
     }
 
-    // Sanitize and validate input data (force uppercase on all text inputs)
+    // Sanitize and validate input data (force uppercase on standard fields while preserving passport number format)
     $visa_number = strtoupper(mysqli_real_escape_string($conn, trim($_POST['visa_number'])));
-    $passport_number = strtoupper(mysqli_real_escape_string($conn, trim($_POST['passport_number'])));
+    $passport_number = mysqli_real_escape_string($conn, trim($_POST['passport_number']));
     $surname = strtoupper(mysqli_real_escape_string($conn, trim($_POST['surname'])));
     $given_name = strtoupper(mysqli_real_escape_string($conn, trim($_POST['given_name'])));
     $nationality = strtoupper(mysqli_real_escape_string($conn, trim($_POST['nationality'])));
@@ -105,12 +105,11 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
         exit();
     }
 
-    // Validate Passport Number (Numbers and Alphabets only, no spaces or special characters)
-    $passport_clean = preg_replace('/[^A-Z0-9]/', '', $passport_number);
-    if ($passport_clean !== $passport_number || empty($passport_clean)) {
+    // Validate Passport Number is not empty
+    if (empty($passport_number)) {
         $_SESSION['message'] = [
             'type' => 'error',
-            'text' => 'Passport Number must contain only alphabetic characters and numbers (no spaces or special characters).'
+            'text' => 'Passport Number is required.'
         ];
         header("Location: new-record");
         exit();
@@ -202,17 +201,18 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
         }
     }
     
-    // Check if visa number already exists
-    $check_sql = "SELECT id FROM visa_applications WHERE visa_number = ?";
+    // Check if visa number already exists (prevent duplicate / repeated visa numbers)
+    $clean_visa = preg_replace('/\s+/', '', $visa_number);
+    $check_sql = "SELECT id FROM visa_applications WHERE REPLACE(visa_number, ' ', '') = ?";
     $check_stmt = mysqli_prepare($conn, $check_sql);
-    mysqli_stmt_bind_param($check_stmt, "s", $visa_number);
+    mysqli_stmt_bind_param($check_stmt, "s", $clean_visa);
     mysqli_stmt_execute($check_stmt);
     mysqli_stmt_store_result($check_stmt);
     
     if (mysqli_stmt_num_rows($check_stmt) > 0) {
         $_SESSION['message'] = [
             'type' => 'error',
-            'text' => 'Visa number already exists in the system!'
+            'text' => "Re-Entry Visa Number '{$visa_number}' already exists in the system! Re-Entry Visa Numbers cannot be repeated."
         ];
         mysqli_stmt_close($check_stmt);
         header("Location: new-record");

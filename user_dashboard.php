@@ -362,41 +362,53 @@ $hasData = $numb > 0 || !empty($recent_applications);
         
         .user-stat-card {
             background: white;
-            padding: 18px;
+            padding: 18px 14px;
             border-radius: 10px;
-            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+            box-shadow: 0 3px 10px rgba(0, 0, 0, 0.06);
             text-align: center;
             border: 1px solid #e1e5e9;
-            transition: all 0.3s ease;
+            transition: transform 0.25s ease, box-shadow 0.25s ease;
             position: relative;
             overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 120px;
         }
         
         .user-stat-card:hover {
-            transform: translateY(-3px);
-            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.08);
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.1);
+            border-color: #cbd5e1;
         }
         
         .user-stat-icon {
-            font-size: 1.8rem;
-            margin-bottom: 10px;
-            opacity: 0.9;
+            font-size: 1.75rem;
+            margin-bottom: 8px;
+            line-height: 1;
+            display: inline-block;
         }
         
         .user-stat-number {
-            font-size: 1.7rem;
-            font-weight: 700;
-            margin: 6px 0;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            font-size: 1.75rem;
+            font-weight: 800;
+            margin: 4px 0;
             color: var(--dark);
             line-height: 1;
+            letter-spacing: -0.5px;
         }
         
         .user-stat-label {
-            color: var(--gray);
-            font-weight: 600;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            color: #64748b;
+            font-weight: 700;
             text-transform: uppercase;
-            font-size: 0.78rem;
+            font-size: 0.76rem;
             letter-spacing: 0.5px;
+            margin-top: 4px;
+            line-height: 1.2;
         }
         
         /* Quick Actions - SIMPLIFIED */
@@ -887,16 +899,20 @@ $hasData = $numb > 0 || !empty($recent_applications);
             <!-- Welcome Banner - SIMPLIFIED -->
             <div class="welcome-banner">
                 <div class="row align-items-center">
-                    <div class="col-lg-8 col-md-7">
+                    <div class="col-lg-7 col-md-7">
                         <div class="welcome-text">
-                            <h2>Welcome, <?php echo htmlspecialchars(explode(' ', $fullName)[0]); ?>! 👋</h2>
-                            <p>Track your visa applications and performance</p>
+                            <h2 style="font-size: 1.45rem; font-weight: 700; letter-spacing: -0.3px; margin-bottom: 6px;">Welcome, <?php echo htmlspecialchars(strtoupper($fullName)); ?></h2>
+                            <p style="font-size: 0.88rem; color: #cbd5e1; font-weight: 500; margin-bottom: 0;">
+                                <i class="fa fa-shield" style="color: #22c55e; margin-right: 6px;"></i>NIS Re-Entry Visa Management Portal
+                            </p>
                         </div>
                     </div>
-                    <div class="col-lg-4 col-md-5">
+                    <div class="col-lg-5 col-md-5">
                         <div class="datetime-display">
-                            <div id="currentDateTime"></div>
-                            <div class="location"><?php echo date('l, F j, Y'); ?></div>
+                            <div id="currentDateTime" style="font-size: 0.98rem; font-weight: 700; letter-spacing: 0.2px; color: #f8fafc; margin-bottom: 4px;"></div>
+                            <div class="location" style="font-size: 0.84rem; color: #94a3b8; font-weight: 600; display: inline-flex; align-items: center; gap: 5px;">
+                                <i class="fa fa-map-marker" style="color: #ef4444;"></i> NIS Headquarters, Abuja
+                            </div>
                         </div>
                     </div>
                 </div>
