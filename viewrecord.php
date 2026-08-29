@@ -545,7 +545,6 @@ if(isset($_GET['id'])) {
         }
         
         .print-official-header,
-        .print-official-endorsement,
         .print-confidential-watermark {
             display: none;
         }
@@ -554,14 +553,20 @@ if(isset($_GET['id'])) {
         @media print {
             @page {
                 size: A4 portrait;
-                margin: 10mm 14mm 12mm 14mm;
+                margin: 12mm 15mm 12mm 15mm;
             }
 
             .sidebar,
             .top-nav,
             .action-header,
+            .form-header,
+            .mobile-menu-btn,
+            footer,
+            .footer,
             .main-footer,
-            .mobile-menu-btn {
+            .footer-content,
+            #footer,
+            [class*="footer"] {
                 display: none !important;
             }
 
@@ -574,13 +579,14 @@ if(isset($_GET['id'])) {
             .page-content {
                 padding: 0 !important;
                 max-width: 100% !important;
+                width: 100% !important;
             }
 
             body {
                 background: #ffffff !important;
-                color: #0f172a !important;
+                color: #000000 !important;
                 font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif !important;
-                font-size: 9.5pt !important;
+                font-size: 10.5pt !important;
                 -webkit-print-color-adjust: exact !important;
                 print-color-adjust: exact !important;
             }
@@ -601,23 +607,25 @@ if(isset($_GET['id'])) {
 
             .print-confidential-text {
                 font-family: 'Segoe UI', Arial, sans-serif !important;
-                font-size: 5.2rem !important;
+                font-size: 5.5rem !important;
                 font-weight: 900 !important;
                 color: rgba(220, 38, 38, 0.07) !important;
                 text-transform: uppercase !important;
-                letter-spacing: 16px !important;
+                letter-spacing: 18px !important;
                 transform: rotate(-30deg) !important;
                 border: 5px solid rgba(220, 38, 38, 0.07) !important;
-                padding: 10px 40px !important;
-                border-radius: 12px !important;
+                padding: 12px 48px !important;
+                border-radius: 14px !important;
                 user-select: none !important;
                 white-space: nowrap !important;
             }
 
             .print-official-header {
                 display: block !important;
-                margin-bottom: 12px !important;
-                padding-bottom: 8px !important;
+                width: 100% !important;
+                box-sizing: border-box !important;
+                margin-bottom: 16px !important;
+                padding-bottom: 10px !important;
                 border-bottom: 2px solid #1a5c2e !important;
             }
 
@@ -625,6 +633,8 @@ if(isset($_GET['id'])) {
                 display: flex !important;
                 align-items: center !important;
                 justify-content: space-between !important;
+                width: 100% !important;
+                box-sizing: border-box !important;
                 gap: 15px !important;
             }
 
@@ -635,63 +645,57 @@ if(isset($_GET['id'])) {
                 padding: 0 !important;
                 background: transparent !important;
                 margin: 0 !important;
-            }
-
-            .form-header {
-                border-bottom: 1.5px solid #cbd5e1 !important;
-                padding-bottom: 6px !important;
-                margin-bottom: 10px !important;
-            }
-
-            .visa-application-title {
-                font-size: 1.05rem !important;
-                color: #1a5c2e !important;
-                font-weight: 700 !important;
+                width: 100% !important;
+                box-sizing: border-box !important;
             }
 
             /* Clean document sections without box containers */
             .section {
                 background: transparent !important;
                 border: none !important;
-                border-top: 1.5px solid #1a5c2e !important;
                 border-radius: 0 !important;
-                padding: 8px 0 4px 0 !important;
-                margin-bottom: 12px !important;
+                padding: 4px 0 2px 0 !important;
+                margin-bottom: 14px !important;
                 page-break-inside: avoid !important;
+                width: 100% !important;
+                box-sizing: border-box !important;
             }
 
             .section-title {
-                font-size: 0.86rem !important;
+                font-size: 0.95rem !important;
                 font-weight: 800 !important;
                 color: #1a5c2e !important;
-                border-bottom: none !important;
-                padding-bottom: 0 !important;
-                margin-bottom: 6px !important;
+                border-bottom: 1.5px solid #1a5c2e !important;
+                padding-bottom: 4px !important;
+                margin-bottom: 8px !important;
                 text-transform: uppercase !important;
-                letter-spacing: 0.4px !important;
+                letter-spacing: 0.5px !important;
             }
 
             .form-row {
                 display: grid !important;
-                grid-template-columns: repeat(2, 1fr) !important;
-                gap: 6px 24px !important;
-                margin-bottom: 4px !important;
+                grid-template-columns: 1fr 1fr !important;
+                gap: 8px 30px !important;
+                margin-bottom: 5px !important;
+                width: 100% !important;
+                box-sizing: border-box !important;
             }
 
             .form-group {
-                margin-bottom: 4px !important;
+                margin-bottom: 3px !important;
                 border-bottom: 1px dotted #cbd5e1 !important;
-                padding-bottom: 2px !important;
+                padding-bottom: 3px !important;
+                box-sizing: border-box !important;
             }
 
             .form-group label {
-                font-size: 0.68rem !important;
+                font-size: 0.72rem !important;
                 font-weight: 700 !important;
-                color: #64748b !important;
+                color: #475569 !important;
                 text-transform: uppercase !important;
-                margin-bottom: 1px !important;
+                margin-bottom: 2px !important;
                 display: block !important;
-                letter-spacing: 0.4px !important;
+                letter-spacing: 0.5px !important;
             }
 
             /* Clean text values without text boxes/borders */
@@ -700,77 +704,12 @@ if(isset($_GET['id'])) {
                 border: none !important;
                 border-radius: 0 !important;
                 padding: 0 !important;
-                font-size: 0.88rem !important;
+                font-size: 0.95rem !important;
                 font-weight: 700 !important;
-                color: #0f172a !important;
+                color: #000000 !important;
                 min-height: auto !important;
                 line-height: 1.3 !important;
                 box-shadow: none !important;
-            }
-
-            .status-pill {
-                border: 1px solid #16a34a !important;
-                background: #f0fdf4 !important;
-                color: #166534 !important;
-                font-size: 0.75rem !important;
-                font-weight: 700 !important;
-                padding: 2px 8px !important;
-            }
-
-            .print-official-endorsement {
-                display: block !important;
-                margin-top: 14px !important;
-                padding-top: 10px !important;
-                border-top: 1px dashed #94a3b8 !important;
-                page-break-inside: avoid !important;
-            }
-
-            .print-endorsement-grid {
-                display: flex !important;
-                justify-content: space-between !important;
-                align-items: flex-end !important;
-            }
-
-            .endorsement-col {
-                flex: 1 !important;
-            }
-
-            .endorsement-title {
-                font-size: 0.72rem !important;
-                font-weight: 700 !important;
-                color: #334155 !important;
-                text-transform: uppercase !important;
-            }
-
-            .endorsement-name {
-                font-size: 0.82rem !important;
-                font-weight: 700 !important;
-                color: #0f172a !important;
-                margin: 2px 0 15px 0 !important;
-            }
-
-            .endorsement-line {
-                width: 140px !important;
-                border-bottom: 1px solid #0f172a !important;
-                margin-bottom: 3px !important;
-            }
-
-            .endorsement-sub {
-                font-size: 0.68rem !important;
-                color: #64748b !important;
-            }
-
-            .endorsement-stamp-box {
-                display: inline-block !important;
-                width: 130px !important;
-                height: 48px !important;
-                border: 1px dashed #94a3b8 !important;
-                color: #94a3b8 !important;
-                font-size: 0.68rem !important;
-                line-height: 48px !important;
-                text-align: center !important;
-                font-weight: 700 !important;
-                border-radius: 4px !important;
             }
         }
     </style>
@@ -869,17 +808,17 @@ if(isset($_GET['id'])) {
                 <!-- Official Government Print Header (Visible during Print only) -->
                 <div class="print-official-header">
                     <div class="print-header-content">
-                        <img src="assets/images/nis_crest_logo.png" alt="Nigeria Immigration Service Emblem" class="print-logo" style="height: 75px; width: auto; object-fit: contain;">
+                        <img src="assets/images/nis_crest_logo.png" alt="Nigeria Immigration Service Emblem" class="print-logo" style="height: 80px; width: auto; object-fit: contain;">
                         <div class="print-header-titles" style="flex: 1; margin: 0 15px; text-align: center;">
-                            <div style="display: inline-block; border: 1.5px solid #dc2626; color: #dc2626; font-size: 0.7rem; font-weight: 800; padding: 1px 8px; border-radius: 3px; letter-spacing: 1.5px; margin-bottom: 3px; text-transform: uppercase;">CONFIDENTIAL</div>
-                            <h3 style="font-size: 1.18rem; font-weight: 800; text-transform: uppercase; margin: 0; color: #1a5c2e; letter-spacing: 0.5px;">Nigeria Immigration Service</h3>
-                            <h4 style="font-size: 0.92rem; font-weight: 700; text-transform: uppercase; margin: 2px 0; color: #0f172a;">Re-Entry Visa Application Dossier Slip</h4>
-                            <div style="font-size: 0.76rem; color: #475569; font-weight: 500;">NIS Headquarters, Shehu Shagari Way, Airport Road, Sauka, Abuja</div>
+                            <h2 style="font-size: 1.3rem; font-weight: 800; text-transform: uppercase; margin: 0; color: #1a5c2e; letter-spacing: 0.5px;">Nigeria Immigration Service</h2>
+                            <h3 style="font-size: 1.0rem; font-weight: 700; text-transform: uppercase; margin: 3px 0; color: #0f172a;">Re-Entry Visa Application Dossier Slip</h3>
+                            <div style="font-size: 0.8rem; color: #475569; font-weight: 500;">NIS Headquarters, Shehu Shagari Way, Airport Road, Sauka, Abuja</div>
                         </div>
-                        <div class="print-header-meta" style="text-align: right; font-size: 0.75rem; color: #334155; min-width: 135px;">
+                        <div class="print-header-meta" style="text-align: right; font-size: 0.82rem; color: #1e293b; min-width: 140px; line-height: 1.45;">
                             <div><strong>Print Date:</strong> <?php echo date('d/m/Y'); ?></div>
                             <div><strong>Print Time:</strong> <?php echo date('h:i A'); ?></div>
                             <div><strong>Ref No:</strong> <span style="font-family: monospace; font-weight: 700; color: #1a5c2e;"><?php echo htmlspecialchars($visa_number); ?></span></div>
+                            <div><strong>Status:</strong> <span style="font-weight: 700; color: #166534;"><?php echo strtoupper($status); ?></span></div>
                         </div>
                     </div>
                 </div>
@@ -1091,29 +1030,6 @@ if(isset($_GET['id'])) {
                         <div class="form-group">
                             <label>Validity Period (Within)</label>
                             <div class="detail-value-field"><?php echo htmlspecialchars($within); ?></div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Official Government Print Endorsement & Verification Footer (Visible during Print only) -->
-                <div class="print-official-endorsement">
-                    <div class="print-endorsement-grid">
-                        <div class="endorsement-col">
-                            <div class="endorsement-title">Processed / Verified By:</div>
-                            <div class="endorsement-name"><?php echo htmlspecialchars(!empty($foundk['created_by']) ? $foundk['created_by'] : $_SESSION['username']); ?></div>
-                            <div class="endorsement-line"></div>
-                            <div class="endorsement-sub">Authorised Processing Officer Signature & Date</div>
-                        </div>
-                        <div class="endorsement-col" style="text-align: center;">
-                            <div class="endorsement-stamp-box">
-                                OFFICIAL NIS STAMP
-                            </div>
-                        </div>
-                        <div class="endorsement-col" style="text-align: right;">
-                            <div class="endorsement-title">System Verification Audit:</div>
-                            <div class="endorsement-sub">Generated from NISREV Portal</div>
-                            <div class="endorsement-sub">Security Reference: <span style="font-family: monospace; font-weight: 700;"><?php echo substr(hash('sha256', $visa_number . $passport_number . $surname), 0, 16); ?></span></div>
-                            <div class="endorsement-sub">Application Status: <strong><?php echo strtoupper($status); ?></strong></div>
                         </div>
                     </div>
                 </div>
