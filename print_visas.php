@@ -327,7 +327,7 @@ $retrieve = mysqli_query($conn, $sqluse);
             font-weight: 800;
             margin: 4px 0;
             line-height: 1;
-            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             letter-spacing: -0.5px;
         }
         

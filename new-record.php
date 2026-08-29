@@ -293,7 +293,7 @@ $current_page = basename($_SERVER['PHP_SELF']);
             padding: 10px 12px;
             border: 1.5px solid #e1e5e9;
             border-radius: 6px;
-            font-family: inherit;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             font-size: 0.9rem;
             transition: all 0.3s;
             background: white;

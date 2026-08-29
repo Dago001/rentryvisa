@@ -31,7 +31,7 @@ $record = mysqli_fetch_assoc($result);
 <head>
     <title>Visa <?php echo htmlspecialchars($visa_number); ?></title>
     <style>
-        body { font-family: Arial; margin: 40px; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 40px; }
         .header { text-align: center; margin-bottom: 30px; }
         .title { font-size: 24px; font-weight: bold; color: #1a5c2e; }
         .subtitle { color: #666; }

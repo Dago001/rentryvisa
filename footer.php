@@ -9,6 +9,7 @@
     margin-top: 20px;
     font-size: 14px;
     color: #6c757d;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
 ">
     <div style="float: right;">
         All Rights Reserved by 
@@ -17,12 +18,7 @@
            style="color: #5c3c1e; text-decoration: none; font-weight: bold;">
             Nigeria Immigration Service
         </a>. 
-        Designed and Developed by 
-        <!-- <a href="https://www.immigration.gov.ng/" 
-           target="_blank"  -->
-           <!-- style="color: #1a5c2e; text-decoration: none; font-weight: bold;"> -->
-            NIS Web Team
-        </a>
+        Designed and Developed by NIS Web Team
     </div>
     <div style="clear: both;"></div>
 </footer>

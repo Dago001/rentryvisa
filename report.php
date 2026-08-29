@@ -2255,7 +2255,7 @@ try {
             printWindow.document.write('<link href="vendors/font-awesome/css/font-awesome.min.css" rel="stylesheet">');
             printWindow.document.write('<style>');
             printWindow.document.write('@page { size: landscape; margin: 12mm; }');
-            printWindow.document.write('body { padding: 20px; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; color: #0f172a; background: #fff; }');
+            printWindow.document.write('body { padding: 20px; font-family: \'Segoe UI\', Tahoma, Geneva, Verdana, sans-serif; color: #0f172a; background: #fff; }');
             printWindow.document.write('.header-block { border-bottom: 2.5px solid #1a5c2e; padding-bottom: 12px; margin-bottom: 18px; display: flex; justify-content: space-between; align-items: flex-start; }');
             printWindow.document.write('.header-block h3 { color: #1a5c2e; font-weight: 800; margin: 0 0 4px 0; font-size: 1.35rem; }');
             printWindow.document.write('.header-block h4 { color: #334155; font-size: 1rem; margin: 0 0 4px 0; font-weight: 600; }');

@@ -204,6 +204,23 @@ $current_page = basename($_SERVER['PHP_SELF']);
         }
     }
     
+    /* ==========================================================================
+       Master Uniform Typography (Strictly Matches index.php System-Wide)
+       ========================================================================== */
+    html, body, input, select, textarea, button, optgroup, option, .form-control, .btn, 
+    table, th, td, h1, h2, h3, h4, h5, h6, .stat-number, .stat-label, .card-title, 
+    .badge, .pagination, .navbar, .top-nav, .user-name, .user-role, .vignette-toolbar,
+    .vignette-select, .vignette-input, .vignette-field-addon, .vignette-btn-reset {
+        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif !important;
+        -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
+    }
+
+    /* Strictly preserve monospace font for codes, hashes, IPs, and passport numbers */
+    code, kbd, samp, pre, .font-monospace, .audit-ip, .passport-code {
+        font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace !important;
+    }
+
     /* Force standard text inputs to uppercase, while strictly preserving passwords, emails, and special fields */
     input[type="text"]:not(.no-uppercase):not([data-no-uppercase="true"]):not([data-password-field="true"]):not([name*="password"]):not([id*="password"]):not([name*="email"]):not([id*="email"]):not([name*="search"]):not([id*="search"]), 
     textarea:not(.no-uppercase):not([data-no-uppercase="true"]), 
