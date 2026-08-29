@@ -334,52 +334,63 @@ $current_page = basename($_SERVER['PHP_SELF']);
             margin-right: 8px;
         }
 
-        /* ===== STATUS MESSAGES ===== */
+        /* ===== EXECUTIVE STATUS NOTIFICATION CARDS ===== */
         .status-message {
-            padding: 12px 15px;
-            margin-bottom: 20px;
-            border-radius: 6px;
-            text-align: center;
-            font-weight: 500;
-            font-size: 0.9rem;
+            padding: 16px 20px;
+            margin-bottom: 24px;
+            border-radius: 8px;
+            font-size: 0.92rem;
+            line-height: 1.5;
+            box-shadow: 0 3px 12px rgba(0, 0, 0, 0.05);
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            text-align: left;
         }
 
         .status-success {
-            background-color: rgba(39, 174, 96, 0.1);
-            color: var(--secondary);
-            border: 1px solid var(--secondary);
+            background-color: #f0fdf4;
+            color: #166534;
+            border: 1px solid #bbf7d0;
+            border-left: 5px solid #16a34a;
         }
 
         .status-error {
-            background-color: rgba(220, 53, 69, 0.1);
-            color: var(--danger);
-            border: 1px solid var(--danger);
+            background-color: #fef2f2;
+            color: #991b1b;
+            border: 1px solid #fecaca;
+            border-left: 5px solid #dc2626;
         }
 
         .required {
-            color: var(--danger);
+            color: #dc2626;
+            font-weight: 700;
         }
 
         .is-invalid {
-            border: 1.5px solid var(--danger) !important;
+            border: 1.5px solid #dc2626 !important;
         }
 
-        /* Info text - Top right */
+        /* Info text - Top right (Executive Badge) */
         .form-info {
-            padding: 8px 12px;
-            background: #e8f5e8;
-            border-radius: 6px;
-            color: #2d5016;
-            font-weight: 500;
-            font-size: 0.8rem;
-            max-width: 200px;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 14px;
+            background: #f8fafc;
+            border: 1px solid #cbd5e1;
+            border-radius: 20px;
+            color: #475569;
+            font-weight: 600;
+            font-size: 0.78rem;
+            letter-spacing: 0.2px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
             flex-shrink: 0;
         }
 
         .form-info i {
-            margin-right: 5px;
-            color: var(--secondary);
+            color: #ef4444;
+            font-size: 0.72rem;
         }
 
         /* Centralized Sidebar Responsive Styles moved to sidebar.php */    
@@ -841,13 +852,19 @@ $current_page = basename($_SERVER['PHP_SELF']);
                 <div class="form-header">
                     <h3 class="visa-application-title">Re-Entry Visa Application Form</h3>
                     <div class="form-info">
-                        <i class="fa fa-info-circle"></i> All fields marked with * are compulsory.
+                        <i class="fa fa-asterisk"></i> Fields marked with <span style="color: #dc2626; font-weight: 700;">*</span> are mandatory
                     </div>
                 </div>
                 
                 <?php if (isset($_SESSION['message'])): ?>
-                    <div class="status-message status-<?php echo $_SESSION['message']['type']; ?>">
-                        <?php echo $_SESSION['message']['text']; ?>
+                    <div class="status-message status-<?php echo htmlspecialchars($_SESSION['message']['type']); ?>">
+                        <i class="fa <?php echo $_SESSION['message']['type'] === 'success' ? 'fa-check-circle' : 'fa-exclamation-circle'; ?>" style="font-size: 1.6rem; flex-shrink: 0; color: <?php echo $_SESSION['message']['type'] === 'success' ? '#16a34a' : '#dc2626'; ?>;"></i>
+                        <div style="flex: 1;">
+                            <?php if (!empty($_SESSION['message']['title'])): ?>
+                                <div style="font-weight: 700; font-size: 0.96rem; margin-bottom: 3px; color: <?php echo $_SESSION['message']['type'] === 'success' ? '#14532d' : '#7f1d1d'; ?>;"><?php echo htmlspecialchars($_SESSION['message']['title']); ?></div>
+                            <?php endif; ?>
+                            <div style="font-size: 0.88rem;"><?php echo $_SESSION['message']['text']; ?></div>
+                        </div>
                     </div>
                     <?php unset($_SESSION['message']); ?>
                 <?php endif; ?>

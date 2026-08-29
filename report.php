@@ -694,11 +694,11 @@ try {
         
         .stat-number {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            font-size: 1.75rem;
-            font-weight: 800;
+            font-size: 1.65rem;
+            font-weight: 600;
             margin: 4px 0;
-            line-height: 1;
-            letter-spacing: -0.5px;
+            line-height: 1.1;
+            letter-spacing: -0.3px;
         }
         
         .stat-card.total .stat-number { color: var(--info); }
@@ -709,10 +709,10 @@ try {
         .stat-label {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             color: #64748b;
-            font-weight: 700;
+            font-weight: 600;
             text-transform: uppercase;
-            font-size: 0.76rem;
-            letter-spacing: 0.5px;
+            font-size: 0.75rem;
+            letter-spacing: 0.4px;
             margin-top: 4px;
             line-height: 1.2;
         }

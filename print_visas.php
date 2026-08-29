@@ -326,28 +326,28 @@ $retrieve = mysqli_query($conn, $sqluse);
         
         .stat-number {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            font-size: 1.75rem;
-            font-weight: 800;
+            font-size: 1.65rem;
+            font-weight: 600;
             margin: 4px 0;
-            line-height: 1;
-            letter-spacing: -0.5px;
+            line-height: 1.1;
+            letter-spacing: -0.3px;
         }
         
         .stat-label {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             color: #64748b;
-            font-weight: 700;
+            font-weight: 600;
             text-transform: uppercase;
-            font-size: 0.76rem;
-            letter-spacing: 0.5px;
+            font-size: 0.75rem;
+            letter-spacing: 0.4px;
             margin-top: 4px;
             line-height: 1.2;
         }
 
         .stat-card.card-total .stat-number { color: #1a5c2e; }
-        .stat-card.card-printed .stat-number { color: #16a34a; }
-        .stat-card.card-pending .stat-number { color: #d97706; }
-        .stat-card.card-today .stat-number { color: #1a5c2e; }
+        .stat-card.card-printed .stat-number { color: #059669; }
+        .stat-card.card-pending .stat-number { color: #ea580c; }
+        .stat-card.card-today .stat-number { color: #2563eb; }
 
         /* Card Container */
         .card {
@@ -843,21 +843,21 @@ $retrieve = mysqli_query($conn, $sqluse);
 
                 <!-- Stat 2: Total Printed Cards -->
                 <div class="stat-card card-printed">
-                    <div class="stat-card-icon text-success"><i class="fa fa-check-circle-o"></i></div>
+                    <div class="stat-card-icon" style="color: #059669;"><i class="fa fa-check-circle-o"></i></div>
                     <div class="stat-number"><?php echo number_format($stats['total_printed']); ?></div>
                     <div class="stat-label">Total Visas Printed</div>
                 </div>
 
                 <!-- Stat 3: Yet to be Printed Cards -->
                 <div class="stat-card card-pending">
-                    <div class="stat-card-icon text-warning"><i class="fa fa-clock-o"></i></div>
+                    <div class="stat-card-icon" style="color: #ea580c;"><i class="fa fa-print"></i></div>
                     <div class="stat-number"><?php echo number_format($stats['yet_to_print']); ?></div>
                     <div class="stat-label">Yet to be Printed Visas</div>
                 </div>
 
                 <!-- Stat 4: Cards Printed Today -->
                 <div class="stat-card card-today">
-                    <div class="stat-card-icon text-primary"><i class="fa fa-print"></i></div>
+                    <div class="stat-card-icon" style="color: #2563eb;"><i class="fa fa-calendar-check-o"></i></div>
                     <div class="stat-number"><?php echo number_format($stats['printed_today']); ?></div>
                     <div class="stat-label">Total Visas Printed Today</div>
                 </div>

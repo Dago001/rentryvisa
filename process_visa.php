@@ -260,16 +260,16 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             $mfa_letter, $covering_letter, $entry_stamp_date, $contract_duration, $old_visa_number, $passport_date_of_issue, $passport_date_of_expiry);
         
         if ($stmt->execute()) {
-    $applicationId = $conn->insert_id;
-    
-    // Get the passport number from the POST data
-    $passportNumber = $_POST['passport_number'];
-    
-    $_SESSION['message'] = [
-        'type' => 'success',
-        'text' => "Visa application submitted successfully! Application ID: " . htmlspecialchars($passportNumber)
-    ];
-    
+            $applicationId = $conn->insert_id;
+            
+            $_SESSION['message'] = [
+                'type' => 'success',
+                'title' => 'Application Successfully Registered',
+                'visa_number' => $visa_number,
+                'passport_number' => $passport_number,
+                'applicant_name' => $surname . ', ' . $given_name,
+                'text' => "Re-Entry Visa Application for <strong>" . htmlspecialchars($surname . ', ' . $given_name) . "</strong> has been registered successfully.<br><span style='display: inline-block; margin-top: 6px;'>Re-Entry Visa Number: <strong style='background: #1a5c2e; color: #ffffff; font-size: 0.85rem; font-weight: 600; padding: 4px 8px; border-radius: 4px; display: inline-block;'>" . htmlspecialchars($visa_number) . "</strong> &nbsp;|&nbsp; Passport Number: <strong style='color: #0f172a;'>" . htmlspecialchars($passport_number) . "</strong></span>"
+            ];
             
             // Log the activity with full IP and user agent
             $log_description = "Created new visa application for " . $surname . ", " . $given_name . " (Visa: " . $visa_number . ", Passport: " . $passport_number . ")";

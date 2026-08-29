@@ -1266,12 +1266,12 @@ function showDashboard() {
             }
             
             .stat-number {
-                font-size: 1.75rem;
-                font-weight: 800;
+                font-size: 1.65rem;
+                font-weight: 600;
                 margin: 4px 0;
                 color: var(--dark);
-                line-height: 1;
-                letter-spacing: -0.5px;
+                line-height: 1.1;
+                letter-spacing: -0.3px;
             }
             
             .stat-card.success .stat-number { color: var(--secondary); }
@@ -1280,10 +1280,10 @@ function showDashboard() {
             
             .stat-label {
                 color: #64748b;
-                font-weight: 700;
+                font-weight: 600;
                 text-transform: uppercase;
-                font-size: 0.76rem;
-                letter-spacing: 0.5px;
+                font-size: 0.75rem;
+                letter-spacing: 0.4px;
                 margin-top: 4px;
                 line-height: 1.2;
             }
@@ -1597,44 +1597,44 @@ function showDashboard() {
                 <!-- Statistics -->
                 <div class="stats-grid">
                     <div class="stat-card">
-                        <i class="fa fa-globe stat-icon" style="color: var(--primary);"></i>
-                        <div class="stat-number"><?php echo number_format($numb); ?></div>
+                        <i class="fa fa-globe stat-icon" style="color: #1a5c2e;"></i>
+                        <div class="stat-number" style="color: #1a5c2e;"><?php echo number_format($numb); ?></div>
                         <div class="stat-label">Total Re-Entry Visas</div>
                     </div>
                     <div class="stat-card">
                         <i class="fa fa-file-o stat-icon" style="color: #16a34a;"></i>
-                        <div class="stat-number"><?php echo number_format($total_fresh); ?></div>
+                        <div class="stat-number" style="color: #16a34a;"><?php echo number_format($total_fresh); ?></div>
                         <div class="stat-label">Total Fresh Applications</div>
                     </div>
                     <div class="stat-card">
                         <i class="fa fa-refresh stat-icon" style="color: #d97706;"></i>
-                        <div class="stat-number"><?php echo number_format($total_renewal); ?></div>
+                        <div class="stat-number" style="color: #d97706;"><?php echo number_format($total_renewal); ?></div>
                         <div class="stat-label">Total Renewal Applications</div>
                     </div>
                     <div class="stat-card">
-                        <i class="fa fa-calendar-plus-o stat-icon" style="color: #3b82f6;"></i>
-                        <div class="stat-number"><?php echo number_format($daily_total); ?></div>
+                        <i class="fa fa-calendar-plus-o stat-icon" style="color: #2563eb;"></i>
+                        <div class="stat-number" style="color: #2563eb;"><?php echo number_format($daily_total); ?></div>
                         <div class="stat-label">Daily Total Applications</div>
                     </div>
                     <div class="stat-card">
-                        <i class="fa fa-line-chart stat-icon" style="color: var(--info);"></i>
-                        <div class="stat-number"><?php echo number_format($stats['recent_visas']); ?></div>
+                        <i class="fa fa-line-chart stat-icon" style="color: #0284c7;"></i>
+                        <div class="stat-number" style="color: #0284c7;"><?php echo number_format($stats['recent_visas']); ?></div>
                         <div class="stat-label">Last 7 Days</div>
                     </div>
                     <div class="stat-card">
-                        <i class="fa fa-calendar-check-o stat-icon" style="color: var(--secondary);"></i>
-                        <div class="stat-number"><?php echo number_format($stats['monthly_visas']); ?></div>
+                        <i class="fa fa-calendar-check-o stat-icon" style="color: #7c3aed;"></i>
+                        <div class="stat-number" style="color: #7c3aed;"><?php echo number_format($stats['monthly_visas']); ?></div>
                         <div class="stat-label">This Month</div>
                     </div>
                     <div class="stat-card">
                         <i class="fa fa-check-circle-o stat-icon" style="color: #059669;"></i>
-                        <div class="stat-number"><?php echo number_format($total_printed); ?></div>
+                        <div class="stat-number" style="color: #059669;"><?php echo number_format($total_printed); ?></div>
                         <div class="stat-label">Total Printed Visas</div>
                     </div>
                     <!-- Visas Pending Print Metric Card -->
                     <div class="stat-card">
-                        <i class="fa fa-print stat-icon" style="color: #d97706;"></i>
-                        <div class="stat-number" style="color: #d97706;"><?php echo number_format($total_pending_print); ?></div>
+                        <i class="fa fa-print stat-icon" style="color: #ea580c;"></i>
+                        <div class="stat-number" style="color: #ea580c;"><?php echo number_format($total_pending_print); ?></div>
                         <div class="stat-label">Visas Pending Print</div>
                     </div>
                 </div>

@@ -254,20 +254,20 @@ $current_page = basename($_SERVER['PHP_SELF']);
 
     .stat-number, .user-stat-number {
         font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif !important;
-        font-size: 1.75rem !important;
-        font-weight: 800 !important;
+        font-size: 1.65rem !important;
+        font-weight: 600 !important;
         margin: 4px 0 !important;
-        line-height: 1 !important;
-        letter-spacing: -0.5px !important;
+        line-height: 1.1 !important;
+        letter-spacing: -0.3px !important;
     }
 
     .stat-label, .user-stat-label {
         font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif !important;
         color: #64748b !important;
-        font-weight: 700 !important;
+        font-weight: 600 !important;
         text-transform: uppercase !important;
-        font-size: 0.76rem !important;
-        letter-spacing: 0.5px !important;
+        font-size: 0.75rem !important;
+        letter-spacing: 0.4px !important;
         margin-top: 4px !important;
         line-height: 1.2 !important;
     }

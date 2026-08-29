@@ -357,20 +357,20 @@ $numb = $retrieve ? mysqli_num_rows($retrieve) : 0;
         
         .stat-number {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            font-size: 1.75rem;
-            font-weight: 800;
+            font-size: 1.65rem;
+            font-weight: 600;
             margin: 4px 0;
-            line-height: 1;
-            letter-spacing: -0.5px;
+            line-height: 1.1;
+            letter-spacing: -0.3px;
         }
         
         .stat-label {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             color: #64748b;
-            font-weight: 700;
+            font-weight: 600;
             text-transform: uppercase;
-            font-size: 0.76rem;
-            letter-spacing: 0.5px;
+            font-size: 0.75rem;
+            letter-spacing: 0.4px;
             margin-top: 4px;
             line-height: 1.2;
         }
@@ -378,7 +378,7 @@ $numb = $retrieve ? mysqli_num_rows($retrieve) : 0;
         .stat-card.card-total .stat-number { color: #1a5c2e; }
         .stat-card.card-fresh .stat-number { color: #16a34a; }
         .stat-card.card-renewal .stat-number { color: #d97706; }
-        .stat-card.card-today .stat-number { color: #1a5c2e; }
+        .stat-card.card-today .stat-number { color: #2563eb; }
 
         /* Card Container */
         .card {
@@ -836,7 +836,7 @@ $numb = $retrieve ? mysqli_num_rows($retrieve) : 0;
 
                 <!-- Stat 4: Applications Today -->
                 <div class="stat-card card-today">
-                    <div class="stat-card-icon" style="color: #1a5c2e;"><i class="fa fa-calendar-check-o"></i></div>
+                    <div class="stat-card-icon" style="color: #2563eb;"><i class="fa fa-calendar-check-o"></i></div>
                     <div class="stat-number"><?php echo number_format($stats['total_today']); ?></div>
                     <div class="stat-label">Total Applications Today</div>
                 </div>
