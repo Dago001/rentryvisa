@@ -4,43 +4,6 @@ error_reporting(E_ALL);
 ini_set('display_errors', 1);
 require_once('db/db.php');
 
-// Sync current user's profile photo from database to ensure it's always up to date
-if (isset($_SESSION['user_id'])) {
-    $current_uid = $_SESSION['user_id'];
-    $photo_sync = mysqli_query($conn, "SELECT photo FROM users WHERE id = '$current_uid'");
-    if ($photo_sync && $photo_row = mysqli_fetch_assoc($photo_sync)) {
-        $_SESSION['photo'] = $photo_row['photo'];
-    }
-}
-
-require_once('GoogleAuthenticator.php');
-require_once('vendors/phpqrcode/qrlib.php');
-
-// Check if google_auth_secret column exists, add if not
-$column_check = mysqli_query($conn, "SHOW COLUMNS FROM users LIKE 'google_auth_secret'");
-if ($column_check && mysqli_num_rows($column_check) == 0) {
-    mysqli_query($conn, "ALTER TABLE users ADD COLUMN google_auth_secret VARCHAR(32) DEFAULT NULL");
-}
-
-
-
-// Check if user is logged in
-if (isset($_SESSION['user_id'])) {
-    // Redirect based on user role
-    $role = $_SESSION['role'] ?? 'DataEntry';
-    
-    // Admin, Supervisor, and ViewOnly go to general admin dashboard
-    if ($role === 'Admin' || $role === 'Supervisor' || $role === 'ViewOnly' || strcasecmp($role, 'viewonly') === 0 || strcasecmp($role, 'view only') === 0) {
-        showDashboard(); // General Dashboard for Admin, Supervisor, and ViewOnly
-    } else {
-        // Regular DataEntry users go to user dashboard
-        header("Location: user_dashboard");
-        exit();
-    }
-} else {
-    showLoginForm();
-}
-
 // Cloudflare Turnstile Configuration
 define('TURNSTILE_SITE_KEY', '0x4AAAAAAFpWM5olq43To2dX');
 define('TURNSTILE_SECRET_KEY', '0x4AAAAAAFpWM8Tr7vaQDxWHVKt82JPnI0Y');
@@ -107,6 +70,45 @@ if (!function_exists('verifyTurnstileToken')) {
 
         return false;
     }
+}
+
+
+
+// Sync current user's profile photo from database to ensure it's always up to date
+if (isset($_SESSION['user_id'])) {
+    $current_uid = $_SESSION['user_id'];
+    $photo_sync = mysqli_query($conn, "SELECT photo FROM users WHERE id = '$current_uid'");
+    if ($photo_sync && $photo_row = mysqli_fetch_assoc($photo_sync)) {
+        $_SESSION['photo'] = $photo_row['photo'];
+    }
+}
+
+require_once('GoogleAuthenticator.php');
+require_once('vendors/phpqrcode/qrlib.php');
+
+// Check if google_auth_secret column exists, add if not
+$column_check = mysqli_query($conn, "SHOW COLUMNS FROM users LIKE 'google_auth_secret'");
+if ($column_check && mysqli_num_rows($column_check) == 0) {
+    mysqli_query($conn, "ALTER TABLE users ADD COLUMN google_auth_secret VARCHAR(32) DEFAULT NULL");
+}
+
+
+
+// Check if user is logged in
+if (isset($_SESSION['user_id'])) {
+    // Redirect based on user role
+    $role = $_SESSION['role'] ?? 'DataEntry';
+    
+    // Admin, Supervisor, and ViewOnly go to general admin dashboard
+    if ($role === 'Admin' || $role === 'Supervisor' || $role === 'ViewOnly' || strcasecmp($role, 'viewonly') === 0 || strcasecmp($role, 'view only') === 0) {
+        showDashboard(); // General Dashboard for Admin, Supervisor, and ViewOnly
+    } else {
+        // Regular DataEntry users go to user dashboard
+        header("Location: user_dashboard");
+        exit();
+    }
+} else {
+    showLoginForm();
 }
 
 function showLoginForm() {
