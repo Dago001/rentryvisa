@@ -1,9 +1,28 @@
 <?php
-define('DB_SERVER', 'localhost:3306');
-define('DB_USERNAME', 'nisappsc_admin');
-define('DB_PASSWORD', 'Password@2025');
-define('DB_DATABASE', 'nisappsc_visavignette');
-$conn = mysqli_connect(DB_SERVER, DB_USERNAME, DB_PASSWORD, DB_DATABASE) or die("Database connection failed");
+// Auto-detect environment (Local XAMPP vs Production Server)
+$is_local = (
+    !isset($_SERVER['HTTP_HOST']) ||
+    strpos($_SERVER['HTTP_HOST'], 'localhost') !== false ||
+    strpos($_SERVER['HTTP_HOST'], '127.0.0.1') !== false ||
+    ($_SERVER['REMOTE_ADDR'] ?? '') === '127.0.0.1' ||
+    ($_SERVER['REMOTE_ADDR'] ?? '') === '::1'
+);
+
+if ($is_local) {
+    // Local XAMPP Development Configuration
+    define('DB_SERVER', '127.0.0.1');
+    define('DB_USERNAME', 'root');
+    define('DB_PASSWORD', '');
+    define('DB_DATABASE', 'nisappsc');
+} else {
+    // Production Live Server Configuration
+    define('DB_SERVER', 'localhost');
+    define('DB_USERNAME', 'nisappsc_admin');
+    define('DB_PASSWORD', 'Password@2025');
+    define('DB_DATABASE', 'nisappsc_visavignette');
+}
+
+$conn = mysqli_connect(DB_SERVER, DB_USERNAME, DB_PASSWORD, DB_DATABASE) or die("Database connection failed: " . mysqli_connect_error());
 //$database = mysqli_select_db($connection, DB_DATABASE) or die(mysqli_error());
 
 /* check connection */

@@ -64,6 +64,12 @@ if (isset($_GET['id'])) {
         $place_of_issue = strtoupper(htmlspecialchars($foundk['place_of_issue']));
         $date_of_issue = formatNISDate($foundk['date_of_issue']);
         $authority = strtoupper(htmlspecialchars($foundk['authority']));
+        $authLen = mb_strlen($authority);
+        $authFontSize = '22px';
+        if ($authLen > 21) {
+            $calculatedSize = max(9, floor(22 * (21 / $authLen)));
+            $authFontSize = $calculatedSize . 'px';
+        }
         $embassy = isset($foundk['embassy']) ? strtoupper(htmlspecialchars($foundk['embassy'])) : '';
         // Update print tracking in visa_applications
         $print_operator = $_SESSION['username'] ?? 'System';
@@ -168,17 +174,19 @@ if (isset($_GET['id'])) {
         }
         
         .unicef-tag {
-            top: 50%;
-            left: 90%;
-            font-size: 22px;
-            writing-mode: vertical-rl;
-            text-orientation: mixed;
-            height: 23.1%;
-            line-height: 1.3;
-            text-align: center;
-            transform: rotate(180deg);
-            transform-origin: center;
-        }
+    top: 40%;
+    left: 90%;
+    font-size: 18px;
+    writing-mode: vertical-rl;
+    text-orientation: mixed;
+    height: 45%;
+    line-height: 1.1;
+    text-align: center;
+    transform: rotate(180deg);
+    transform-origin: center;
+    overflow: visible;
+    text-overflow: clip;
+}
         
         .full-name {
             top: 48%;
@@ -396,7 +404,7 @@ if (isset($_GET['id'])) {
                 </div>
                 
                 <!-- Authority -->
-                <div class="visa-text authority">
+                <div class="visa-text authority" style="font-size: <?php echo $authFontSize; ?>; overflow: visible; text-overflow: clip;">
                     <?php echo $authority; ?>
                 </div>
                 
@@ -431,6 +439,17 @@ if (isset($_GET['id'])) {
     <script>
         // Trigger browser print dialog immediately
         window.addEventListener('DOMContentLoaded', function() {
+            const authEl = document.querySelector('.authority');
+            if (authEl) {
+                const textLen = authEl.textContent.trim().length;
+                if (textLen > 21) {
+                    let currentSize = parseFloat(window.getComputedStyle(authEl).fontSize) || 22;
+                    while (authEl.scrollWidth > authEl.clientWidth && currentSize > 8) {
+                        currentSize -= 0.5;
+                        authEl.style.fontSize = currentSize + 'px';
+                    }
+                }
+            }
             setTimeout(function() {
                 window.print();
             }, 100);

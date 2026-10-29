@@ -55,7 +55,7 @@ function showLoginForm() {
     }
 
     // Handle submission of new password when password reset is required (Step 3)
-    if (isset($_POST['set_new_password']) && isset($_SESSION['temp_user']) && !empty($_SESSION['temp_user']['mfa_verified'])) {
+    if ((isset($_POST['set_new_password']) || isset($_POST['change_default_password'])) && isset($_SESSION['temp_user']) && !empty($_SESSION['temp_user']['mfa_verified'])) {
         if (!isset($_POST['csrf_token']) || $_POST['csrf_token'] !== $_SESSION['csrf_token']) {
             $error_message = "Security validation failed. Please refresh the page.";
         } else {
@@ -65,8 +65,16 @@ function showLoginForm() {
 
             if (empty($new_pwd) || empty($confirm_pwd)) {
                 $error_message = "All password fields are required.";
-            } elseif (strlen($new_pwd) < 6) {
-                $error_message = "New password must be at least 6 characters long.";
+            } elseif (strlen($new_pwd) < 8) {
+                $error_message = "New password must be at least 8 characters long.";
+            } elseif (!preg_match('/[A-Z]/', $new_pwd)) {
+                $error_message = "New password must contain at least one uppercase letter (A-Z).";
+            } elseif (!preg_match('/[a-z]/', $new_pwd)) {
+                $error_message = "New password must contain at least one lowercase letter (a-z).";
+            } elseif (!preg_match('/[0-9]/', $new_pwd)) {
+                $error_message = "New password must contain at least one number (0-9).";
+            } elseif (!preg_match('/[^a-zA-Z0-9]/', $new_pwd)) {
+                $error_message = "New password must contain at least one special character (e.g. !@#$%^&*).";
             } elseif ($new_pwd !== $confirm_pwd) {
                 $error_message = "New password and confirmation password do not match.";
             } elseif ($new_pwd === 'password@123') {
@@ -193,50 +201,93 @@ function showLoginForm() {
             $password = trim($_POST['password']);
 
             if (!empty($username) && !empty($password)) {
-                $stmt = mysqli_prepare($conn, "SELECT * FROM users WHERE (email = ? OR service_no = ?) AND status = 'active'");
-                mysqli_stmt_bind_param($stmt, "ss", $username, $username);
-                mysqli_stmt_execute($stmt);
-                $result = mysqli_stmt_get_result($stmt);
+                // Rate Limiting / 5-attempt Lockout check (Option A: 15-minute cooldown)
+                $lockout_duration = 15 * 60; // 15 minutes in seconds
+                $max_attempts = 5;
+                $user_key = strtolower($username);
                 
-                if ($row = mysqli_fetch_assoc($result)) {
-                    if (password_verify($password, $row['password'])) {
-                        // Store user details in temporary session
-                        $is_first_time = empty($row['google_auth_secret']);
-                        $is_pwd_reset_required = (!empty($row['password_reset_required']) && $row['password_reset_required'] == 1) || ($password === 'password@123');
-                        
-                        $_SESSION['temp_user'] = [
-                            'id' => $row['id'],
-                            'username' => $row['service_no'],
-                            'full_name' => $row['fname'] . ' ' . $row['lname'],
-                            'email' => $row['email'],
-                            'role' => $row['role'],
-                            'photo' => $row['photo'],
-                            'first_time' => $is_first_time,
-                            'password_reset_required' => $is_pwd_reset_required ? 1 : 0
-                        ];
-
-                        $ga = new GoogleAuthenticator();
-                        if ($is_first_time) {
-                            // First-time user: Generate a new secret
-                            $secret = $ga->createSecret();
-                            $_SESSION['temp_mfa_secret'] = $secret;
-                        } else {
-                            // Returning user: Load their existing secret
-                            $_SESSION['temp_mfa_secret'] = $row['google_auth_secret'];
-                        }
-
-                        // Refresh page to show MFA screen
-                        header("Location: index");
-                        exit();
-                    } else {
-                        logActivity($conn, "LOGIN_FAILED", "Failed login attempt (invalid password) for user: $username", $username);
-                        $error_message = "Invalid login credentials";
-                    }
-                } else {
-                    logActivity($conn, "LOGIN_FAILED", "Failed login attempt (user not found or account deactivated): $username", $username);
-                    $error_message = "Invalid login credentials or account is deactivated";
+                if (!isset($_SESSION['login_attempts'])) {
+                    $_SESSION['login_attempts'] = [];
                 }
-                mysqli_stmt_close($stmt);
+                
+                $attempts_data = $_SESSION['login_attempts'][$user_key] ?? ['count' => 0, 'last_attempt' => 0];
+                $is_locked = false;
+
+                if ($attempts_data['count'] >= $max_attempts) {
+                    $time_passed = time() - $attempts_data['last_attempt'];
+                    if ($time_passed < $lockout_duration) {
+                        $remaining_secs = $lockout_duration - $time_passed;
+                        $remaining_mins = ceil($remaining_secs / 60);
+                        $error_message = "Too many failed login attempts. Account is temporarily locked. Please try again in $remaining_mins minute(s).";
+                        $is_locked = true;
+                    } else {
+                        // Cooldown expired, reset attempt counter
+                        $_SESSION['login_attempts'][$user_key] = ['count' => 0, 'last_attempt' => 0];
+                        $attempts_data = ['count' => 0, 'last_attempt' => 0];
+                    }
+                }
+
+                if (!$is_locked) {
+                    $stmt = mysqli_prepare($conn, "SELECT * FROM users WHERE (email = ? OR service_no = ?) AND status = 'active'");
+                    mysqli_stmt_bind_param($stmt, "ss", $username, $username);
+                    mysqli_stmt_execute($stmt);
+                    $result = mysqli_stmt_get_result($stmt);
+                    
+                    if ($row = mysqli_fetch_assoc($result)) {
+                        if (password_verify($password, $row['password'])) {
+                            // Reset failed attempts on successful password verification
+                            unset($_SESSION['login_attempts'][$user_key]);
+
+                            // Store user details in temporary session
+                            $is_first_time = empty($row['google_auth_secret']);
+                            $is_pwd_reset_required = (!empty($row['password_reset_required']) && $row['password_reset_required'] == 1) || ($password === 'password@123');
+                            
+                            $_SESSION['temp_user'] = [
+                                'id' => $row['id'],
+                                'username' => $row['service_no'],
+                                'full_name' => $row['fname'] . ' ' . $row['lname'],
+                                'email' => $row['email'],
+                                'role' => $row['role'],
+                                'photo' => $row['photo'],
+                                'first_time' => $is_first_time,
+                                'password_reset_required' => $is_pwd_reset_required ? 1 : 0
+                            ];
+
+                            $ga = new GoogleAuthenticator();
+                            if ($is_first_time) {
+                                // First-time user: Generate a new secret
+                                $secret = $ga->createSecret();
+                                $_SESSION['temp_mfa_secret'] = $secret;
+                            } else {
+                                // Returning user: Load their existing secret
+                                $_SESSION['temp_mfa_secret'] = $row['google_auth_secret'];
+                            }
+
+                            // Refresh page to show MFA screen
+                            header("Location: index");
+                            exit();
+                        } else {
+                            $new_count = ($attempts_data['count'] ?? 0) + 1;
+                            $_SESSION['login_attempts'][$user_key] = [
+                                'count' => $new_count,
+                                'last_attempt' => time()
+                            ];
+
+                            if ($new_count >= $max_attempts) {
+                                logActivity($conn, "LOGIN_LOCKOUT", "User $username temporarily locked out for 15 minutes after 5 failed password attempts", $username);
+                                $error_message = "Too many failed login attempts (5/5). Account is temporarily locked for 15 minutes.";
+                            } else {
+                                $remaining_attempts = $max_attempts - $new_count;
+                                logActivity($conn, "LOGIN_FAILED", "Failed login attempt (invalid password) for user: $username", $username);
+                                $error_message = "Invalid login credentials. ($remaining_attempts attempt(s) remaining before temporary lockout)";
+                            }
+                        }
+                    } else {
+                        logActivity($conn, "LOGIN_FAILED", "Failed login attempt (user not found or account deactivated): $username", $username);
+                        $error_message = "Invalid login credentials or account is deactivated";
+                    }
+                    mysqli_stmt_close($stmt);
+                }
             } else {
                 $error_message = "All fields are required.";
             }
@@ -525,8 +576,10 @@ function showLoginForm() {
             @media (max-width: 576px) {
                 body {
                     padding: 8px;
-                    align-items: flex-start;
-                    padding-top: 15px;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    min-height: 100vh;
                 }
                 
                 .login-wrapper {
@@ -558,7 +611,7 @@ function showLoginForm() {
             }
         </style>
     </head>
-    <body>
+    <body oncontextmenu="return false;">
         <div class="login-wrapper">
             <div class="login-container">
                 <div class="login-header">
@@ -602,23 +655,24 @@ function showLoginForm() {
                             </div>
 
                             <div class="form-group mb-2">
-                                <label class="form-label">New Password <span class="text-danger">*</span></label>
+                                <label class="form-label">New Password</label>
                                 <div class="password-wrapper">
                                     <input type="password" name="new_password" class="form-control" 
-                                           placeholder="Enter new password (min. 6 chars)" required 
-                                           minlength="6" autocomplete="new-password" id="firstNewPwd">
+                                           placeholder="Enter New Password (min 8 chars)" required id="firstNewPwd" minlength="8">
                                     <button type="button" class="toggle-password" aria-label="Toggle password visibility">
                                         <i class="fa fa-eye"></i>
                                     </button>
                                 </div>
+                                <small class="text-muted" style="font-size: 0.68rem; display: block; margin-top: 3px; line-height: 1.2;">
+                                    Must contain at least 8 characters, 1 uppercase, 1 lowercase, 1 number, & 1 special character.
+                                </small>
                             </div>
 
                             <div class="form-group mb-3">
-                                <label class="form-label">Confirm New Password <span class="text-danger">*</span></label>
+                                <label class="form-label">Confirm New Password</label>
                                 <div class="password-wrapper">
                                     <input type="password" name="confirm_password" class="form-control" 
-                                           placeholder="Confirm new password" required 
-                                           minlength="6" autocomplete="new-password" id="firstConfirmPwd">
+                                           placeholder="Confirm New Password" required minlength="8">
                                     <button type="button" class="toggle-password" aria-label="Toggle password visibility">
                                         <i class="fa fa-eye"></i>
                                     </button>
@@ -626,17 +680,11 @@ function showLoginForm() {
                             </div>
 
                             <button type="submit" name="set_new_password" class="btn-login w-100">
-                                <i class="fa fa-check-circle"></i>
-                                <span>Save Password & Sign In</span>
+                                <i class="fa fa-save"></i>
+                                <span>Save & Continue</span>
                             </button>
-
-                            <div class="text-center mt-3" style="border-top: 1px solid #e1e5e9; padding-top: 10px; margin-top: 15px;">
-                                <a href="index?cancel_mfa=1" class="text-decoration-none text-muted small" style="font-size: 0.72rem;">
-                                    <i class="fa fa-arrow-left"></i> Cancel and sign out
-                                </a>
-                            </div>
                         </form>
-                    <?php elseif (isset($_SESSION['temp_user'])): ?>
+                    <?php elseif (isset($_SESSION['temp_user']) && !empty($_SESSION['temp_mfa_secret'])): ?>
                         <!-- MFA Verification/Setup Form -->
                         <form method="post" id="mfaForm" autocomplete="off">
                             <input type="hidden" name="csrf_token" value="<?php echo $_SESSION['csrf_token']; ?>">
@@ -674,7 +722,8 @@ function showLoginForm() {
                                 <input type="text" name="mfa_code" class="form-control text-center font-monospace" 
                                        placeholder="000000" required maxlength="6" pattern="\d{6}" 
                                        style="font-size: 1.3rem; letter-spacing: 0.4rem; padding-left: 0.6rem; font-weight: 700;"
-                                       autocomplete="one-time-code" autofocus id="mfaCodeField">
+                                       autocomplete="one-time-code" autofocus id="mfaCodeField"
+                                       inputmode="numeric" oninput="this.value = this.value.replace(/[^0-9]/g, '')">
                             </div>
 
                             <button type="submit" name="verify_mfa" class="btn-login w-100">
@@ -695,7 +744,9 @@ function showLoginForm() {
                             <div class="form-group">
                                 <label class="form-label">Service No</label>
                                 <input type="text" name="username" class="form-control" 
-                                       placeholder="Enter Service Number" required 
+                                       placeholder="Enter 4 or 5-digit Service Number" required 
+                                       inputmode="numeric" pattern="\d{4,5}" minlength="4" maxlength="5"
+                                       oninput="this.value = this.value.replace(/[^0-9]/g, '').slice(0, 5)"
                                        autocomplete="username">
                             </div>
                             
@@ -729,6 +780,12 @@ function showLoginForm() {
 
         <script>
             document.addEventListener('DOMContentLoaded', function() {
+                // Disable right click context menu on login page
+                document.addEventListener('contextmenu', function(e) {
+                    e.preventDefault();
+                    return false;
+                });
+
                 const firstNewPwd = document.getElementById('firstNewPwd');
                 const mfaCodeField = document.getElementById('mfaCodeField');
                 if (firstNewPwd) {
