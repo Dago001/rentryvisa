@@ -1,13 +1,15 @@
 # Git Auto-Sync Script for Re-Entry Visa Application
-# This script monitors for local changes, automatically commits, and pushes to GitHub.
+# This script monitors for local changes, automatically commits, pushes to GitHub,
+# and automatically deploys strictly to https://rentryvisa.immigration.gov.ng/
 
 $IntervalSeconds = 30
 $RepoDir = "c:\xampp\htdocs\rentryvisas"
 
 Set-Location $RepoDir
 Write-Host "=========================================" -ForegroundColor Cyan
-Write-Host " Git Auto-Sync is Running in Background " -ForegroundColor Green
+Write-Host " Git Auto-Sync & Live Deploy is Running   " -ForegroundColor Green
 Write-Host " Monitoring: $RepoDir" -ForegroundColor Yellow
+Write-Host " Target: rentryvisa.immigration.gov.ng" -ForegroundColor Yellow
 Write-Host " Check Interval: $IntervalSeconds seconds" -ForegroundColor Yellow
 Write-Host " Press Ctrl+C to stop" -ForegroundColor Gray
 Write-Host "=========================================" -ForegroundColor Cyan
@@ -36,6 +38,12 @@ while ($true) {
             $pushResult = (git push origin main 2>&1) | Out-String
             if ($LASTEXITCODE -eq 0) {
                 Write-Host "[$timestamp] Successfully pushed to GitHub!" -ForegroundColor Green
+
+                # Deploy strictly to rentryvisa subdomain via SSH
+                Write-Host "[$timestamp] Deploying to live server (rentryvisa.immigration.gov.ng)..." -ForegroundColor Magenta
+                $deployCmd = 'cd domains/rentryvisa.immigration.gov.ng/public_html && git fetch origin && git reset --hard origin/main'
+                $deployResult = (ssh -o ConnectTimeout=10 -p 22 immigrat@server3.nairahost.ng $deployCmd 2>&1) | Out-String
+                Write-Host "[$timestamp] Live Server Deployed Successfully!" -ForegroundColor Green
             } else {
                 Write-Host "[$timestamp] Push status: $pushResult" -ForegroundColor DarkYellow
             }
