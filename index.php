@@ -41,6 +41,74 @@ if (isset($_SESSION['user_id'])) {
     showLoginForm();
 }
 
+// Cloudflare Turnstile Configuration
+define('TURNSTILE_SITE_KEY', '0x4AAAAAAFpWM5olq43To2dX');
+define('TURNSTILE_SECRET_KEY', '0x4AAAAAAFpWM8Tr7vaQDxWHVKt82JPnI0Y');
+
+if (!function_exists('verifyTurnstileToken')) {
+    function verifyTurnstileToken($token, $secret, $ip = null) {
+        if (empty($token)) {
+            return false;
+        }
+
+        $url = 'https://challenges.cloudflare.com/turnstile/v0/siteverify';
+        $postFields = [
+            'secret' => $secret,
+            'response' => $token
+        ];
+        if (!empty($ip)) {
+            $postFields['remoteip'] = $ip;
+        }
+        $postData = http_build_query($postFields);
+
+        $response = false;
+        if (function_exists('curl_init')) {
+            $ch = curl_init($url);
+            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+            curl_setopt($ch, CURLOPT_POST, true);
+            curl_setopt($ch, CURLOPT_POSTFIELDS, $postData);
+            curl_setopt($ch, CURLOPT_TIMEOUT, 10);
+            curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
+            $response = curl_exec($ch);
+            curl_close($ch);
+        }
+
+        if ($response === false) {
+            $opts = [
+                'http' => [
+                    'method' => 'POST',
+                    'header' => "Content-type: application/x-www-form-urlencoded\r\n",
+                    'content' => $postData,
+                    'timeout' => 10
+                ]
+            ];
+            $context = stream_context_create($opts);
+            $response = @file_get_contents($url, false, $context);
+        }
+
+        if ($response) {
+            $result = json_decode($response, true);
+            if (!empty($result['success'])) {
+                return true;
+            }
+
+            // Local development check: allow testing when domain restriction triggers on localhost
+            $is_local_dev = (
+                !isset($_SERVER['HTTP_HOST']) ||
+                strpos($_SERVER['HTTP_HOST'], 'localhost') !== false ||
+                strpos($_SERVER['HTTP_HOST'], '127.0.0.1') !== false ||
+                ($_SERVER['REMOTE_ADDR'] ?? '') === '127.0.0.1' ||
+                ($_SERVER['REMOTE_ADDR'] ?? '') === '::1'
+            );
+            if ($is_local_dev && !empty($result['error-codes']) && in_array('domain-mismatch', $result['error-codes'])) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+}
+
 function showLoginForm() {
     global $conn;
     
@@ -197,7 +265,14 @@ function showLoginForm() {
         if (!isset($_POST['csrf_token']) || $_POST['csrf_token'] !== $_SESSION['csrf_token']) {
             $error_message = "Security validation failed. Please refresh the page.";
         } else {
-            $username = trim($_POST['username']);
+            // Verify Cloudflare Turnstile CAPTCHA
+            $turnstile_response = $_POST['cf-turnstile-response'] ?? '';
+            $client_ip = function_exists('getClientIP') ? getClientIP() : ($_SERVER['REMOTE_ADDR'] ?? '');
+            
+            if (empty($turnstile_response) || !verifyTurnstileToken($turnstile_response, TURNSTILE_SECRET_KEY, $client_ip)) {
+                $error_message = "Security verification failed. Please complete the security check.";
+            } else {
+                $username = trim($_POST['username']);
             $password = trim($_POST['password']);
 
             if (!empty($username) && !empty($password)) {
@@ -291,6 +366,7 @@ function showLoginForm() {
             } else {
                 $error_message = "All fields are required.";
             }
+            }
         }
     }
     ?>
@@ -305,6 +381,7 @@ function showLoginForm() {
         <link href="vendors/bootstrap/dist/css/bootstrap.min.css" rel="stylesheet">
         <link href="vendors/font-awesome/css/font-awesome.min.css" rel="stylesheet">
         <script src="vendors/qrcodejs/qrcode.min.js"></script>
+        <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
         <style>
             :root {
                 --primary: #1a5c2e;
@@ -761,6 +838,11 @@ function showLoginForm() {
                                         <i class="fa fa-eye"></i>
                                     </button>
                                 </div>
+                            </div>
+                            
+                            <!-- Cloudflare Turnstile Widget -->
+                            <div class="form-group d-flex justify-content-center my-3" style="display:flex; justify-content:center; margin: 12px 0; min-height: 65px;">
+                                <div class="cf-turnstile" data-sitekey="<?php echo TURNSTILE_SITE_KEY; ?>" data-theme="light"></div>
                             </div>
                             
                             <button type="submit" name="login" class="btn-login">
@@ -1719,7 +1801,8 @@ function showDashboard() {
                         </div>
                     </div>
                 </div>
-                <div class="row mt-5" style="margin-top: 3rem !important;">
+
+                <div class="row mt-5" style="margin-top: 3rem !important;">
                     <!-- Recent Applications -->
                     <div class="col-md-12 mb-4">
                         <div class="recent-card" style="height: 100%; margin-top: 0;">
