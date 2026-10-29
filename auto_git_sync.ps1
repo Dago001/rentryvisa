@@ -1,8 +1,8 @@
-﻿# Git Auto-Sync Script for Re-Entry Visa Application
+# Git Auto-Sync Script for Re-Entry Visa Application
 # This script monitors for local changes, automatically commits, and pushes to GitHub.
 
 $IntervalSeconds = 30
-$RepoDir = "c:\xampp\htdocs\rentryvisa"
+$RepoDir = "c:\xampp\htdocs\rentryvisas"
 
 Set-Location $RepoDir
 Write-Host "=========================================" -ForegroundColor Cyan
