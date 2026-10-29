@@ -1272,15 +1272,16 @@ $passport_date_of_expiry_exists = in_array('passport_date_of_expiry', $columns);
                         <h4 class="section-title"><i class="fa fa-plane-departure me-2"></i>Passport & Travel Information</h4>
                         <div class="form-row">
                             <div class="form-group">
-                                <label class="form-label">Passport Number *</label>
-                                <input type="text" 
-                                       class="form-control" 
-                                       name="passport_number" 
-                                       value="<?php echo htmlspecialchars(getFieldValue($record, 'passport_number')); ?>" 
-                                       readonly 
-                                       style="background-color: #e9ecef; cursor: not-allowed;" 
-                                       required>
-                            </div>
+						    <label class="form-label">Passport Number *</label>
+						    <input type="text" 
+						           class="form-control" 
+						           id="passport_number" 
+						           name="passport_number" 
+						           value="<?php echo htmlspecialchars(getFieldValue($record, 'passport_number')); ?>" 
+						           placeholder="Enter Passport Number" 
+						           style="text-transform: uppercase;" 
+						           required>
+						</div>
 
                             <?php if ($passport_date_of_issue_exists): ?>
                             <div class="form-group">

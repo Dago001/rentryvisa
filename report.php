@@ -1,366 +1,509 @@
 <?php
 require_once('security.php');
 error_reporting(E_ALL);
+ini_set('display_errors', '0');
 require_once('db/db.php');
 
-// Check if user is logged in - use the same session variable as process_visa.php
+// Check if user is logged in
 if (!isset($_SESSION['username'])) {
     header("Location: index");
     exit();
 }
 
 // Verify role is Admin, Supervisor, or ViewOnly
-$userRole = $_SESSION['role'] ?? 'DataEntry';
-if ($userRole !== 'Admin' && $userRole !== 'Supervisor' && $userRole !== 'ViewOnly') {
+$userRole = trim((string)($_SESSION['role'] ?? 'DataEntry'));
+$userRoleNormalized = strtolower(preg_replace('/\s+/', '', $userRole));
+if (!in_array($userRoleNormalized, ['admin', 'supervisor', 'viewonly'], true)) {
     header("Location: user_dashboard");
     exit();
 }
 
+// Fallback helper functions if missing in security.php
+if (!function_exists('parseUserAgent')) {
+    function parseUserAgent($userAgent) {
+        if (empty($userAgent)) {
+            return ['browser' => 'System/CLI', 'os' => 'Server', 'device' => 'Server', 'icon' => 'fa-server', 'summary' => 'System Server'];
+        }
+        $os = 'Unknown OS';
+        if (preg_match('/windows nt 10/i', $userAgent)) $os = 'Windows 10/11';
+        elseif (preg_match('/windows nt 6\.3/i', $userAgent)) $os = 'Windows 8.1';
+        elseif (preg_match('/windows nt 6\.2/i', $userAgent)) $os = 'Windows 8';
+        elseif (preg_match('/windows nt 6\.1/i', $userAgent)) $os = 'Windows 7';
+        elseif (preg_match('/windows/i', $userAgent)) $os = 'Windows';
+        elseif (preg_match('/macintosh|mac os x/i', $userAgent)) $os = 'macOS';
+        elseif (preg_match('/android/i', $userAgent)) $os = 'Android';
+        elseif (preg_match('/iphone|ipad|ipod/i', $userAgent)) $os = 'iOS';
+        elseif (preg_match('/linux/i', $userAgent)) $os = 'Linux';
+        
+        $browser = 'Unknown Browser';
+        if (preg_match('/edg/i', $userAgent)) $browser = 'Edge';
+        elseif (preg_match('/chrome|crios/i', $userAgent)) $browser = 'Chrome';
+        elseif (preg_match('/firefox|fxios/i', $userAgent)) $browser = 'Firefox';
+        elseif (preg_match('/safari/i', $userAgent) && !preg_match('/chrome/i', $userAgent)) $browser = 'Safari';
+        elseif (preg_match('/opera|opr/i', $userAgent)) $browser = 'Opera';
+        
+        $icon = 'fa-desktop';
+        if (preg_match('/mobile|iphone|ipod|android.*mobile/i', $userAgent)) $icon = 'fa-mobile';
+        elseif (preg_match('/tablet|ipad|android(?!.*mobile)/i', $userAgent)) $icon = 'fa-tablet';
+        
+        return ['browser' => $browser, 'os' => $os, 'device' => 'Device', 'icon' => $icon, 'summary' => "$browser on $os"];
+    }
+}
 
+if (!function_exists('getAuditBadgeClass')) {
+    function getAuditBadgeClass($action) {
+        $act = strtoupper(trim((string)$action));
+        if (strpos($act, 'CREATE') !== false) return ['class' => 'badge-create', 'icon' => 'fa-plus-circle'];
+        if (strpos($act, 'UPDATE') !== false || strpos($act, 'EDIT') !== false) return ['class' => 'badge-update', 'icon' => 'fa-pencil'];
+        if (strpos($act, 'DELETE') !== false || strpos($act, 'REMOVE') !== false) return ['class' => 'badge-delete', 'icon' => 'fa-trash'];
+        if (strpos($act, 'LOGIN_FAILED') !== false || strpos($act, 'FAILED') !== false) return ['class' => 'badge-login-failed', 'icon' => 'fa-exclamation-triangle'];
+        if (strpos($act, 'LOGIN') !== false) return ['class' => 'badge-login', 'icon' => 'fa-sign-in'];
+        if (strpos($act, 'LOGOUT') !== false) return ['class' => 'badge-logout', 'icon' => 'fa-sign-out'];
+        if (strpos($act, 'PRINT') !== false) return ['class' => 'badge-print', 'icon' => 'fa-print'];
+        if (strpos($act, 'VIEW') !== false) return ['class' => 'badge-view', 'icon' => 'fa-eye'];
+        return ['class' => 'badge-other', 'icon' => 'fa-info-circle'];
+    }
+}
 
-// Get report data based on filters
-$start_date = $_GET['start_date'] ?? date('Y-m-01'); // Default to start of current month
-$end_date = $_GET['end_date'] ?? date('Y-m-t'); // Default to end of current month
-$report_type = $_GET['report_type'] ?? 'monthly';
+// Get report date filters (default to current month)
+$start_date = isset($_GET['start_date']) ? trim((string)$_GET['start_date']) : date('Y-m-01');
+$end_date = isset($_GET['end_date']) ? trim((string)$_GET['end_date']) : date('Y-m-t');
 
+// Strict date validation and range normalization.
+$start_obj = DateTime::createFromFormat('!Y-m-d', $start_date);
+$end_obj = DateTime::createFromFormat('!Y-m-d', $end_date);
+$start_valid = $start_obj && $start_obj->format('Y-m-d') === $start_date;
+$end_valid = $end_obj && $end_obj->format('Y-m-d') === $end_date;
+
+if (!$start_valid) {
+    $start_date = date('Y-m-01');
+    $start_obj = new DateTime($start_date);
+}
+if (!$end_valid) {
+    $end_date = date('Y-m-t');
+    $end_obj = new DateTime($end_date);
+}
+if ($start_obj > $end_obj) {
+    [$start_date, $end_date] = [$end_date, $start_date];
+    [$start_obj, $end_obj] = [$end_obj, $start_obj];
+}
+
+// Use an exclusive upper bound so timestamps with fractional seconds are included.
 $sd = $start_date . ' 00:00:00';
-$ed = $end_date . ' 23:59:59';
+$ed_exclusive = (clone $end_obj)->modify('+1 day')->format('Y-m-d') . ' 00:00:00';
 
-// Static stats that are not affected by filter
+// Initialize variables.
 $static_total = 0;
-$static_active = 0;
 $static_fresh = 0;
 $static_renewal = 0;
+$static_current_month = 0;
+$static_approved = 0;
 
 $filtered_fresh_count = 0;
 $filtered_renewal_count = 0;
 
-// Initialize data arrays
-$status_data = ['active' => 0, 'pending' => 0];
+$status_data = [];
 $monthly_data = [];
-$user_stats = [];
 $gender_stats = [];
 $audit_logs = [];
 $filtered_applications = [];
+$officer_activity_summary = [];
+$officer_names = [];
+$audit_total_count = 0;
+$audit_distinct_operators = 0;
+$audit_logins_count = 0;
+$distinct_ips = [];
+$nationality_filter = trim((string)($_GET['nationality'] ?? ''));
+$nationality_options = [];
+$has_nationality_column = false;
+
+// Build the selected-period month labels from the actual date range.
+$period_months = new DatePeriod(
+    new DateTime($start_date . ' 00:00:00'),
+    new DateInterval('P1M'),
+    (new DateTime($end_date . ' 00:00:00'))->modify('first day of next month')
+);
+foreach ($period_months as $period_month) {
+    $monthly_data[$period_month->format('M Y')] = 0;
+}
 
 try {
-    // First, ensure the visa_applications table exists
-    $table_check = mysqli_query($conn, "SHOW TABLES LIKE 'visa_applications'");
-    if (mysqli_num_rows($table_check) == 0) {
-        // Table doesn't exist, initialize empty data
-        $overall_stats = ['total' => 0, 'approved' => 0, 'pending' => 0, 'rejected' => 0];
-    } else {
-        // Fetch static counts
-        $q_total = mysqli_query($conn, "SELECT COUNT(*) as count FROM visa_applications");
-        if ($q_total && $row = mysqli_fetch_assoc($q_total)) {
-            $static_total = (int)$row['count'];
+    // Inspect table columns so this report remains compatible with the current schema.
+    $columns = [];
+    $col_check_q = mysqli_query($conn, "SHOW COLUMNS FROM visa_applications");
+    if ($col_check_q) {
+        while ($col_row = mysqli_fetch_assoc($col_check_q)) {
+            $columns[] = $col_row['Field'];
         }
-        $q_current_month = mysqli_query($conn, "SELECT COUNT(*) as count FROM visa_applications WHERE MONTH(application_date) = MONTH(CURRENT_DATE()) AND YEAR(application_date) = YEAR(CURRENT_DATE())");
-        $static_current_month = 0;
-        if ($q_current_month && $row = mysqli_fetch_assoc($q_current_month)) {
-            $static_current_month = (int)$row['count'];
-        }
-        $q_fresh = mysqli_query($conn, "SELECT COUNT(*) as count FROM visa_applications WHERE LOWER(application_type) = 'fresh'");
-        if ($q_fresh && $row = mysqli_fetch_assoc($q_fresh)) {
-            $static_fresh = (int)$row['count'];
-        }
-        $q_renewal = mysqli_query($conn, "SELECT COUNT(*) as count FROM visa_applications WHERE LOWER(application_type) = 'renewal'");
-        if ($q_renewal && $row = mysqli_fetch_assoc($q_renewal)) {
-            $static_renewal = (int)$row['count'];
-        }
-
-        // Fetch filtered applications list
-        $filter_query = "SELECT visa_number, passport_number, surname, given_name, application_type, application_date 
-                         FROM visa_applications 
-                         WHERE application_date BETWEEN ? AND ? 
-                         ORDER BY application_date DESC";
-        if ($stmt_filter = mysqli_prepare($conn, $filter_query)) {
-            mysqli_stmt_bind_param($stmt_filter, "ss", $sd, $ed);
-            mysqli_stmt_execute($stmt_filter);
-            $filter_result = mysqli_stmt_get_result($stmt_filter);
-            while ($row = mysqli_fetch_assoc($filter_result)) {
-                $filtered_applications[] = $row;
-                if (strtolower($row['application_type'] ?? 'fresh') === 'renewal') {
-                    $filtered_renewal_count++;
-                } else {
-                    $filtered_fresh_count++;
-                }
-            }
-            mysqli_stmt_close($stmt_filter);
-        }
-        // Status distribution data
-        $status_query = "SELECT status, COUNT(*) as count FROM visa_applications 
-                        WHERE application_date BETWEEN ? AND ? 
-                        GROUP BY status";
-        if ($stmt = mysqli_prepare($conn, $status_query)) {
-            mysqli_stmt_bind_param($stmt, "ss", $sd, $ed);
-            mysqli_stmt_execute($stmt);
-            $status_result = mysqli_stmt_get_result($stmt);
-            
-            $all_statuses = ['active', 'pending'];
-            foreach ($all_statuses as $status) {
-                $status_data[$status] = 0;
-            }
-            
-            while ($row = mysqli_fetch_assoc($status_result)) {
-                $status_data[$row['status']] = (int)$row['count'];
-            }
-            mysqli_stmt_close($stmt);
-        }
-
-        // Monthly application data for the selected report year
-        $report_year = (int)date('Y', strtotime($start_date));
-        $monthly_query = "SELECT 
-                            MONTH(application_date) as month, 
-                            COUNT(*) as count 
-                          FROM visa_applications 
-                          WHERE YEAR(application_date) = ?
-                          GROUP BY MONTH(application_date) 
-                          ORDER BY month";
-        if ($stmt_m = mysqli_prepare($conn, $monthly_query)) {
-            mysqli_stmt_bind_param($stmt_m, "i", $report_year);
-            mysqli_stmt_execute($stmt_m);
-            $monthly_result = mysqli_stmt_get_result($stmt_m);
-            
-            $months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-            foreach ($months as $month) {
-                $monthly_data[$month] = 0;
-            }
-            
-            while ($row = mysqli_fetch_assoc($monthly_result)) {
-                $month_name = $months[$row['month'] - 1];
-                $monthly_data[$month_name] = (int)$row['count'];
-            }
-            mysqli_stmt_close($stmt_m);
-        }
-
-        // User statistics
-        $user_query = "SELECT 
-                        created_by as username,
-                        COUNT(id) as applications,
-                        SUM(CASE WHEN status = 'active' THEN 1 ELSE 0 END) as approved
-                      FROM visa_applications 
-                      WHERE application_date BETWEEN ? AND ?
-                      GROUP BY created_by 
-                      ORDER BY applications DESC 
-                      LIMIT 10";
-        if ($stmt = mysqli_prepare($conn, $user_query)) {
-            mysqli_stmt_bind_param($stmt, "ss", $sd, $ed);
-            mysqli_stmt_execute($stmt);
-            $user_result = mysqli_stmt_get_result($stmt);
-            while ($row = mysqli_fetch_assoc($user_result)) {
-                $user_stats[] = $row;
-            }
-            mysqli_stmt_close($stmt);
-        }
-
-        // Applications by gender in the filtered date range
-        $gender_field = 'gender';
-        $cols_query = mysqli_query($conn, "SHOW COLUMNS FROM visa_applications");
-        if ($cols_query) {
-            $db_cols = [];
-            while ($c = mysqli_fetch_assoc($cols_query)) {
-                $db_cols[] = $c['Field'];
-            }
-            if (in_array('gender', $db_cols) && in_array('sex', $db_cols)) {
-                $gender_field = "COALESCE(NULLIF(TRIM(gender), ''), NULLIF(TRIM(sex), ''))";
-            } elseif (in_array('sex', $db_cols)) {
-                $gender_field = 'sex';
-            }
-        }
-
-        $gender_query = "SELECT 
-                            CASE 
-                                WHEN UPPER(TRIM($gender_field)) IN ('M', 'MALE') THEN 'Male'
-                                WHEN UPPER(TRIM($gender_field)) IN ('F', 'FEMALE') THEN 'Female'
-                                ELSE 'Other'
-                            END as gender,
-                            COUNT(*) as count 
-                          FROM visa_applications 
-                          WHERE application_date BETWEEN ? AND ?
-                            AND $gender_field IS NOT NULL 
-                            AND TRIM($gender_field) != ''
-                            AND UPPER(TRIM($gender_field)) IN ('M', 'MALE', 'F', 'FEMALE')
-                          GROUP BY gender 
-                          ORDER BY count DESC";
-        if ($stmt = mysqli_prepare($conn, $gender_query)) {
-            mysqli_stmt_bind_param($stmt, "ss", $sd, $ed);
-            mysqli_stmt_execute($stmt);
-            $gender_result = mysqli_stmt_get_result($stmt);
-            
-            while ($row = mysqli_fetch_assoc($gender_result)) {
-                $gender_stats[] = $row;
-            }
-            mysqli_stmt_close($stmt);
-        }
-
-        // Overall statistics
-        $total_query = "SELECT 
-                        COUNT(*) as total,
-                        SUM(CASE WHEN status = 'active' THEN 1 ELSE 0 END) as approved,
-                        SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END) as pending
-                      FROM visa_applications 
-                      WHERE application_date BETWEEN ? AND ?";
-        if ($stmt = mysqli_prepare($conn, $total_query)) {
-            mysqli_stmt_bind_param($stmt, "ss", $sd, $ed);
-            mysqli_stmt_execute($stmt);
-            $total_result = mysqli_stmt_get_result($stmt);
-            $overall_stats = mysqli_fetch_assoc($total_result);
-            $overall_stats['rejected'] = 0;
-            mysqli_stmt_close($stmt);
-        }
-
-        // Fetch Audit Logs (Activity Trail) if table exists
-        $log_table_check = mysqli_query($conn, "SHOW TABLES LIKE 'activity_log'");
-        if (mysqli_num_rows($log_table_check) > 0) {
-            $audit_query = "SELECT id, user_id, action, description, ip_address, user_agent, created_at 
-                            FROM activity_log 
-                            WHERE created_at BETWEEN ? AND ? 
-                            ORDER BY id DESC 
-                            LIMIT 50000";
-            if ($stmt_audit = mysqli_prepare($conn, $audit_query)) {
-                mysqli_stmt_bind_param($stmt_audit, "ss", $sd, $ed);
-                mysqli_stmt_execute($stmt_audit);
-                $audit_result = mysqli_stmt_get_result($stmt_audit);
-                while ($row = mysqli_fetch_assoc($audit_result)) {
-                    $raw_ip = trim($row['ip_address'] ?? '');
-                    if (empty($raw_ip) || $raw_ip === '::1' || $raw_ip === '0:0:0:0:0:0:0:1') {
-                        $row['display_ip'] = '127.0.0.1';
-                        $row['is_local'] = true;
-                    } else {
-                        $row['display_ip'] = $raw_ip;
-                        $row['is_local'] = ($raw_ip === '127.0.0.1' || $raw_ip === 'localhost');
-                    }
-                    $row['ua_info'] = parseUserAgent($row['user_agent'] ?? '');
-                    $audit_logs[] = $row;
-                }
-                mysqli_stmt_close($stmt_audit);
-            }
-        }
-        
-        // Calculate Audit & Officer Productivity Statistics
-        $audit_total_count = count($audit_logs);
-        $audit_operators = array_unique(array_filter(array_column($audit_logs, 'user_id')));
-        $audit_distinct_operators = count($audit_operators);
-        $audit_logins_count = 0;
-        $audit_security_count = 0;
-        $audit_visa_ops_count = 0;
-        $distinct_ips = [];
-
-        foreach ($audit_logs as $log) {
-            $act = strtoupper($log['action'] ?? '');
-            if (strpos($act, 'LOGIN') !== false) {
-                $audit_logins_count++;
-            }
-            if (strpos($act, 'RESET') !== false || strpos($act, 'PASSWORD') !== false || strpos($act, 'MFA') !== false || strpos($act, 'FAILED') !== false) {
-                $audit_security_count++;
-            }
-            if ($act === 'CREATE' || strpos($act, 'EDIT') !== false || strpos($act, 'UPDATE') !== false || strpos($act, 'VIEW') !== false || strpos($act, 'PRINT') !== false) {
-                $audit_visa_ops_count++;
-            }
-            if (!empty($log['display_ip'])) {
-                $distinct_ips[$log['display_ip']] = true;
-            }
-        }
-
-        // Compute exact ground-truth Officer Productivity from visa_applications and activity_log
-        $officer_activity_summary = [];
-
-        // 1. Applications created per user in date range
-        $q_created = mysqli_query($conn, "SELECT created_by, COUNT(*) as cnt, MAX(application_date) as last_created 
-                                          FROM visa_applications 
-                                          WHERE application_date BETWEEN '$sd' AND '$ed' 
-                                            AND created_by IS NOT NULL AND created_by != '' 
-                                          GROUP BY created_by");
-        if ($q_created) {
-            while ($r = mysqli_fetch_assoc($q_created)) {
-                $op = $r['created_by'];
-                if (!isset($officer_activity_summary[$op])) {
-                    $officer_activity_summary[$op] = [
-                        'operator' => $op,
-                        'total' => 0,
-                        'creates' => 0,
-                        'edits' => 0,
-                        'prints' => 0,
-                        'logins' => 0,
-                        'last_seen' => $r['last_created']
-                    ];
-                }
-                $officer_activity_summary[$op]['creates'] = (int)$r['cnt'];
-            }
-        }
-
-        // 2. Visas printed per user in date range (matching print_visas.php ground truth)
-        $q_printed = mysqli_query($conn, "SELECT printed_by, COUNT(*) as cnt, MAX(printed_at) as last_printed 
-                                          FROM visa_applications 
-                                          WHERE print_status = 1 
-                                            AND printed_by IS NOT NULL AND printed_by != '' 
-                                            AND printed_at BETWEEN '$sd' AND '$ed' 
-                                          GROUP BY printed_by");
-        if ($q_printed) {
-            while ($r = mysqli_fetch_assoc($q_printed)) {
-                $op = $r['printed_by'];
-                if (!isset($officer_activity_summary[$op])) {
-                    $officer_activity_summary[$op] = [
-                        'operator' => $op,
-                        'total' => 0,
-                        'creates' => 0,
-                        'edits' => 0,
-                        'prints' => 0,
-                        'logins' => 0,
-                        'last_seen' => $r['last_printed']
-                    ];
-                }
-                $officer_activity_summary[$op]['prints'] = (int)$r['cnt'];
-                if (!empty($r['last_printed']) && (empty($officer_activity_summary[$op]['last_seen']) || $r['last_printed'] > $officer_activity_summary[$op]['last_seen'])) {
-                    $officer_activity_summary[$op]['last_seen'] = $r['last_printed'];
-                }
-            }
-        }
-
-        // 3. Edits, Logins and latest activity from activity_log
-        foreach ($audit_logs as $log) {
-            $op = $log['user_id'] ?: 'SYSTEM';
-            $act = strtoupper($log['action'] ?? '');
-            
-            if (!isset($officer_activity_summary[$op])) {
-                $officer_activity_summary[$op] = [
-                    'operator' => $op,
-                    'total' => 0,
-                    'creates' => 0,
-                    'edits' => 0,
-                    'prints' => 0,
-                    'logins' => 0,
-                    'last_seen' => $log['created_at']
-                ];
-            }
-
-            if (strpos($act, 'EDIT') !== false || (strpos($act, 'UPDATE') !== false && strpos($act, 'USER') === false)) {
-                $officer_activity_summary[$op]['edits']++;
-            } elseif (strpos($act, 'LOGIN') !== false) {
-                $officer_activity_summary[$op]['logins']++;
-            }
-
-            if (!empty($log['created_at']) && (empty($officer_activity_summary[$op]['last_seen']) || $log['created_at'] > $officer_activity_summary[$op]['last_seen'])) {
-                $officer_activity_summary[$op]['last_seen'] = $log['created_at'];
-            }
-        }
-
-        // Calculate total actions for each officer
-        foreach ($officer_activity_summary as $op => &$stats_item) {
-            $stats_item['total'] = $stats_item['creates'] + $stats_item['edits'] + $stats_item['prints'] + $stats_item['logins'];
-        }
-        unset($stats_item);
-
-        uasort($officer_activity_summary, function($a, $b) {
-            return $b['total'] <=> $a['total'];
-        });
     }
 
-} catch (Exception $e) {
-    error_log("Report error: " . $e->getMessage());
-    $overall_stats = ['total' => 0, 'approved' => 0, 'pending' => 0, 'rejected' => 0];
-    $status_data = ['active' => 0, 'pending' => 0];
+    if (empty($columns)) {
+        throw new RuntimeException('Unable to read visa_applications table structure.');
+    }
+
+    $has_nationality_column = in_array('nationality', $columns, true);
+    if ($has_nationality_column) {
+        $nationality_options_q = mysqli_query($conn, "SELECT DISTINCT TRIM(nationality) AS nationality
+            FROM visa_applications
+            WHERE nationality IS NOT NULL AND TRIM(nationality) <> ''
+            ORDER BY nationality ASC");
+        if ($nationality_options_q) {
+            while ($nrow = mysqli_fetch_assoc($nationality_options_q)) {
+                $n = trim((string)$nrow['nationality']);
+                if ($n !== '') $nationality_options[] = $n;
+            }
+        }
+        if ($nationality_filter !== '') {
+            $nationality_exists = false;
+            foreach ($nationality_options as $n) {
+                if (strcasecmp($n, $nationality_filter) === 0) {
+                    $nationality_filter = $n;
+                    $nationality_exists = true;
+                    break;
+                }
+            }
+            if (!$nationality_exists) $nationality_filter = '';
+        }
+    } else {
+        $nationality_filter = '';
+    }
+
+    // Optional nationality filter. When empty, all nationalities are included.
+    $nationality_filter_sql = $has_nationality_column
+        ? " AND (? = '' OR LOWER(TRIM(COALESCE(nationality, ''))) = LOWER(?))"
+        : '';
+    $nationality_select_expr = $has_nationality_column ? 'nationality' : "'' AS nationality";
+
+    $bindReportFilters = function($stmt) use ($sd, $ed_exclusive, $nationality_filter, $has_nationality_column) {
+        if ($has_nationality_column) {
+            mysqli_stmt_bind_param($stmt, 'ssss', $sd, $ed_exclusive, $nationality_filter, $nationality_filter);
+        } else {
+            mysqli_stmt_bind_param($stmt, 'ss', $sd, $ed_exclusive);
+        }
+    };
+
+    // Prefer application_date, then created_at, then date_of_issue. The first available
+    // business date is used consistently throughout the selected-period report.
+    $date_parts = [];
+    if (in_array('application_date', $columns, true)) {
+        $date_parts[] = "NULLIF(NULLIF(application_date, '0000-00-00'), '0000-00-00 00:00:00')";
+    }
+    if (in_array('created_at', $columns, true)) {
+        $date_parts[] = "NULLIF(NULLIF(created_at, '0000-00-00'), '0000-00-00 00:00:00')";
+    }
+    if (in_array('date_of_issue', $columns, true)) {
+        $date_parts[] = "NULLIF(NULLIF(date_of_issue, '0000-00-00'), '0000-00-00 00:00:00')";
+    }
+    if (empty($date_parts)) {
+        throw new RuntimeException('visa_applications has no supported application date column.');
+    }
+    $date_expr = count($date_parts) === 1 ? $date_parts[0] : 'COALESCE(' . implode(', ', $date_parts) . ')';
+    $date_filter_sql = "$date_expr >= ? AND $date_expr < ?";
+
+    $app_type_expr = in_array('application_type', $columns, true)
+        ? "COALESCE(NULLIF(TRIM(application_type), ''), 'fresh')"
+        : "'fresh'";
+
+    $status_expr = in_array('status', $columns, true)
+        ? "COALESCE(NULLIF(TRIM(status), ''), 'Unspecified')"
+        : "'Unspecified'";
+
+    // 1. Selected-period application summary. Every headline number now uses the same filter.
+    $stats_sql = "SELECT
+        COUNT(*) AS total,
+        COALESCE(SUM(CASE WHEN LOWER($app_type_expr) = 'renewal' THEN 1 ELSE 0 END), 0) AS renewal_count,
+        COALESCE(SUM(CASE WHEN LOWER($app_type_expr) <> 'renewal' THEN 1 ELSE 0 END), 0) AS fresh_count,
+        COALESCE(SUM(CASE WHEN LOWER($status_expr) IN ('approved','active','issued','completed') THEN 1 ELSE 0 END), 0) AS approved_count
+        FROM visa_applications WHERE $date_filter_sql$nationality_filter_sql";
+    if ($stmt = mysqli_prepare($conn, $stats_sql)) {
+        $bindReportFilters($stmt);
+        mysqli_stmt_execute($stmt);
+        $stats_result = mysqli_stmt_get_result($stmt);
+        if ($stats_result && ($row = mysqli_fetch_assoc($stats_result))) {
+            $static_total = (int)$row['total'];
+            $static_fresh = (int)$row['fresh_count'];
+            $static_renewal = (int)$row['renewal_count'];
+            $static_approved = (int)$row['approved_count'];
+            $static_current_month = $static_total;
+        }
+        mysqli_stmt_close($stmt);
+    }
+    $filtered_fresh_count = $static_fresh;
+    $filtered_renewal_count = $static_renewal;
+
+    // 2. Filtered application records for the selected period.
+    $id_order = in_array('id', $columns, true) ? ', id DESC' : '';
+    $filter_query = "SELECT
+        visa_number,
+        passport_number,
+        surname,
+        given_name,
+        $nationality_select_expr,
+        $app_type_expr AS application_type,
+        $date_expr AS effective_date,
+        $status_expr AS status
+        FROM visa_applications
+        WHERE $date_filter_sql$nationality_filter_sql
+        ORDER BY effective_date DESC$id_order";
+    if ($stmt = mysqli_prepare($conn, $filter_query)) {
+        $bindReportFilters($stmt);
+        mysqli_stmt_execute($stmt);
+        $result = mysqli_stmt_get_result($stmt);
+        if ($result) {
+            while ($row = mysqli_fetch_assoc($result)) {
+                $filtered_applications[] = $row;
+            }
+        }
+        mysqli_stmt_close($stmt);
+    }
+
+    // 3. Actual status distribution for the selected period.
+    $status_sql = "SELECT $status_expr AS status_name, COUNT(*) AS count
+                   FROM visa_applications
+                   WHERE $date_filter_sql$nationality_filter_sql
+                   GROUP BY $status_expr
+                   ORDER BY count DESC";
+    if ($stmt = mysqli_prepare($conn, $status_sql)) {
+        $bindReportFilters($stmt);
+        mysqli_stmt_execute($stmt);
+        $result = mysqli_stmt_get_result($stmt);
+        if ($result) {
+            while ($row = mysqli_fetch_assoc($result)) {
+                $label = trim((string)$row['status_name']);
+                if ($label === '') $label = 'Unspecified';
+                $status_data[$label] = (int)$row['count'];
+            }
+        }
+        mysqli_stmt_close($stmt);
+    }
+
+    // 4. Monthly application trend for the selected period, not the current calendar year.
+    $monthly_sql = "SELECT DATE_FORMAT($date_expr, '%Y-%m') AS month_key, COUNT(*) AS count
+                    FROM visa_applications
+                    WHERE $date_filter_sql$nationality_filter_sql
+                    GROUP BY DATE_FORMAT($date_expr, '%Y-%m')
+                    ORDER BY month_key";
+    if ($stmt = mysqli_prepare($conn, $monthly_sql)) {
+        $bindReportFilters($stmt);
+        mysqli_stmt_execute($stmt);
+        $result = mysqli_stmt_get_result($stmt);
+        if ($result) {
+            while ($row = mysqli_fetch_assoc($result)) {
+                $key = DateTime::createFromFormat('!Y-m-d', $row['month_key'] . '-01');
+                if ($key) $monthly_data[$key->format('M Y')] = (int)$row['count'];
+            }
+        }
+        mysqli_stmt_close($stmt);
+    }
+
+    // 5. Gender distribution for the selected period.
+    if (in_array('gender', $columns, true) || in_array('sex', $columns, true)) {
+        if (in_array('gender', $columns, true) && in_array('sex', $columns, true)) {
+            $g_field = "COALESCE(NULLIF(TRIM(gender), ''), NULLIF(TRIM(sex), ''))";
+        } else {
+            $g_field = in_array('gender', $columns, true) ? 'gender' : 'sex';
+        }
+        $gender_sql = "SELECT CASE
+            WHEN UPPER(TRIM($g_field)) IN ('M','MALE') THEN 'Male'
+            WHEN UPPER(TRIM($g_field)) IN ('F','FEMALE') THEN 'Female'
+            ELSE 'Other / Unspecified'
+            END AS gender_label, COUNT(*) AS count
+            FROM visa_applications
+            WHERE $date_filter_sql$nationality_filter_sql AND $g_field IS NOT NULL AND TRIM($g_field) <> ''
+            GROUP BY gender_label ORDER BY count DESC";
+        if ($stmt = mysqli_prepare($conn, $gender_sql)) {
+            $bindReportFilters($stmt);
+            mysqli_stmt_execute($stmt);
+            $result = mysqli_stmt_get_result($stmt);
+            if ($result) {
+                while ($row = mysqli_fetch_assoc($result)) {
+                    $gender_stats[] = ['gender' => $row['gender_label'], 'count' => (int)$row['count']];
+                }
+            }
+            mysqli_stmt_close($stmt);
+        }
+    }
+
+    // 6. Load officer display names from users when the table/columns exist.
+    $check_users_table = mysqli_query($conn, "SHOW TABLES LIKE 'users'");
+    if ($check_users_table && mysqli_num_rows($check_users_table) > 0) {
+        $u_cols = [];
+        $user_cols_res = mysqli_query($conn, "SHOW COLUMNS FROM users");
+        if ($user_cols_res) {
+            while ($uc = mysqli_fetch_assoc($user_cols_res)) $u_cols[] = $uc['Field'];
+        }
+        $select_user_fields = array_values(array_intersect(['id','service_no','fname','lname','username'], $u_cols));
+        if (in_array('id', $select_user_fields, true)) {
+            $users_q = mysqli_query($conn, "SELECT " . implode(', ', $select_user_fields) . " FROM users");
+            if ($users_q) {
+                while ($u = mysqli_fetch_assoc($users_q)) {
+                    $fullName = trim(($u['fname'] ?? '') . ' ' . ($u['lname'] ?? ''));
+                    $sNo = trim((string)($u['service_no'] ?? ''));
+                    $displayName = $fullName !== '' ? ($sNo !== '' ? "$fullName ($sNo)" : $fullName) : ($sNo !== '' ? $sNo : 'Unknown Officer');
+                    $keys = [(string)($u['id'] ?? '')];
+                    if ($sNo !== '') $keys[] = $sNo;
+                    if ($fullName !== '') $keys[] = $fullName;
+                    if (!empty($u['username'])) $keys[] = trim((string)$u['username']);
+                    foreach ($keys as $key) {
+                        if ($key !== '') {
+                            $officer_names[$key] = $displayName;
+                            $officer_names[strtolower($key)] = $displayName;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // 7. Audit trail for the selected period. No arbitrary 5,000-row lifetime cap.
+    $log_table_check = mysqli_query($conn, "SHOW TABLES LIKE 'activity_log'");
+    $act_cols = [];
+    if ($log_table_check && mysqli_num_rows($log_table_check) > 0) {
+        $act_cols_q = mysqli_query($conn, "SHOW COLUMNS FROM activity_log");
+        if ($act_cols_q) while ($ac = mysqli_fetch_assoc($act_cols_q)) $act_cols[] = $ac['Field'];
+
+        if (in_array('created_at', $act_cols, true)) {
+            $has_ua = in_array('user_agent', $act_cols, true);
+            $has_ip = in_array('ip_address', $act_cols, true);
+            $ua_col = $has_ua ? 'user_agent' : "'' AS user_agent";
+            $ip_col = $has_ip ? 'ip_address' : "'' AS ip_address";
+            $id_col = in_array('id', $act_cols, true) ? 'id' : '0 AS id';
+            $user_col = in_array('user_id', $act_cols, true) ? 'user_id' : "'' AS user_id";
+            $action_col = in_array('action', $act_cols, true) ? 'action' : "'' AS action";
+            $description_col = in_array('description', $act_cols, true) ? 'description' : "'' AS description";
+
+            $audit_sql = "SELECT $id_col, $user_col, $action_col, $description_col, $ip_col, $ua_col, created_at
+                          FROM activity_log
+                          WHERE created_at >= ? AND created_at < ?
+                          ORDER BY created_at DESC, id DESC";
+            if ($stmt = mysqli_prepare($conn, $audit_sql)) {
+                // Audit logs are date-scoped only because activity_log does not contain applicant nationality.
+                mysqli_stmt_bind_param($stmt, 'ss', $sd, $ed_exclusive);
+                mysqli_stmt_execute($stmt);
+                $result = mysqli_stmt_get_result($stmt);
+                if ($result) {
+                    while ($row = mysqli_fetch_assoc($result)) {
+                        $raw_ip = trim((string)($row['ip_address'] ?? ''));
+                        $row['display_ip'] = ($raw_ip === '' || $raw_ip === '::1' || $raw_ip === '0:0:0:0:0:0:0:1') ? '127.0.0.1' : $raw_ip;
+                        $row['is_local'] = in_array($row['display_ip'], ['127.0.0.1','localhost'], true);
+                        $row['ua_info'] = parseUserAgent($row['user_agent'] ?? '');
+                        $audit_logs[] = $row;
+                        if ($row['display_ip'] !== '') $distinct_ips[$row['display_ip']] = true;
+                    }
+                }
+                mysqli_stmt_close($stmt);
+            }
+        }
+    }
+
+    // 8. Accurate audit counters for the same selected period.
+    $audit_total_count = count($audit_logs);
+    $audit_operators = [];
+    $audit_logins_count = 0;
+    foreach ($audit_logs as $log) {
+        $operator = trim((string)($log['user_id'] ?? ''));
+        if ($operator !== '') $audit_operators[$operator] = true;
+        if (strpos(strtoupper((string)($log['action'] ?? '')), 'LOGIN') !== false) $audit_logins_count++;
+    }
+    $audit_distinct_operators = count($audit_operators);
+
+    // 9. Officer productivity for the SAME selected period.
+    $ensureOfficer = function($operator) use (&$officer_activity_summary) {
+        $operator = trim((string)$operator);
+        if ($operator === '') return null;
+        if (!isset($officer_activity_summary[$operator])) {
+            $officer_activity_summary[$operator] = [
+                'operator' => $operator, 'total' => 0, 'creates' => 0,
+                'edits' => 0, 'prints' => 0, 'logins' => 0, 'last_seen' => null
+            ];
+        }
+        return $operator;
+    };
+
+    if (in_array('created_by', $columns, true)) {
+        $created_sql = "SELECT created_by, COUNT(*) AS cnt, MAX($date_expr) AS last_seen
+                        FROM visa_applications
+                        WHERE $date_filter_sql$nationality_filter_sql AND created_by IS NOT NULL AND TRIM(created_by) <> ''
+                        GROUP BY created_by";
+        if ($stmt = mysqli_prepare($conn, $created_sql)) {
+            $bindReportFilters($stmt);
+            mysqli_stmt_execute($stmt);
+            $result = mysqli_stmt_get_result($stmt);
+            if ($result) while ($r = mysqli_fetch_assoc($result)) {
+                $op = $ensureOfficer($r['created_by']);
+                $officer_activity_summary[$op]['creates'] = (int)$r['cnt'];
+                $officer_activity_summary[$op]['last_seen'] = $r['last_seen'];
+            }
+            mysqli_stmt_close($stmt);
+        }
+    }
+
+    if (in_array('print_status', $columns, true) && in_array('printed_by', $columns, true)) {
+        $print_date_expr = in_array('printed_at', $columns, true) ? "NULLIF(NULLIF(printed_at, '0000-00-00'), '0000-00-00 00:00:00')" : $date_expr;
+        $print_sql = "SELECT printed_by, COUNT(*) AS cnt, MAX($print_date_expr) AS last_seen
+                      FROM visa_applications
+                      WHERE $print_date_expr >= ? AND $print_date_expr < ?
+                        AND print_status = 1$nationality_filter_sql AND printed_by IS NOT NULL AND TRIM(printed_by) <> ''
+                      GROUP BY printed_by";
+        if ($stmt = mysqli_prepare($conn, $print_sql)) {
+            $bindReportFilters($stmt);
+            mysqli_stmt_execute($stmt);
+            $result = mysqli_stmt_get_result($stmt);
+            if ($result) while ($r = mysqli_fetch_assoc($result)) {
+                $op = $ensureOfficer($r['printed_by']);
+                $officer_activity_summary[$op]['prints'] = (int)$r['cnt'];
+                if (empty($officer_activity_summary[$op]['last_seen']) || $r['last_seen'] > $officer_activity_summary[$op]['last_seen']) {
+                    $officer_activity_summary[$op]['last_seen'] = $r['last_seen'];
+                }
+            }
+            mysqli_stmt_close($stmt);
+        }
+    }
+
+    // Activity-log edits/logins/prints are also constrained to the selected period.
+    if (!empty($act_cols) && in_array('created_at', $act_cols, true) && in_array('user_id', $act_cols, true)) {
+        $activity_sql = "SELECT user_id, action, COUNT(*) AS cnt, MAX(created_at) AS last_seen
+                         FROM activity_log
+                         WHERE created_at >= ? AND created_at < ?
+                           AND user_id IS NOT NULL AND TRIM(user_id) <> ''
+                         GROUP BY user_id, action";
+        if ($stmt = mysqli_prepare($conn, $activity_sql)) {
+            mysqli_stmt_bind_param($stmt, 'ss', $sd, $ed_exclusive);
+            mysqli_stmt_execute($stmt);
+            $result = mysqli_stmt_get_result($stmt);
+            if ($result) while ($r = mysqli_fetch_assoc($result)) {
+                $op = $ensureOfficer($r['user_id']);
+                $act = strtoupper(trim((string)$r['action']));
+                $cnt = (int)$r['cnt'];
+                if (strpos($act, 'LOGIN') !== false) {
+                    $officer_activity_summary[$op]['logins'] += $cnt;
+                } elseif (strpos($act, 'PRINT') !== false) {
+                    // If printed_by/print_status exists, those DB fields are the source of truth.
+                    if (!(in_array('print_status', $columns, true) && in_array('printed_by', $columns, true))) {
+                        $officer_activity_summary[$op]['prints'] += $cnt;
+                    }
+                } elseif (strpos($act, 'EDIT') !== false || (strpos($act, 'UPDATE') !== false && strpos($act, 'USER') === false)) {
+                    $officer_activity_summary[$op]['edits'] += $cnt;
+                }
+                if (empty($officer_activity_summary[$op]['last_seen']) || $r['last_seen'] > $officer_activity_summary[$op]['last_seen']) {
+                    $officer_activity_summary[$op]['last_seen'] = $r['last_seen'];
+                }
+            }
+            mysqli_stmt_close($stmt);
+        }
+    }
+
+    foreach ($officer_activity_summary as &$stats_item) {
+        $stats_item['total'] = $stats_item['creates'] + $stats_item['edits'] + $stats_item['prints'] + $stats_item['logins'];
+        if (empty($stats_item['last_seen'])) $stats_item['last_seen'] = $start_date . ' 00:00:00';
+    }
+    unset($stats_item);
+    uasort($officer_activity_summary, function($a, $b) {
+        return ($b['total'] <=> $a['total']) ?: strcmp((string)$a['operator'], (string)$b['operator']);
+    });
+
+} catch (Throwable $e) {
+    error_log('Report error: ' . $e->getMessage());
 }
 ?>
 
@@ -626,6 +769,25 @@ try {
             user-select: none;
             white-space: nowrap;
             text-transform: uppercase;
+        }
+
+        .filter-nationality-control {
+            border: none !important;
+            box-shadow: none !important;
+            padding: 4px 10px !important;
+            font-size: 0.86rem !important;
+            font-weight: 600 !important;
+            color: #1e293b !important;
+            background: transparent !important;
+            height: 34px !important;
+            outline: none !important;
+            min-width: 190px;
+            max-width: 240px;
+            cursor: pointer;
+        }
+
+        .nationality-filter-field {
+            max-width: 300px;
         }
 
         .filter-date-control {
@@ -1501,22 +1663,22 @@ try {
                 <div class="stat-card">
                     <i class="fa fa-list-alt text-info" style="font-size: 1.8rem; margin-bottom: 10px; color: var(--info);"></i>
                     <div class="stat-number" style="color: var(--info);"><?php echo number_format($static_total); ?></div>
-                    <div class="stat-label">Total Applications</div>
+                    <div class="stat-label"><?php echo $nationality_filter !== '' ? htmlspecialchars($nationality_filter) . ' Applications' : 'Applications in Selected Period'; ?></div>
                 </div>
                 <div class="stat-card">
                     <i class="fa fa-file-o text-success" style="font-size: 1.8rem; margin-bottom: 10px; color: #16a34a;"></i>
                     <div class="stat-number" style="color: #16a34a;"><?php echo number_format($static_fresh); ?></div>
-                    <div class="stat-label">Total Fresh Applications</div>
+                    <div class="stat-label"><?php echo $nationality_filter !== '' ? htmlspecialchars($nationality_filter) . ' Fresh Applications' : 'Fresh Applications'; ?></div>
                 </div>
                 <div class="stat-card">
                     <i class="fa fa-refresh text-warning" style="font-size: 1.8rem; margin-bottom: 10px; color: #d97706;"></i>
                     <div class="stat-number" style="color: #d97706;"><?php echo number_format($static_renewal); ?></div>
-                    <div class="stat-label">Total Renewal Applications</div>
+                    <div class="stat-label"><?php echo $nationality_filter !== '' ? htmlspecialchars($nationality_filter) . ' Renewal Applications' : 'Renewal Applications'; ?></div>
                 </div>
                 <div class="stat-card">
                     <i class="fa fa-calendar text-primary" style="font-size: 1.8rem; margin-bottom: 10px; color: var(--primary);"></i>
-                    <div class="stat-number" style="color: var(--primary);"><?php echo number_format($static_current_month); ?></div>
-                    <div class="stat-label">Applications This Month</div>
+                    <div class="stat-number" style="color: var(--primary);"><?php echo number_format($static_approved); ?></div>
+                    <div class="stat-label"><?php echo $nationality_filter !== '' ? htmlspecialchars($nationality_filter) . ' Approved / Active' : 'Approved / Active'; ?></div>
                 </div>
             </div>
 
@@ -1525,7 +1687,7 @@ try {
                 <div class="report-header-flex">
                     <div class="report-header-title-box">
                         <h4><i class="fa fa-calendar-check-o text-success me-2"></i> Filter Applications & Audit Report</h4>
-                        <p class="mb-0">Select custom dates or click a quick preset period</p>
+                        <p class="mb-0">Select custom dates, choose a nationality, or click a quick preset period<?php echo $has_nationality_column ? ' · Nationality filtering is available' : ''; ?></p>
                     </div>
                     <div class="report-header-filter-box">
                         <form method="GET" class="filter-compact-form" id="mainFilterForm">
@@ -1540,6 +1702,17 @@ try {
                                     <input type="date" class="form-control filter-date-control" name="end_date" id="filterEndDate"
                                            value="<?php echo htmlspecialchars($end_date); ?>" required>
                                 </div>
+                                <?php if ($has_nationality_column): ?>
+                                <div class="filter-date-field nationality-filter-field">
+                                    <span class="filter-date-tag">Nationality</span>
+                                    <select class="form-control filter-nationality-control" name="nationality" id="filterNationality">
+                                        <option value="">All Nationalities</option>
+                                        <?php foreach ($nationality_options as $nationality_option): ?>
+                                            <option value="<?php echo htmlspecialchars($nationality_option); ?>" <?php echo (strcasecmp($nationality_filter, $nationality_option) === 0 && $nationality_filter !== '') ? 'selected' : ''; ?>><?php echo htmlspecialchars($nationality_option); ?></option>
+                                        <?php endforeach; ?>
+                                    </select>
+                                </div>
+                                <?php endif; ?>
                                 <button type="submit" class="btn btn-filter-green btn-filter-compact">
                                     <i class="fa fa-filter"></i> Filter
                                 </button>
@@ -1564,8 +1737,11 @@ try {
                 <div class="col-12">
                     <div class="data-card">
                         <h5 class="d-flex align-items-center mb-3 flex-wrap gap-2">
-                            <span><i class="fa fa-list-alt me-2" style="color: var(--primary);"></i> Filtered Application Records (<?php echo htmlspecialchars($start_date); ?> to <?php echo htmlspecialchars($end_date); ?>)</span>
+                            <span><i class="fa fa-list-alt me-2" style="color: var(--primary);"></i> <?php echo $nationality_filter !== '' ? htmlspecialchars($nationality_filter) . ' Application Records' : 'Filtered Application Records'; ?> (<?php echo htmlspecialchars($start_date); ?> to <?php echo htmlspecialchars($end_date); ?>)</span>
                             <div class="ms-md-auto d-flex gap-2 align-items-center flex-wrap">
+                                <button type="button" class="btn btn-sm btn-success text-white" onclick="exportApplicationsToCSV()" title="Export Applications to CSV / Excel">
+                                    <i class="fa fa-file-excel-o"></i> Export CSV
+                                </button>
                                 <button type="button" class="btn btn-sm btn-warning text-white" onclick="printTable('filteredTableContainer')" title="Print Table">
                                     <i class="fa fa-print"></i> Print Table
                                 </button>
@@ -1575,6 +1751,14 @@ try {
                             </div>
                         </h5>
                         <div id="filteredTableContainer">
+                            <?php if ($nationality_filter !== ''): ?>
+                            <div class="nationality-report-summary mb-3" style="padding:14px 16px; border:1px solid #dbe7df; border-radius:8px; background:#f8fbf9;">
+                                <div style="font-weight:700; color:#207027; font-size:1rem;">
+                                    <i class="fa fa-globe me-2"></i><?php echo htmlspecialchars($nationality_filter); ?> Nationality Report
+                                </div>
+                                <div class="small text-muted mt-1">Showing all <?php echo htmlspecialchars($nationality_filter); ?> applications within the selected date range. The summary below gives the Fresh, Renewal and Total counts.</div>
+                            </div>
+                            <?php endif; ?>
                             <div class="table-responsive">
                                 <table id="filteredTable" class="table table-hover table-striped">
                                     <thead style="position: sticky; top: 0; background: white; z-index: 1;">
@@ -1583,6 +1767,7 @@ try {
                                             <th>Application Date</th>
                                             <th>Re-Entry Visa Number</th>
                                             <th>Applicant Name</th>
+                                            <th>Nationality</th>
                                             <th>Passport Number</th>
                                             <th>Type of Application</th>
                                         </tr>
@@ -1596,13 +1781,24 @@ try {
                                                 <tr>
                                                     <td><?php echo $f_sno++; ?></td>
                                                     <td class="text-nowrap small">
-                                                        <?php echo date('M j, Y g:i A', strtotime($f_app['application_date'])); ?>
+                                                        <?php 
+                                                            $raw_app_date = !empty($f_app['application_date']) ? $f_app['application_date'] : ($f_app['effective_date'] ?? '');
+                                                            if (!empty($raw_app_date) && $raw_app_date !== '0000-00-00' && $raw_app_date !== '0000-00-00 00:00:00') {
+                                                                $ts = strtotime($raw_app_date);
+                                                                echo ($ts !== false && $ts > 0) ? date('M j, Y g:i A', $ts) : htmlspecialchars($raw_app_date);
+                                                            } else {
+                                                                echo '<span class="text-muted">N/A</span>';
+                                                            }
+                                                        ?>
                                                     </td>
                                                     <td class="font-monospace fw-bold">
                                                         <?php echo htmlspecialchars($f_app['visa_number']); ?>
                                                     </td>
                                                     <td>
                                                         <?php echo htmlspecialchars(strtoupper($f_app['surname'] . ' ' . $f_app['given_name'])); ?>
+                                                    </td>
+                                                    <td>
+                                                        <span class="fw-semibold"><?php echo htmlspecialchars($f_app['nationality'] ?? 'N/A'); ?></span>
                                                     </td>
                                                     <td>
                                                         <code><?php echo htmlspecialchars($f_app['passport_number']); ?></code>
@@ -1621,7 +1817,7 @@ try {
                                             <?php endforeach; ?>
                                         <?php else: ?>
                                             <tr>
-                                                <td colspan="6" class="text-center text-muted">No records found for the selected period.</td>
+                                                <td colspan="7" class="text-center text-muted">No records found for the selected period.</td>
                                             </tr>
                                         <?php endif; ?>
                                     </tbody>
@@ -1633,21 +1829,21 @@ try {
                                     <div class="stat-icon-wrapper"><i class="fa fa-file-text"></i></div>
                                     <div class="stat-details">
                                         <span class="stat-val"><?php echo $filtered_fresh_count; ?></span>
-                                        <span class="stat-lbl">Filtered Fresh</span>
+                                        <span class="stat-lbl"><?php echo $nationality_filter !== '' ? htmlspecialchars($nationality_filter) . ' Fresh' : 'Filtered Fresh'; ?></span>
                                     </div>
                                 </div>
                                 <div class="filtered-stat-box renewal-box">
                                     <div class="stat-icon-wrapper"><i class="fa fa-refresh"></i></div>
                                     <div class="stat-details">
                                         <span class="stat-val"><?php echo $filtered_renewal_count; ?></span>
-                                        <span class="stat-lbl">Filtered Renewal</span>
+                                        <span class="stat-lbl"><?php echo $nationality_filter !== '' ? htmlspecialchars($nationality_filter) . ' Renewal' : 'Filtered Renewal'; ?></span>
                                     </div>
                                 </div>
                                 <div class="filtered-stat-box total-box">
                                     <div class="stat-icon-wrapper"><i class="fa fa-list"></i></div>
                                     <div class="stat-details">
                                         <span class="stat-val"><?php echo count($filtered_applications); ?></span>
-                                        <span class="stat-lbl">Total Filtered</span>
+                                        <span class="stat-lbl"><?php echo $nationality_filter !== '' ? 'Total ' . htmlspecialchars($nationality_filter) : 'Total Filtered'; ?></span>
                                     </div>
                                 </div>
                             </div>
@@ -1660,7 +1856,7 @@ try {
             <div class="charts-grid">
                 <!-- Status Distribution Pie Chart -->
                 <div class="chart-card">
-                    <h5><i class="fa fa-pie-chart" style="color: var(--primary);"></i> Application Status Distribution (Fresh vs Renewal)</h5>
+                    <h5><i class="fa fa-pie-chart" style="color: var(--primary);"></i> Application Status Distribution</h5>
                     <div class="chart-container">
                         <canvas id="statusChart"></canvas>
                     </div>
@@ -1668,7 +1864,7 @@ try {
 
                 <!-- Monthly Trends Line Chart -->
                 <div class="chart-card">
-                    <h5><i class="fa fa-line-chart" style="color: var(--secondary);"></i> Monthly Application Trends</h5>
+                    <h5><i class="fa fa-line-chart" style="color: var(--secondary);"></i> Monthly Application Trends for Selected Period</h5>
                     <div class="chart-container">
                         <canvas id="monthlyChart"></canvas>
                     </div>
@@ -1676,14 +1872,12 @@ try {
 
                 <!-- Gender Distribution Bar Chart -->
                 <div class="chart-card">
-                    <h5><i class="fa fa-venus-mars" style="color: var(--warning);"></i> Applications by Gender</h5>
+                    <h5><i class="fa fa-venus-mars" style="color: var(--warning);"></i> Applications by Gender in Selected Period</h5>
                     <div class="chart-container">
                         <canvas id="genderChart"></canvas>
                     </div>
                 </div>
             </div>
-
-
 
             <!-- Officer Activity & Productivity Section -->
             <div class="row mt-4">
@@ -1709,7 +1903,7 @@ try {
                                     <thead>
                                         <tr>
                                             <th>S/No</th>
-                                            <th>Officer / Username</th>
+                                            <th>Officer Name & Service No</th>
                                             <th>Applications Created</th>
                                             <th>Records Edited</th>
                                             <th>Vignettes Printed</th>
@@ -1727,7 +1921,7 @@ try {
                                                 <tr>
                                                     <td><?php echo $o_sno++; ?></td>
                                                     <td class="font-monospace fw-bold text-dark">
-                                                        <i class="fa fa-user-circle text-primary me-1"></i> <?php echo htmlspecialchars($op_name); ?>
+                                                        <i class="fa fa-user-circle text-primary me-1"></i> <?php echo htmlspecialchars($officer_names[$op_name] ?? $officer_names[strtolower($op_name)] ?? $op_name); ?>
                                                     </td>
                                                     <td>
                                                         <span style="background:#dcfce7; color:#166534; padding:3px 8px; border-radius:4px; font-weight:700; font-size:0.85rem; border:1px solid #bbf7d0;">
@@ -1862,7 +2056,7 @@ try {
                                         <tr>
                                             <th>S/No</th>
                                             <th>Timestamp</th>
-                                            <th>Operator</th>
+                                            <th>Operator (Name & Service No)</th>
                                             <th>Action</th>
                                             <th>Description</th>
                                             <th>IP Address & Device</th>
@@ -1886,7 +2080,7 @@ try {
                                                         </div>
                                                     </td>
                                                     <td class="font-monospace fw-bold">
-                                                        <i class="fa fa-user-circle text-muted me-1"></i><?php echo htmlspecialchars($log['user_id']); ?>
+                                                        <i class="fa fa-user-circle text-muted me-1"></i><?php echo htmlspecialchars($officer_names[$log['user_id']] ?? $officer_names[strtolower($log['user_id'])] ?? $log['user_id']); ?>
                                                     </td>
                                                     <td>
                                                         <span class="audit-badge <?php echo $badgeInfo['class']; ?>">
@@ -1941,7 +2135,10 @@ try {
                 <h5><i class="fa fa-download" style="color: var(--primary);"></i> Reports & Export Center</h5>
                 <p class="text-muted mb-3" style="font-size:0.9rem;">Download activity logs or print official reports for the selected period (<?php echo htmlspecialchars($start_date); ?> to <?php echo htmlspecialchars($end_date); ?>)</p>
                 <div class="btn-group flex-wrap gap-2 justify-content-center">
-                    <button class="btn btn-success btn-export text-white" onclick="exportOfficerToCSV()">
+                    <button class="btn btn-success btn-export text-white" onclick="exportApplicationsToCSV()">
+                        <i class="fa fa-list-alt"></i> Export Applications (CSV)
+                    </button>
+                    <button class="btn btn-primary btn-export text-white" onclick="exportOfficerToCSV()">
                         <i class="fa fa-file-excel-o"></i> Export Officer Summary (CSV)
                     </button>
                     <button class="btn btn-info btn-export text-white" onclick="exportAuditTrailToCSV()">
@@ -1956,18 +2153,18 @@ try {
     </div>
 
     <script>
-        // Status Distribution Pie Chart
+        // Application Status Distribution Pie Chart
         const statusCtx = document.getElementById('statusChart').getContext('2d');
+        const statusLabels = <?php echo json_encode(array_keys($status_data), JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT); ?>;
+        const statusValues = <?php echo json_encode(array_values($status_data)); ?>;
+        const statusPalette = ['#1a5c2e', '#27ae60', '#f39c12', '#3498db', '#dc3545', '#6c757d', '#7c3aed', '#0f766e'];
         const statusChart = new Chart(statusCtx, {
             type: 'pie',
             data: {
-                labels: ['Fresh Applications', 'Renewal Applications'],
+                labels: statusLabels,
                 datasets: [{
-                    data: [
-                        <?php echo $filtered_fresh_count; ?>,
-                        <?php echo $filtered_renewal_count; ?>
-                    ],
-                    backgroundColor: ['#27ae60', '#f39c12'],
+                    data: statusValues,
+                    backgroundColor: statusLabels.map((_, i) => statusPalette[i % statusPalette.length]),
                     borderWidth: 2,
                     borderColor: '#fff'
                 }]
@@ -1976,9 +2173,7 @@ try {
                 responsive: true,
                 maintainAspectRatio: false,
                 plugins: {
-                    legend: {
-                        position: 'bottom'
-                    }
+                    legend: { position: 'bottom' }
                 }
             }
         });
@@ -2023,10 +2218,10 @@ try {
                     label: 'Applications',
                     data: <?php echo !empty($gender_stats) ? json_encode(array_column($gender_stats, 'count')) : json_encode([]); ?>,
                     backgroundColor: [
-                        '#3498db', '#f43f5e', '#64748b'
+                        '#1a5c2e', '#f39c12', '#2c3e50'
                     ],
                     borderColor: '#ffffff',
-                    borderWidth: 1.5
+                    borderWidth: 2
                 }]
             },
             options: {
